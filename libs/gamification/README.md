@@ -1,1 +1,0 @@
-Shared gamification helpers.
