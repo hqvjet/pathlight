@@ -1,0 +1,9 @@
+## Overview
+
+This Alembic revision adds the following tables:
+
+- `quiz_info`: Contains quiz metadata like title, description, duration
+- `quiz`: Links users to quiz instances
+- `quiz_qa`: Contains quiz questions and multiple choice answers
+
+Use `alembic upgrade head` to apply the migration and `alembic downgrade base` to rollback.
