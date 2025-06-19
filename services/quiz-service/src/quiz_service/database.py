@@ -3,8 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-# Database URL - sẽ được config từ environment variables
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./quiz.db")
+# Database URL - đọc từ environment variables
+DATABASE_URL = os.getenv("QUIZ_DATABASE_URL", os.getenv("DATABASE_URL", "postgresql://postgres:1210@localhost:5433/pathlight"))
 
 # Lazy loading để tránh lỗi khi import models
 def get_engine():
