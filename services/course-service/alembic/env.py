@@ -45,7 +45,7 @@ def run_migrations_offline() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
     if url is None:
-        url = "sqlite:///./course.db"
+        url = "postgresql://postgres:1210@localhost:5433/pathlight"
     
     context.configure(
         url=url,
@@ -65,13 +65,13 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Use SQLite as default for development
+    # Use PostgreSQL as default for production
     configuration = config.get_section(config.config_ini_section)
     if configuration is None:
         configuration = {}
     
     if "sqlalchemy.url" not in configuration:
-        configuration["sqlalchemy.url"] = "sqlite:///./course.db"
+        configuration["sqlalchemy.url"] = "postgresql://postgres:1210@localhost:5433/pathlight"
     
     connectable = engine_from_config(
         configuration,
