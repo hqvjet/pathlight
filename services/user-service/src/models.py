@@ -1,17 +1,18 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, BigInteger, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer, Boolean, BigInteger, ForeignKey, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from src.database import Base
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "users" 
     
     user_id = Column(String, primary_key=True)
     profile_id = Column(String, ForeignKey("user_profile.profile_id"), nullable=False)
-    email = Column(String, nullable=True)
-    password = Column(String, nullable=True)
-    google_id = Column(String, nullable=True)
+    email = Column(String, nullable=True, unique=True)
+    password = Column(String, nullable=True)  # Nullable for OAuth users
+    google_id = Column(String, nullable=True, unique=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -31,8 +32,8 @@ class UserProfile(Base):
     current_exp = Column(BigInteger, nullable=False, default=0)
     require_exp = Column(BigInteger, nullable=False, default=10)
     remind_time = Column(DateTime, nullable=False)
-    sex = Column(Boolean, nullable=False)
-    bio = Column(String, nullable=False)
+    sex = Column(Boolean, nullable=False)  # True for male, False for female
+    bio = Column(Text, nullable=True)  # Changed to Text and made nullable
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

@@ -45,7 +45,9 @@ def run_migrations_offline() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
     if url is None:
-        url = "sqlite:///./user.db"
+        # Load from environment variable
+        from src.database import DATABASE_URL
+        url = DATABASE_URL.replace('+asyncpg', '')  # Remove async driver if present
     
     context.configure(
         url=url,
@@ -65,13 +67,10 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Use SQLite as default for development
-    configuration = config.get_section(config.config_ini_section)
-    if configuration is None:
-        configuration = {}
-    
+    configuration = config.get_section(config.config_ini_section, {})
     if "sqlalchemy.url" not in configuration:
-        configuration["sqlalchemy.url"] = "sqlite:///./user.db"
+        from src.database import DATABASE_URL
+        configuration["sqlalchemy.url"] = DATABASE_URL.replace('+asyncpg', '')
     
     connectable = engine_from_config(
         configuration,
