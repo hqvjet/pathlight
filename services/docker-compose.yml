@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
+    env_file:
+      - ../.env
+    networks:
+      - pathlight-network
+
+  course-service:
+    build: ./course-service
+    ports:
+      - "${COURSE_SERVICE_PORT}:${COURSE_SERVICE_PORT}"
+    env_file:
+      - ../.env
+    networks:
+      - pathlight-network
+
+  quiz-service:
+    build: ./quiz-service
+    ports:
+      - "${QUIZ_SERVICE_PORT}:${QUIZ_SERVICE_PORT}"
+    env_file:
+      - ../.env
+    networks:
+      - pathlight-network
+
+  user-service:
+    build: ./user-service
+    ports:
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+    env_file:
+      - ../.env
+    networks:
+      - pathlight-network
+
+networks:
+  pathlight-network:
+    driver: bridge
