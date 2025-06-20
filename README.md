@@ -70,27 +70,6 @@ npm run dev
 ```
 </details>
 
-## 📁 Folder Structure
-```text
-pathlight/
-├── services/             # FastAPI microservices
-│   ├── api-gateway/
-│   ├── auth-service/
-│   ├── course-service/
-│   ├── lesson-service/
-│   ├── test-service/
-│   └── user-service/
-├── libs/                 # Shared packages
-│   ├── ai-prompts/
-│   ├── common-types-py/
-│   ├── common-types-ts/
-│   ├── common-utils-py/
-│   └── common-utils-ts/
-├── frontend/             # Next.js app
-├── docs/                 # diagrams & specifications
-└── LICENSE
-```
-
 ## 🙌 Contributing
 1. Fork and clone this repo.
 2. Create feature branches and open PRs against `main`.
