@@ -1,0 +1,29 @@
+# PathLight Project Dependencies
+
+# Core FastAPI framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.0
+
+# Environment & Configuration
+python-dotenv>=1.0.0
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# HTTP Client (for inter-service communication)
+httpx>=0.25.0
+
+# Development & Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Additional utilities
+pydantic>=2.0.0
+typing-extensions>=4.8.0
