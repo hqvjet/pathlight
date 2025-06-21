@@ -1,22 +1,23 @@
+# db/database.py
+
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-import os
+from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-# Database URL - đọc từ environment variables
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres123@postgres:5432/pathlight_db")
+from .config import DATABASE_URL, DEBUG
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=os.getenv("DEBUG", "false").lower() == "true")
+engine = create_engine(DATABASE_URL, echo=DEBUG)
 
-# Create SessionLocal class
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Base model
 Base = declarative_base()
 metadata = Base.metadata
 
-# Database dependency
+# FastAPI-compatible dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -24,6 +25,7 @@ def get_db():
     finally:
         db.close()
 
+# Context manager for CLI/scripts
 @contextmanager
 def get_db_context():
     db = SessionLocal()
@@ -32,6 +34,6 @@ def get_db_context():
     finally:
         db.close()
 
+# Create tables from Base subclasses
 def create_tables():
-    """Create all tables"""
     Base.metadata.create_all(bind=engine)

@@ -25,22 +25,26 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Auth Service", version="1.0.0")
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configuration
-security = HTTPBearer()
+# Load configuration from environment
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
 JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "pathlight-refresh-secret-key-2025")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+# CORS configuration
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
+ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "*").split(",")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
+)
 
 # Email configuration
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -48,7 +52,12 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@pathlight.com")
+
+# Frontend URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# Security
+security = HTTPBearer()
 
 # Admin credentials
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -92,6 +101,9 @@ class AuthResponse(BaseModel):
     status: int
     access_token: str
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
 # Utility functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -117,10 +129,17 @@ def generate_token() -> str:
 def send_email(to_email: str, subject: str, body: str):
     """Send email using SMTP"""
     try:
+        logger.info(f"🔍 DEBUG: Attempting to send email to {to_email}")
+        logger.info(f"🔍 DEBUG: SMTP_USERNAME={SMTP_USERNAME}")
+        logger.info(f"🔍 DEBUG: SMTP_PASSWORD={'*' * len(SMTP_PASSWORD) if SMTP_PASSWORD else 'EMPTY'}")
+        logger.info(f"🔍 DEBUG: FROM_EMAIL={FROM_EMAIL}")
+        logger.info(f"🔍 DEBUG: SMTP_SERVER={SMTP_SERVER}:{SMTP_PORT}")
+        
         if not SMTP_USERNAME or not SMTP_PASSWORD:
             logger.warning("Email credentials not configured. Skipping email send.")
             return
             
+        logger.info(f"📧 Creating email message...")
         msg = MIMEMultipart()
         msg['From'] = FROM_EMAIL
         msg['To'] = to_email
@@ -128,15 +147,25 @@ def send_email(to_email: str, subject: str, body: str):
         
         msg.attach(MIMEText(body, 'html'))
         
+        logger.info(f"📡 Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}...")
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        
+        logger.info(f"🔒 Starting TLS...")
         server.starttls()
+        
+        logger.info(f"🔑 Logging in...")
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        
+        logger.info(f"📤 Sending email...")
         text = msg.as_string()
         server.sendmail(FROM_EMAIL, to_email, text)
         server.quit()
-        logger.info(f"Email sent successfully to {to_email}")
+        
+        logger.info(f"✅ Email sent successfully to {to_email}")
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email}: {str(e)}")
+        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
+        import traceback
+        logger.error(f"📋 Full traceback: {traceback.format_exc()}")
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     try:
@@ -198,7 +227,36 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
-        return MessageResponse(status=401, message="Tài khoản này đã được sử dụng")
+        if existing_user.is_email_verified:
+            return MessageResponse(status=400, message="Email này đã được sử dụng và đã được xác thực")
+        else:
+            # User exists but not verified - resend verification email
+            verification_token = generate_token()
+            existing_user.email_verification_token = verification_token
+            existing_user.password = hash_password(user_data.password)  # Update password
+            db.commit()
+            
+            # Send verification email
+            verification_link = f"{FRONTEND_URL}/auth/verify-email?token={verification_token}"
+            email_body = f"""
+            <html>
+            <body>
+                <h2>Xác thực tài khoản PathLight</h2>
+                <p>Chào bạn,</p>
+                <p>Bạn đã đăng ký lại tài khoản với email này!</p>
+                <p>Vui lòng click vào nút dưới đây để xác thực tài khoản của bạn:</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_link}" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Xác thực tài khoản</a>
+                </p>
+                <p>Hoặc copy và paste link sau vào trình duyệt:</p>
+                <p style="word-break: break-all; color: #666;">{verification_link}</p>
+                <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau 24 giờ.</p>
+            </body>
+            </html>
+            """
+            
+            send_email(user_data.email, "Xác thực tài khoản (Đăng ký lại)", email_body)
+            return MessageResponse(status=200, message="Email đã được đăng ký trước đó. Mã xác thực mới đã được gửi vào email của bạn.")
     
     # Create new user
     verification_token = generate_token()
@@ -215,15 +273,20 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
     db.commit()
     
     # Send verification email
-    verification_link = f"{FRONTEND_URL}/api/v1/verify-email?token={verification_token}"
+    verification_link = f"{FRONTEND_URL}/auth/verify-email?token={verification_token}"
     email_body = f"""
     <html>
     <body>
-        <h2>Xác thực tài khoản</h2>
+        <h2>Xác thực tài khoản PathLight</h2>
         <p>Chào bạn,</p>
-        <p>Vui lòng click vào link dưới đây để xác thực tài khoản của bạn:</p>
-        <a href="{verification_link}">Xác thực tài khoản</a>
-        <p>Link này sẽ hết hạn sau 24 giờ.</p>
+        <p>Cảm ơn bạn đã đăng ký tài khoản tại PathLight!</p>
+        <p>Vui lòng click vào nút dưới đây để xác thực tài khoản của bạn:</p>
+        <p style="text-align: center; margin: 30px 0;">
+            <a href="{verification_link}" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Xác thực tài khoản</a>
+        </p>
+        <p>Hoặc copy và paste link sau vào trình duyệt:</p>
+        <p style="word-break: break-all; color: #666;">{verification_link}</p>
+        <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau 24 giờ.</p>
     </body>
     </html>
     """
@@ -412,6 +475,48 @@ async def admin_signin(request: AdminSigninRequest, db: Session = Depends(get_db
     
     return AuthResponse(status=200, access_token=access_token)
 
+# 1.2. Gửi lại email xác thực
+@app.post("/api/v1/resend-verification", response_model=MessageResponse)
+async def resend_verification(request: ResendVerificationRequest, db: Session = Depends(get_db)):
+    """Resend verification email endpoint"""
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        return MessageResponse(status=400, message="Email không tồn tại trong hệ thống")
+    
+    if user.is_email_verified:
+        return MessageResponse(status=400, message="Email này đã được xác thực")
+    
+    # Generate new verification token
+    verification_token = generate_token()
+    user.email_verification_token = verification_token
+    db.commit()
+    
+    # Send verification email
+    verification_link = f"{FRONTEND_URL}/auth/verify-email?token={verification_token}"
+    email_body = f"""
+    <html>
+    <body>
+        <h2>Xác thực tài khoản PathLight</h2>
+        <p>Chào bạn,</p>
+        <p>Bạn đã yêu cầu gửi lại email xác thực!</p>
+        <p>Vui lòng click vào nút dưới đây để xác thực tài khoản của bạn:</p>
+        <p style="text-align: center; margin: 30px 0;">
+            <a href="{verification_link}" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Xác thực tài khoản</a>
+        </p>
+        <p>Hoặc copy và paste link sau vào trình duyệt:</p>
+        <p style="word-break: break-all; color: #666;">{verification_link}</p>
+        <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau 24 giờ.</p>
+    </body>
+    </html>
+    """
+    
+    send_email(request.email, "Xác thực tài khoản (Gửi lại)", email_body)
+    
+    return MessageResponse(status=200, message="Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    
+    # Get port from environment
+    port = int(os.getenv("AUTH_SERVICE_PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
