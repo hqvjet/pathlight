@@ -7,21 +7,30 @@ import os
 from datetime import datetime
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# Import config từ file config.py
+from .config import (
+    USER_SERVICE_PORT, 
+    JWT_SECRET_KEY, 
+    JWT_ALGORITHM, 
+    ALLOWED_ORIGINS,
+    DEBUG,
+    LOG_LEVEL
+)
+
+# Setup logging
+logging.basicConfig(level=getattr(logging, LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="User Service", version="1.0.0")
 
+# CORS - CHỈ CHO PHÉP API GATEWAY
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,  # Chỉ API Gateway
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
-
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
-JWT_ALGORITHM = "HS256"
 
 class UserProfile(BaseModel):
     email: EmailStr
@@ -198,4 +207,4 @@ async def unenroll_course(course_id: int, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8004)
+    uvicorn.run(app, host="0.0.0.0", port=USER_SERVICE_PORT)
