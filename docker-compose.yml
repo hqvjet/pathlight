@@ -1,4 +1,19 @@
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - pathlight-network
+
   # API Gateway
   api-gateway:
     build: ./services/api-gateway
@@ -9,6 +24,7 @@ services:
     depends_on:
       - postgres
       - auth-service
+      - user-service
     networks:
       - pathlight-network
 
@@ -24,18 +40,42 @@ services:
     networks:
       - pathlight-network
 
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+  # User Service  
+  user-service:
+    build: ./services/user-service
     ports:
-      - "${POSTGRES_PORT}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - auth-service
+    networks:
+      - pathlight-network
+
+  # Course Service
+  course-service:
+    build: ./services/course-service
+    ports:
+      - "${COURSE_SERVICE_PORT}:${COURSE_SERVICE_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - auth-service
+    networks:
+      - pathlight-network
+
+  # Quiz Service
+  quiz-service:
+    build: ./services/quiz-service
+    ports:
+      - "${QUIZ_SERVICE_PORT}:${QUIZ_SERVICE_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - auth-service
     networks:
       - pathlight-network
 
