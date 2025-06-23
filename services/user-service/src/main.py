@@ -7,15 +7,19 @@ import os
 from datetime import datetime
 import logging
 
-# Import config từ file config.py
-from .config import (
-    USER_SERVICE_PORT, 
-    JWT_SECRET_KEY, 
-    JWT_ALGORITHM, 
-    ALLOWED_ORIGINS,
-    DEBUG,
-    LOG_LEVEL
-)
+# Configuration from environment
+USER_SERVICE_PORT = int(os.getenv("USER_SERVICE_PORT", "8002"))
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# CORS - CHỈ CHO PHÉP API GATEWAY
+API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
+ALLOWED_ORIGINS = [
+    API_GATEWAY_URL,
+    "http://localhost:8000",  # for development
+]
 
 # Setup logging
 logging.basicConfig(level=getattr(logging, LOG_LEVEL))
@@ -32,30 +36,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic models
 class UserProfile(BaseModel):
-    email: EmailStr
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    phone: Optional[str] = None
-    bio: Optional[str] = None
+    email: str
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
     avatar_url: Optional[str] = None
-    date_of_birth: Optional[str] = None
-    location: Optional[str] = None
-    preferences: Optional[dict] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+
+class UpdateProfileRequest(BaseModel):
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
 
 class EnrollmentRequest(BaseModel):
-    course_id: int
+    course_id: str
 
-class ProgressUpdate(BaseModel):
-    lesson_id: int
-    progress: float
-    completed: bool
+class CourseProgress(BaseModel):
+    course_id: str
+    course_title: str
+    progress_percentage: float
+    last_accessed: Optional[datetime] = None
 
-users_db = {}
-enrollments_db = {}
-progress_db = {}
+class UserStats(BaseModel):
+    total_courses: int
+    completed_courses: int
+    total_hours: float
+
+# Mock users database (in real app, use proper database)
+mock_users = {
+    "user123": {
+        "email": "john@example.com",
+        "given_name": "John",
+        "family_name": "Doe",
+        "avatar_url": "https://example.com/avatar.jpg"
+    }
+}
 
 def verify_token(request: Request):
     try:
@@ -79,129 +93,79 @@ async def health():
 
 @app.get("/api/v1/profile")
 async def get_profile(request: Request):
-    user_email = verify_token(request)
-    if not user_email:
+    """Lấy thông tin profile người dùng"""
+    user_id = verify_token(request)
+    if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     
-    profile = users_db.get(user_email, {
-        "email": user_email,
-        "created_at": datetime.utcnow()
+    # Mock response - in real app, query database
+    user_data = mock_users.get(user_id, {
+        "email": "user@example.com",
+        "given_name": "User",
+        "family_name": "Name",
+        "avatar_url": None
     })
     
-    return {"status": 200, "profile": profile}
+    return {"status": 200, "data": user_data}
 
 @app.put("/api/v1/profile")
-async def update_profile(profile: UserProfile, request: Request):
-    user_email = verify_token(request)
-    if not user_email:
+async def update_profile(request: Request, profile_data: UpdateProfileRequest):
+    """Cập nhật thông tin profile"""
+    user_id = verify_token(request)
+    if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     
-    profile_data = profile.dict()
-    profile_data["email"] = user_email
-    profile_data["updated_at"] = datetime.utcnow()
+    # Mock update - in real app, update database
+    logger.info(f"Updating profile for user {user_id}: {profile_data}")
     
-    if user_email not in users_db:
-        profile_data["created_at"] = datetime.utcnow()
-    else:
-        profile_data["created_at"] = users_db[user_email].get("created_at", datetime.utcnow())
-    
-    users_db[user_email] = profile_data
-    
-    return {"status": 200, "profile": profile_data}
+    return {"status": 200, "message": "Profile updated successfully"}
 
-@app.post("/api/v1/enrollments")
-async def enroll_course(enrollment: EnrollmentRequest, request: Request):
-    user_email = verify_token(request)
-    if not user_email:
+@app.get("/api/v1/courses/enrolled")
+async def get_enrolled_courses(request: Request):
+    """Lấy danh sách khóa học đã đăng ký"""
+    user_id = verify_token(request)
+    if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     
-    enrollment_key = f"{user_email}_{enrollment.course_id}"
-    
-    if enrollment_key in enrollments_db:
-        return {"status": 400, "message": "Already enrolled in this course"}
-    
-    enrollment_data = {
-        "user_email": user_email,
-        "course_id": enrollment.course_id,
-        "enrolled_at": datetime.utcnow(),
-        "status": "active"
-    }
-    
-    enrollments_db[enrollment_key] = enrollment_data
-    
-    return {"status": 200, "enrollment": enrollment_data}
-
-@app.get("/api/v1/enrollments")
-async def get_enrollments(request: Request):
-    user_email = verify_token(request)
-    if not user_email:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    user_enrollments = [
-        enrollment for enrollment in enrollments_db.values() 
-        if enrollment["user_email"] == user_email
+    # Mock data - in real app, query database
+    enrolled_courses = [
+        {
+            "course_id": "course1",
+            "course_title": "Python Cơ Bản",
+            "progress_percentage": 75.5,
+            "last_accessed": "2025-06-20T10:30:00"
+        },
+        {
+            "course_id": "course2", 
+            "course_title": "Web Development",
+            "progress_percentage": 42.0,
+            "last_accessed": "2025-06-22T14:15:00"
+        }
     ]
     
-    return {"status": 200, "enrollments": user_enrollments}
+    return {"status": 200, "data": enrolled_courses}
 
-@app.post("/api/v1/progress")
-async def update_progress(progress: ProgressUpdate, request: Request):
-    user_email = verify_token(request)
-    if not user_email:
+@app.post("/api/v1/courses/enroll")
+async def enroll_course(request: Request, enrollment: EnrollmentRequest):
+    """Đăng ký khóa học"""
+    user_id = verify_token(request)
+    if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     
-    progress_key = f"{user_email}_{progress.lesson_id}"
+    # Mock enrollment - in real app, add to database
+    logger.info(f"User {user_id} enrolling in course {enrollment.course_id}")
     
-    progress_data = {
-        "user_email": user_email,
-        "lesson_id": progress.lesson_id,
-        "progress": progress.progress,
-        "completed": progress.completed,
-        "updated_at": datetime.utcnow()
-    }
-    
-    progress_db[progress_key] = progress_data
-    
-    return {"status": 200, "progress": progress_data}
+    return {"status": 200, "message": "Enrolled successfully"}
 
-@app.get("/api/v1/progress")
-async def get_progress(request: Request):
-    user_email = verify_token(request)
-    if not user_email:
+@app.delete("/api/v1/courses/{course_id}/unenroll")
+async def unenroll_course(request: Request, course_id: str):
+    """Hủy đăng ký khóa học"""
+    user_id = verify_token(request)
+    if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     
-    user_progress = [
-        progress for progress in progress_db.values() 
-        if progress["user_email"] == user_email
-    ]
-    
-    return {"status": 200, "progress": user_progress}
-
-@app.get("/api/v1/progress/course/{course_id}")
-async def get_course_progress(course_id: int, request: Request):
-    user_email = verify_token(request)
-    if not user_email:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    course_progress = []
-    for progress in progress_db.values():
-        if progress["user_email"] == user_email:
-            course_progress.append(progress)
-    
-    return {"status": 200, "progress": course_progress}
-
-@app.delete("/api/v1/enrollments/{course_id}")
-async def unenroll_course(course_id: int, request: Request):
-    user_email = verify_token(request)
-    if not user_email:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    enrollment_key = f"{user_email}_{course_id}"
-    
-    if enrollment_key not in enrollments_db:
-        return {"status": 404, "message": "Enrollment not found"}
-    
-    del enrollments_db[enrollment_key]
+    # Mock unenrollment - in real app, remove from database
+    logger.info(f"User {user_id} unenrolling from course {course_id}")
     
     return {"status": 200, "message": "Unenrolled successfully"}
 
