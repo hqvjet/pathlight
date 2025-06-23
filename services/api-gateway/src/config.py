@@ -14,7 +14,7 @@ class Config:
     
     # API Gateway Settings
     GATEWAY_HOST = os.getenv("GATEWAY_HOST", "0.0.0.0")
-    GATEWAY_PORT = int(os.getenv("API_GATEWAY_PORT", 8000))
+    GATEWAY_PORT = int(os.getenv("API_GATEWAY_PORT", "8000"))
     
     # Client CORS Settings (chỉ cho phép frontend)
     ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
@@ -24,13 +24,13 @@ class Config:
     # Service Discovery - API Gateway cần biết tất cả services
     SERVICES = {
         "auth": os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001"),
-        "user": os.getenv("USER_SERVICE_URL", "http://user-service:8002"), 
+        "user": os.getenv("USER_SERVICE_URL", "http://user-service:8002"),
         "course": os.getenv("COURSE_SERVICE_URL", "http://course-service:8003"),
         "quiz": os.getenv("QUIZ_SERVICE_URL", "http://quiz-service:8004"),
     }
     
     # Authentication (để verify JWT từ clients)
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-secret")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     
     # Application Config
