@@ -23,6 +23,7 @@ export default function SignUpForm() {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showLoginLink, setShowLoginLink] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -30,6 +31,7 @@ export default function SignUpForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setShowLoginLink(false);
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
@@ -58,14 +60,33 @@ export default function SignUpForm() {
       const result = await res.json();
 
       if (res.ok) {
-        // Success - redirect to verify email
+        // Success - email verification sent
         storage.setPendingEmail(formData.email);
-        router.push('/auth/verify-email');
+        router.push('/auth/email-sent');
       } else {
-        setError(result.message || 'Đăng ký thất bại');
+        // Get error message from response - backend may use 'detail' or 'message'
+        const errorMessage = result.detail || result.message || 'Đăng ký thất bại. Vui lòng thử lại.';
+        
+        // Handle different error cases
+        if (res.status === 400 && errorMessage.includes('đã được sử dụng và đã được xác thực')) {
+          // User already verified - should login instead
+          setError(errorMessage);
+          setShowLoginLink(true);
+        } else if (res.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('đã tồn tại')) {
+          setError('Email này đã được đăng ký. Vui lòng sử dụng email khác hoặc đăng nhập.');
+          setShowLoginLink(true);
+        } else if (errorMessage.includes('Invalid email') || errorMessage.includes('email không hợp lệ')) {
+          setError('Định dạng email không hợp lệ. Vui lòng kiểm tra lại.');
+        } else if (errorMessage.includes('Password') || errorMessage.includes('mật khẩu')) {
+          setError('Mật khẩu không đáp ứng yêu cầu. Vui lòng chọn mật khẩu mạnh hơn.');
+        } else {
+          // Use the exact error message from backend
+          setError(errorMessage);
+        }
       }
-    } catch {
-      setError('Lỗi kết nối. Vui lòng thử lại.');
+    } catch (error) {
+      console.error('Signup error:', error);
+      setError('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
     } finally {
       setLoading(false);
     }
@@ -149,8 +170,21 @@ export default function SignUpForm() {
             </h2>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-                {error}
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                <div className="text-sm mb-3">
+                  {error}
+                </div>
+                {showLoginLink && (
+                  <Link
+                    href="/auth/signin"
+                    className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
+                  >
+                    Đăng Nhập Ngay
+                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                )}
               </div>
             )}
 
