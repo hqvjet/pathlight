@@ -1,14 +1,21 @@
+import sys
+import os
+
+# Add libs path to use common utilities
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'libs', 'common-utils-py', 'src'))
+
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
+from pathlight_common import get_database_url, get_debug_mode
 
-# Database URL - đọc từ environment variables
-DATABASE_URL = os.getenv("QUIZ_DATABASE_URL", os.getenv("DATABASE_URL", "postgresql://postgres:1210@localhost:5433/pathlight"))
+# Database configuration from common utilities
+DATABASE_URL = get_database_url()
+DEBUG = get_debug_mode()
 
 # Lazy loading để tránh lỗi khi import models
 def get_engine():
-    return create_engine(DATABASE_URL)
+    return create_engine(DATABASE_URL, echo=DEBUG)
 
 def get_session():
     engine = get_engine()
