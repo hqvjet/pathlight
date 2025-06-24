@@ -1,41 +1,15 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, BigInteger, ForeignKey, Text
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from src.database import Base
+import sys
+import os
 
+# Add libs path to use shared models
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-types-py'))
 
-class User(Base):
-    __tablename__ = "users" 
-    
-    user_id = Column(String, primary_key=True)
-    profile_id = Column(String, ForeignKey("user_profile.profile_id"), nullable=False)
-    email = Column(String, nullable=True, unique=True)
-    password = Column(String, nullable=True)  # Nullable for OAuth users
-    google_id = Column(String, nullable=True, unique=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
-    # Relationship
-    profile = relationship("UserProfile", back_populates="user")
+# Import shared User model
+from shared_models import User
 
+# Make shared User model available
+__all__ = ['User']
 
-class UserProfile(Base):
-    __tablename__ = "user_profile"
-    
-    profile_id = Column(String, primary_key=True)
-    family_name = Column(String, nullable=False)
-    given_name = Column(String, nullable=True)
-    avatar_id = Column(String, nullable=False)
-    dob = Column(DateTime, nullable=False)
-    level = Column(Integer, nullable=False, default=1)
-    current_exp = Column(BigInteger, nullable=False, default=0)
-    require_exp = Column(BigInteger, nullable=False, default=10)
-    remind_time = Column(DateTime, nullable=False)
-    sex = Column(Boolean, nullable=False)  # True for male, False for female
-    bio = Column(Text, nullable=True)  # Changed to Text and made nullable
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
-    # Relationship
-    user = relationship("User", back_populates="profile", uselist=False)
+# Note: UserProfile is now merged into User model in shared_models.py
+# All user profile data is now stored in the unified users table
+# No need for separate UserProfile class
