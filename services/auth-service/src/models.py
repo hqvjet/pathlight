@@ -1,30 +1,18 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, Text
+import sys
+import os
+
+# Add libs path to use shared models
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-types-py'))
+
+from sqlalchemy import Column, String, DateTime, Boolean
 from sqlalchemy.sql import func
 from src.database import Base
 import uuid
 
+# Import shared User model
+from shared_models import User
 
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String, nullable=False, unique=True, index=True)
-    password = Column(String, nullable=True)  # Nullable for OAuth users
-    is_email_verified = Column(Boolean, default=False)
-    email_verification_token = Column(String, nullable=True)
-    password_reset_token = Column(String, nullable=True)
-    
-    # OAuth fields
-    google_id = Column(String, nullable=True, unique=True)
-    given_name = Column(String, nullable=True)
-    family_name = Column(String, nullable=True)
-    avatar_url = Column(String, nullable=True)
-    
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
+# Auth-service specific models
 class Admin(Base):
     __tablename__ = "admins"
     
@@ -40,3 +28,6 @@ class TokenBlacklist(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     token_jti = Column(String, nullable=False, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Make shared User model available
+__all__ = ['User', 'Admin', 'TokenBlacklist']

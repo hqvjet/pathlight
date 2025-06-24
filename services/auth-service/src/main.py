@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add libs path to use common utilities
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-utils-py', 'src'))
+
 from fastapi import FastAPI, HTTPException, Depends, status, Response, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,8 +12,9 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 import bcrypt
 import jwt
-import os
 import secrets
+import time
+from datetime import datetime, timedelta, timezone
 import uuid
 from datetime import datetime, timedelta
 import logging
@@ -15,9 +22,16 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pathlight_common import get_jwt_config, get_service_port
+
+# Load JWT configuration from common utilities
+jwt_config = get_jwt_config()
 
 from src.database import get_db, create_tables
 from src.models import User, Admin, TokenBlacklist
+
+# Email verification configuration
+EMAIL_VERIFICATION_EXPIRE_MINUTES = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_MINUTES", "10"))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -113,13 +127,13 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh", "jti": str(uuid.uuid4())})
     return jwt.encode(to_encode, JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
@@ -127,7 +141,7 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 def send_email(to_email: str, subject: str, body: str):
-    """Send email using SMTP"""
+    """Send email using SMTP with improved reliability"""
     try:
         logger.info(f"🔍 DEBUG: Attempting to send email to {to_email}")
         logger.info(f"🔍 DEBUG: SMTP_USERNAME={SMTP_USERNAME}")
@@ -140,32 +154,66 @@ def send_email(to_email: str, subject: str, body: str):
             return
             
         logger.info(f"📧 Creating email message...")
-        msg = MIMEMultipart()
-        msg['From'] = FROM_EMAIL
+        msg = MIMEMultipart('alternative')
+        msg['From'] = f"PathLight <{FROM_EMAIL}>"
         msg['To'] = to_email
         msg['Subject'] = subject
+        msg['Message-ID'] = f"<{secrets.token_urlsafe(16)}@pathlight.com>"
+        msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
+        msg['X-Mailer'] = 'PathLight App'
         
-        msg.attach(MIMEText(body, 'html'))
+        # Add both HTML and plain text versions
+        plain_body = body.replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
+        plain_body = plain_body.replace('<strong>', '').replace('</strong>', '')
+        plain_body = plain_body.replace('<a href="', '').replace('">', ' ').replace('</a>', '')
         
-        logger.info(f"📡 Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}...")
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        text_part = MIMEText(plain_body, 'plain', 'utf-8')
+        html_part = MIMEText(body, 'html', 'utf-8')
         
-        logger.info(f"🔒 Starting TLS...")
-        server.starttls()
+        msg.attach(text_part)
+        msg.attach(html_part)
         
-        logger.info(f"🔑 Logging in...")
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        
-        logger.info(f"📤 Sending email...")
-        text = msg.as_string()
-        server.sendmail(FROM_EMAIL, to_email, text)
-        server.quit()
-        
-        logger.info(f"✅ Email sent successfully to {to_email}")
+        # Try sending with retry mechanism
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"📡 Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT} (attempt {attempt + 1}/{max_retries})...")
+                server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
+                
+                logger.info(f"🔒 Starting TLS...")
+                server.starttls()
+                
+                logger.info(f"🔑 Logging in...")
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                
+                logger.info(f"📤 Sending email...")
+                refused = server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
+                
+                if refused:
+                    logger.warning(f"⚠️ Some recipients were refused: {refused}")
+                else:
+                    logger.info(f"✅ Email sent successfully to {to_email}")
+                
+                server.quit()
+                return  # Success, exit retry loop
+                
+            except smtplib.SMTPException as smtp_error:
+                logger.error(f"❌ SMTP error on attempt {attempt + 1}: {str(smtp_error)}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)  # Exponential backoff
+            except Exception as conn_error:
+                logger.error(f"❌ Connection error on attempt {attempt + 1}: {str(conn_error)}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+                
     except Exception as e:
         logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
         import traceback
         logger.error(f"📋 Full traceback: {traceback.format_exc()}")
+        # Print Vietnamese error message for debugging
+        print(f"Lỗi không gửi email đến {to_email}: {str(e)}")
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     try:
@@ -226,13 +274,24 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
     """User registration endpoint"""
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
+    
     if existing_user:
         if existing_user.is_email_verified:
-            return MessageResponse(status=400, message="Email này đã được sử dụng và đã được xác thực")
+            # User exists and is verified - REJECT signup
+            logger.warning(f"Attempted signup with already verified email: {user_data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email này đã được sử dụng và đã được xác thực. Vui lòng đăng nhập hoặc sử dụng email khác."
+            )
         else:
-            # User exists but not verified - resend verification email
+            # User exists but not verified - allow re-registration with new verification token
+            logger.info(f"Re-registering unverified user: {user_data.email}")
             verification_token = generate_token()
+            expire_minutes = EMAIL_VERIFICATION_EXPIRE_MINUTES
+            expiration_time = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+            
             existing_user.email_verification_token = verification_token
+            existing_user.email_verification_expires_at = expiration_time
             existing_user.password = hash_password(user_data.password)  # Update password
             db.commit()
             
@@ -250,22 +309,26 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
                 </p>
                 <p>Hoặc copy và paste link sau vào trình duyệt:</p>
                 <p style="word-break: break-all; color: #666;">{verification_link}</p>
-                <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau 24 giờ.</p>
+                <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau {expire_minutes} phút.</p>
             </body>
             </html>
             """
             
             send_email(user_data.email, "Xác thực tài khoản (Đăng ký lại)", email_body)
-            return MessageResponse(status=200, message="Email đã được đăng ký trước đó. Mã xác thực mới đã được gửi vào email của bạn.")
+            return MessageResponse(status=200, message="Email đã được đăng ký trước đó nhưng chưa xác thực. Mã xác thực mới đã được gửi vào email của bạn.")
     
-    # Create new user
+    # Create new user (email doesn't exist)
+    logger.info(f"Creating new user: {user_data.email}")
     verification_token = generate_token()
+    expire_minutes = EMAIL_VERIFICATION_EXPIRE_MINUTES
+    expiration_time = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     hashed_password = hash_password(user_data.password)
     
     user = User(
         email=user_data.email,
         password=hashed_password,
         email_verification_token=verification_token,
+        email_verification_expires_at=expiration_time,
         is_email_verified=False
     )
     
@@ -301,14 +364,19 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
     """Verify email endpoint"""
     user = db.query(User).filter(User.email_verification_token == token).first()
     if not user:
-        return MessageResponse(status=401, message="Token đã hết hạn, xin vui lòng đăng ký lại")
+        return MessageResponse(status=401, message="Token không hợp lệ hoặc đã hết hạn")
+    
+    # Check if token has expired
+    if user.email_verification_expires_at and user.email_verification_expires_at < datetime.now(timezone.utc):
+        return MessageResponse(status=401, message="Token đã hết hạn. Vui lòng yêu cầu gửi lại email xác nhận")
     
     # Update user as verified
     user.is_email_verified = True
     user.email_verification_token = None
+    user.email_verification_expires_at = None
     db.commit()
     
-    return MessageResponse(status=200)
+    return MessageResponse(status=200, message="Email đã được xác thực thành công")
 
 # 1.3. Đăng nhập
 @app.post("/api/v1/signin", response_model=AuthResponse)
@@ -488,7 +556,11 @@ async def resend_verification(request: ResendVerificationRequest, db: Session = 
     
     # Generate new verification token
     verification_token = generate_token()
+    expire_minutes = EMAIL_VERIFICATION_EXPIRE_MINUTES
+    expiration_time = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
+    
     user.email_verification_token = verification_token
+    user.email_verification_expires_at = expiration_time
     db.commit()
     
     # Send verification email
@@ -513,6 +585,24 @@ async def resend_verification(request: ResendVerificationRequest, db: Session = 
     send_email(request.email, "Xác thực tài khoản (Gửi lại)", email_body)
     
     return MessageResponse(status=200, message="Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn")
+
+# Test email endpoint
+@app.post("/api/v1/test-email")
+async def test_email(email: str):
+    """Test endpoint to send email directly"""
+    try:
+        test_body = """
+        <h2>🧪 Test Email từ PathLight</h2>
+        <p>Đây là email test để kiểm tra chức năng gửi email.</p>
+        <p>Nếu bạn nhận được email này, hệ thống email đang hoạt động bình thường.</p>
+        <p>Thời gian gửi: {}</p>
+        """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        send_email(email, "🧪 Test Email - PathLight", test_body)
+        return {"message": f"Test email sent to {email}", "status": "success"}
+    except Exception as e:
+        logger.error(f"Test email failed: {str(e)}")
+        return {"message": f"Failed to send test email: {str(e)}", "status": "error"}
 
 if __name__ == "__main__":
     import uvicorn
