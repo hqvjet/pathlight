@@ -21,6 +21,8 @@ services:
       - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
     env_file:
       - .env
+    volumes:
+      - ./libs:/app/libs:ro
     depends_on:
       - postgres
       - auth-service
@@ -35,6 +37,8 @@ services:
       - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
     env_file:
       - .env
+    volumes:
+      - ./libs:/app/libs:ro
     depends_on:
       - postgres
     networks:
@@ -47,6 +51,8 @@ services:
       - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
     env_file:
       - .env
+    volumes:
+      - ./libs:/app/libs:ro
     depends_on:
       - postgres
       - auth-service
@@ -60,6 +66,8 @@ services:
       - "${COURSE_SERVICE_PORT}:${COURSE_SERVICE_PORT}"
     env_file:
       - .env
+    volumes:
+      - ./libs:/app/libs:ro
     depends_on:
       - postgres
       - auth-service
@@ -73,6 +81,8 @@ services:
       - "${QUIZ_SERVICE_PORT}:${QUIZ_SERVICE_PORT}"
     env_file:
       - .env
+    volumes:
+      - ./libs:/app/libs:ro
     depends_on:
       - postgres
       - auth-service

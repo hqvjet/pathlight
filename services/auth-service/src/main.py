@@ -1,8 +1,8 @@
 import sys
 import os
 
-# Add libs path to use common utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-utils-py', 'src'))
+# Add libs path to use common utilities  
+sys.path.insert(0, '/app/libs/common-utils-py/src')
 
 from fastapi import FastAPI, HTTPException, Depends, status, Response, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -421,10 +421,23 @@ async def signout(credentials: HTTPAuthorizationCredentials = Depends(security),
 async def forget_password(request: ForgetPasswordRequest, db: Session = Depends(get_db)):
     """Forget password endpoint"""
     user = db.query(User).filter(User.email == request.email).first()
-    if not user:
-        return MessageResponse(status=401, message="Tài khoản không tồn tại, xin vui lòng thử lại")
     
-    # Generate reset token
+    if not user:
+        # User doesn't exist
+        logger.warning(f"Password reset requested for non-existent email: {request.email}")
+        return MessageResponse(status=404, message="Email này không tồn tại trong hệ thống")
+    
+    if not user.password:
+        # User exists but is OAuth-only (no password to reset)
+        logger.warning(f"Password reset requested for OAuth-only user: {request.email}")
+        return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
+    
+    if not getattr(user, 'is_active', True):
+        # User exists but is inactive
+        logger.warning(f"Password reset requested for inactive user: {request.email}")
+        return MessageResponse(status=403, message="Tài khoản này đã bị vô hiệu hóa")
+    
+    # User exists, has password, and is active - send reset email
     reset_token = generate_token()
     user.password_reset_token = reset_token
     db.commit()
@@ -438,33 +451,73 @@ async def forget_password(request: ForgetPasswordRequest, db: Session = Depends(
         <p>Chào bạn,</p>
         <p>Vui lòng click vào link dưới đây để đặt lại mật khẩu:</p>
         <a href="{reset_link}">Đặt lại mật khẩu</a>
-        <p>Link này sẽ hết hạn sau 1 giờ.</p>
+        <p>Link này sẽ hết hạn sau 10 phút.</p>
     </body>
     </html>
     """
     
     send_email(request.email, "Đặt lại mật khẩu", email_body)
+    logger.info(f"Password reset email sent to {request.email}")
     
-    return MessageResponse(status=200, message="Xin vui lòng kiểm tra email của bạn để reset mật khẩu")
+    return MessageResponse(status=200, message="Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư của bạn")
+
+# 1.5.1. Kiểm tra token reset password
+@app.get("/api/v1/validate-reset-token/{token}", response_model=MessageResponse)
+async def validate_reset_token(token: str, db: Session = Depends(get_db)):
+    """Validate reset token endpoint"""
+    user = db.query(User).filter(User.password_reset_token == token).first()
+    
+    if not user:
+        # Token not found or invalid
+        logger.warning(f"Token validation failed - invalid token: {token[:8]}...")
+        return MessageResponse(status=401, message="Token không hợp lệ hoặc đã hết hạn")
+    
+    if not user.password:
+        # User exists but is OAuth-only (no password to reset)
+        logger.warning(f"Token validation failed - OAuth-only user: {user.email}")
+        return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
+    
+    if not getattr(user, 'is_active', True):
+        # User exists but is inactive
+        logger.warning(f"Token validation failed - inactive user: {user.email}")
+        return MessageResponse(status=403, message="Tài khoản này đã bị vô hiệu hóa")
+    
+    logger.info(f"Token validation successful for user: {user.email}")
+    return MessageResponse(status=200, message="Token hợp lệ")
 
 # 1.6. Đặt lại mật khẩu
 @app.post("/api/v1/reset-password/{token}", response_model=MessageResponse)
 async def reset_password(token: str, request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Reset password endpoint"""
     user = db.query(User).filter(User.password_reset_token == token).first()
+    
     if not user:
-        return MessageResponse(status=401, message="Token đã hết hạn, xin vui lòng thử lại")
+        # Token not found or invalid
+        logger.warning(f"Reset password attempted with invalid token: {token[:8]}...")
+        return MessageResponse(status=401, message="Token đã hết hạn hoặc không hợp lệ")
     
-    # Check if new password is same as old password
-    if user.password and verify_password(request.new_password, user.password):
-        return MessageResponse(status=401, message="Mật khẩu bạn vừa nhập giống với mật khẩu cũ, xin vui lòng thử lại")
+    if not user.password:
+        # User exists but is OAuth-only (no password to reset)
+        logger.warning(f"Reset password attempted for OAuth-only user: {user.email}")
+        return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
     
-    # Update password
+    if not getattr(user, 'is_active', True):
+        # User exists but is inactive
+        logger.warning(f"Reset password attempted for inactive user: {user.email}")
+        return MessageResponse(status=403, message="Tài khoản này đã bị vô hiệu hóa")
+    
+    # Check if new password is same as current password in database
+    if verify_password(request.new_password, user.password):
+        logger.warning(f"User {user.email} attempted to use same password during reset")
+        return MessageResponse(status=409, message="Mật khẩu mới không được trùng với mật khẩu cũ")
+    
+    # Update password and clear reset token
     user.password = hash_password(request.new_password)
     user.password_reset_token = None
     db.commit()
     
-    return MessageResponse(status=200)
+    logger.info(f"Password reset successful for user {user.email}")
+    return MessageResponse(status=200, message="Đặt lại mật khẩu thành công")
 
 # 1.7. Đăng nhập bằng tài khoản thứ ba (Google)
 @app.post("/api/v1/oauth-signin", response_model=AuthResponse)
@@ -572,7 +625,7 @@ async def resend_verification(request: ResendVerificationRequest, db: Session = 
         <p>Chào bạn,</p>
         <p>Bạn đã yêu cầu gửi lại email xác thực!</p>
         <p>Vui lòng click vào nút dưới đây để xác thực tài khoản của bạn:</p>
-        <p style="text-align: center; margin: 30px 0;">
+        <p style="text-align: start; margin: 30px 0;">
             <a href="{verification_link}" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Xác thực tài khoản</a>
         </p>
         <p>Hoặc copy và paste link sau vào trình duyệt:</p>
@@ -603,6 +656,34 @@ async def test_email(email: str):
     except Exception as e:
         logger.error(f"Test email failed: {str(e)}")
         return {"message": f"Failed to send test email: {str(e)}", "status": "error"}
+
+# Test password verification endpoint (for debugging)
+@app.post("/api/v1/test-password-verification")
+async def test_password_verification(
+    email: str, 
+    test_password: str, 
+    db: Session = Depends(get_db)
+):
+    """Test endpoint to verify password logic - REMOVE IN PRODUCTION"""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return {"message": "User not found", "status": "error"}
+    
+    if not user.password:
+        return {"message": "User has no password (OAuth-only)", "status": "no_password"}
+    
+    # Test password verification
+    is_same = verify_password(test_password, user.password)
+    
+    return {
+        "message": f"Password comparison result: {'SAME' if is_same else 'DIFFERENT'}",
+        "user_email": email,
+        "has_password": bool(user.password),
+        "password_hash_preview": user.password[:20] + "..." if user.password else None,
+        "test_password": test_password,
+        "verification_result": is_same,
+        "status": "success"
+    }
 
 if __name__ == "__main__":
     import uvicorn

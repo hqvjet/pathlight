@@ -4,9 +4,9 @@ import sys
 import os
 
 # Add libs path to use common utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-utils-py', 'src'))
+sys.path.insert(0, '/app/libs/common-utils-py/src')
 # Add libs path for shared models
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-types-py'))
+sys.path.insert(0, '/app/libs/common-types-py')
 
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
@@ -24,22 +24,11 @@ engine = create_engine(DATABASE_URL, echo=DEBUG)
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base model
-Base = declarative_base()
+# Import shared models to get the SharedBase
+from shared_models import SharedBase
 
-# Import shared models to register them with Base
-from shared_models import User, SharedBase
-
-# Merge shared models into Base
-Base.registry._class_registry.update(SharedBase.registry._class_registry)
-
-metadata = Base.metadata
-
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base model
-Base = declarative_base()
+# Use SharedBase as our Base for this service
+Base = SharedBase
 metadata = Base.metadata
 
 # FastAPI-compatible dependency
