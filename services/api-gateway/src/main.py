@@ -17,10 +17,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware - CHỈ CHO PHÉP CLIENTS (Frontend)
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.ALLOWED_ORIGINS,  # Chỉ frontend
+    allow_origins=Config.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=Config.ALLOWED_METHODS,
     allow_headers=Config.ALLOWED_HEADERS,
@@ -40,10 +40,9 @@ async def forward_request(service: str, path: str, request: Request):
     
     service_url = Config.SERVICES[service]
     url = f"{service_url}{path}"
-    
-    # Forward headers
+
     headers = dict(request.headers)
-    headers.pop("host", None)  # Remove host header
+    headers.pop("host", None) 
     
     try:
         # Get request body for POST/PUT requests
@@ -69,10 +68,16 @@ async def forward_request(service: str, path: str, request: Request):
         
     except httpx.RequestError as e:
         logger.error(f"Request to {url} failed: {str(e)}")
-        raise HTTPException(status_code=503, detail=f"Service {service} unavailable")
+        return JSONResponse(
+            content={"status": 503, "message": f"Service {service} unavailable"},
+            status_code=503
+        )
     except Exception as e:
         logger.error(f"Unexpected error forwarding to {url}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return JSONResponse(
+            content={"status": 500, "message": "Internal server error"},
+            status_code=500
+        ) 
 
 @app.get("/")
 async def root():
@@ -125,6 +130,10 @@ async def signout(request: Request):
 @app.post("/api/v1/forget-password")
 async def forget_password(request: Request):
     return await forward_request("auth", "/api/v1/forget-password", request)
+
+@app.get("/api/v1/validate-reset-token/{token}")
+async def validate_reset_token(token: str, request: Request):
+    return await forward_request("auth", f"/api/v1/validate-reset-token/{token}", request)
 
 @app.post("/api/v1/reset-password/{token}")
 async def reset_password(token: str, request: Request):
