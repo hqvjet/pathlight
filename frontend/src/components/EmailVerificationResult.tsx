@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints } from '@/utils/api';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
@@ -41,24 +42,30 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
         if (res.ok) {
           setStatus('success');
           setMessage('Email đã được xác thực thành công!');
+          showToast.authSuccess('Email đã được xác thực thành công!');
         } else {
           setStatus('error');
           // Hiển thị thông báo lỗi cụ thể từ backend
+          let errorMessage = '';
           if (result.message) {
-            setMessage(result.message);
+            errorMessage = result.message;
           } else if (result.detail) {
-            setMessage(result.detail);
+            errorMessage = result.detail;
           } else if (res.status === 401) {
-            setMessage('Token đã hết hạn hoặc không hợp lệ. Vui lòng đăng ký lại.');
+            errorMessage = 'Token đã hết hạn hoặc không hợp lệ. Vui lòng đăng ký lại.';
           } else if (res.status === 404) {
-            setMessage('Token không tồn tại. Vui lòng kiểm tra lại email của bạn.');
+            errorMessage = 'Token không tồn tại. Vui lòng kiểm tra lại email của bạn.';
           } else {
-            setMessage('Xác thực email thất bại. Vui lòng thử lại.');
+            errorMessage = 'Xác thực email thất bại. Vui lòng thử lại.';
           }
+          setMessage(errorMessage);
+          showToast.authError(errorMessage);
         }
       } catch (err) {
         setStatus('error');
-        setMessage('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
+        const errorMessage = 'Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.';
+        setMessage(errorMessage);
+        showToast.authError(errorMessage);
       }
     };
 

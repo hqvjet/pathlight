@@ -1,6 +1,15 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { API_CONFIG } from '../config/env';
 
+// =============================================================================
+// 🌐 API BASE CONFIGURATION
+// =============================================================================
+export const API_BASE = API_CONFIG.BASE_URL;
+
+// =============================================================================
+// 🔗 API ENDPOINTS
+// =============================================================================
 export const endpoints = {
+  // Authentication endpoints
   signin: '/api/v1/signin',
   signup: '/api/v1/signup',
   signout: '/api/v1/signout',
@@ -9,14 +18,145 @@ export const endpoints = {
   adminSignin: '/api/v1/admin/signin',
   verifyEmail: '/api/v1/verify-email',
   resendVerification: '/api/v1/resend-verification',
-  oauthSignin: '/api/v1/oauth-signin'
+  oauthSignin: '/api/v1/oauth-signin',
+  
+  // User endpoints
+  profile: '/api/v1/user/profile',
+  updateProfile: '/api/v1/user/profile',
+  
+  // Course endpoints
+  courses: '/api/v1/courses',
+  courseDetail: (id: string) => `/api/v1/courses/${id}`,
+  
+  // Quiz endpoints
+  quizzes: '/api/v1/quizzes',
+  quizDetail: (id: string) => `/api/v1/quizzes/${id}`,
+  submitQuiz: (id: string) => `/api/v1/quizzes/${id}/submit`,
+} as const;
+
+// =============================================================================
+// 🔧 API UTILITIES
+// =============================================================================
+export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
+  const base = baseUrl || API_BASE;
+  return `${base.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
+// =============================================================================
+// 💾 LOCAL STORAGE UTILITIES
+// =============================================================================
 export const storage = {
-  getToken: () => typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-  setToken: (token: string) => typeof window !== 'undefined' && localStorage.setItem('token', token),
-  removeToken: () => typeof window !== 'undefined' && localStorage.removeItem('token'),
-  getPendingEmail: () => typeof window !== 'undefined' ? localStorage.getItem('pending_email') : null,
-  setPendingEmail: (email: string) => typeof window !== 'undefined' && localStorage.setItem('pending_email', email),
-  removePendingEmail: () => typeof window !== 'undefined' && localStorage.removeItem('pending_email')
+  // Token management
+  getToken: (): string | null => 
+    typeof window !== 'undefined' ? localStorage.getItem('token') : null,
+  setToken: (token: string): void => {
+    if (typeof window !== 'undefined') localStorage.setItem('token', token);
+  },
+  removeToken: (): void => {
+    if (typeof window !== 'undefined') localStorage.removeItem('token');
+  },
+  
+  // Email verification
+  getPendingEmail: (): string | null => 
+    typeof window !== 'undefined' ? localStorage.getItem('pending_email') : null,
+  setPendingEmail: (email: string): void => {
+    if (typeof window !== 'undefined') localStorage.setItem('pending_email', email);
+  },
+  removePendingEmail: (): void => {
+    if (typeof window !== 'undefined') localStorage.removeItem('pending_email');
+  },
+  
+  // User preferences
+  getTheme: (): string | null => 
+    typeof window !== 'undefined' ? localStorage.getItem('theme') : null,
+  setTheme: (theme: string): void => {
+    if (typeof window !== 'undefined') localStorage.setItem('theme', theme);
+  },
+  
+  // Language preferences
+  getLanguage: (): string | null => 
+    typeof window !== 'undefined' ? localStorage.getItem('language') : null,
+  setLanguage: (language: string): void => {
+    if (typeof window !== 'undefined') localStorage.setItem('language', language);
+  },
+  
+  // Generic storage utilities
+  get: (key: string): string | null => 
+    typeof window !== 'undefined' ? localStorage.getItem(key) : null,
+  set: (key: string, value: string): void => {
+    if (typeof window !== 'undefined') localStorage.setItem(key, value);
+  },
+  remove: (key: string): void => {
+    if (typeof window !== 'undefined') localStorage.removeItem(key);
+  },
+  clear: (): void => {
+    if (typeof window !== 'undefined') localStorage.clear();
+  },
 };
+
+// =============================================================================
+// 🔒 API REQUEST HEADERS
+// =============================================================================
+export const getAuthHeaders = (): Record<string, string> => {
+  const token = storage.getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+};
+
+// =============================================================================
+// 🌐 API REQUEST WRAPPER
+// =============================================================================
+export interface ApiResponse<T = any> {
+  data?: T;
+  message?: string;
+  error?: string;
+  status: number;
+}
+
+export const apiRequest = async <T = any>(
+  endpoint: string, 
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> => {
+  try {
+    const url = buildApiUrl(endpoint);
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+      ...options,
+    });
+
+    const data = await response.json();
+    
+    return {
+      data: response.ok ? data : undefined,
+      message: data.message,
+      error: response.ok ? undefined : data.error || data.message,
+      status: response.status,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Network error',
+      status: 0,
+    };
+  }
+};
+
+// =============================================================================
+// 🚀 COMBINED API OBJECT
+// =============================================================================
+export const api = {
+  // Core utilities
+  request: apiRequest,
+  buildUrl: buildApiUrl,
+  getAuthHeaders,
+  
+  // Endpoints
+  endpoints,
+  
+  // Storage utilities
+  storage,
+  
+  // Base configuration
+  baseUrl: API_BASE,
+} as const;

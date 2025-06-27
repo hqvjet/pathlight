@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
@@ -22,7 +23,6 @@ export default function SignUpForm() {
   });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [showLoginLink, setShowLoginLink] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -30,19 +30,18 @@ export default function SignUpForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
     setShowLoginLink(false);
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+      showToast.authError('Mật khẩu xác nhận không khớp');
       setLoading(false);
       return;
     }
 
     // Validate terms agreement
     if (!agreeToTerms) {
-      setError('Vui lòng đồng ý với điều khoản sử dụng');
+      showToast.authError('Vui lòng đồng ý với điều khoản sử dụng');
       setLoading(false);
       return;
     }
@@ -62,6 +61,7 @@ export default function SignUpForm() {
       if (res.ok) {
         // Success - email verification sent
         storage.setPendingEmail(formData.email);
+        showToast.authSuccess('Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.');
         router.push('/auth/email-sent');
       } else {
         // Get error message from response - backend may use 'detail' or 'message'
@@ -70,23 +70,23 @@ export default function SignUpForm() {
         // Handle different error cases
         if (res.status === 400 && errorMessage.includes('đã được sử dụng và đã được xác thực')) {
           // User already verified - should login instead
-          setError(errorMessage);
+          showToast.authError(errorMessage);
           setShowLoginLink(true);
         } else if (res.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('đã tồn tại')) {
-          setError('Email này đã được đăng ký. Vui lòng sử dụng email khác hoặc đăng nhập.');
+          showToast.authError('Email này đã được đăng ký. Vui lòng sử dụng email khác hoặc đăng nhập.');
           setShowLoginLink(true);
         } else if (errorMessage.includes('Invalid email') || errorMessage.includes('email không hợp lệ')) {
-          setError('Định dạng email không hợp lệ. Vui lòng kiểm tra lại.');
+          showToast.authError('Định dạng email không hợp lệ. Vui lòng kiểm tra lại.');
         } else if (errorMessage.includes('Password') || errorMessage.includes('mật khẩu')) {
-          setError('Mật khẩu không đáp ứng yêu cầu. Vui lòng chọn mật khẩu mạnh hơn.');
+          showToast.authError('Mật khẩu không đáp ứng yêu cầu. Vui lòng chọn mật khẩu mạnh hơn.');
         } else {
           // Use the exact error message from backend
-          setError(errorMessage);
+          showToast.authError(errorMessage);
         }
       }
     } catch (error) {
       console.error('Signup error:', error);
-      setError('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
+      showToast.authError('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,6 @@ export default function SignUpForm() {
 
   const handleGoogleSuccess = async (googleUser: any) => {
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch(`${API_BASE}${endpoints.oauthSignin}`, {
@@ -107,12 +106,13 @@ export default function SignUpForm() {
 
       if (res.ok && result.access_token) {
         storage.setToken(result.access_token);
+        showToast.authSuccess('Đăng ký Google thành công!');
         router.push('/dashboard');
       } else {
-        setError(result.message || 'Đăng ký Google thất bại');
+        showToast.authError(result.message || 'Đăng ký Google thất bại');
       }
     } catch {
-      setError('Lỗi kết nối. Vui lòng thử lại.');
+      showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ export default function SignUpForm() {
 
   const { signInWithPopup } = useGoogleOAuth({
     onSuccess: handleGoogleSuccess,
-    onError: () => setError('Đăng ký Google thất bại'),
+    onError: () => showToast.authError('Đăng ký Google thất bại'),
   });
 
   return (
@@ -168,25 +168,6 @@ export default function SignUpForm() {
             <h2 className={`text-3xl font-bold text-center text-gray-900 mb-8 ${montserrat.className}`}>
               Tạo Tài Khoản Mới
             </h2>
-
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-                <div className="text-sm mb-3">
-                  {error}
-                </div>
-                {showLoginLink && (
-                  <Link
-                    href="/auth/signin"
-                    className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
-                  >
-                    Đăng Nhập Ngay
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                )}
-              </div>
-            )}
 
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div>
