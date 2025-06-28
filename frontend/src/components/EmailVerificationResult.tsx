@@ -6,6 +6,7 @@ import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints } from '@/utils/api';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
+import Header from './Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -74,23 +75,15 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex justify-between items-center px-8 md:px-24 py-6">
-          <div className="flex items-center">
-            <Image
-              src="/assets/icons/LOGO.svg"
-              alt="PathLight Logo"
-              width={120}
-              height={40}
-              className="h-10 w-auto"
-            />
-          </div>
-        </div>
-      </div>
+      
+      <Header 
+        variant="auth" 
+        showSocialLinks={true}
+        backgroundColor="transparent"
+      />
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
+      <div className="flex-1 flex items-center justify-center p-8 bg-gray-50 pt-24">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-12 w-full max-w-2xl">
           
           {status === 'loading' && (

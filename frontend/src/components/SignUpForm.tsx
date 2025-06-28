@@ -8,6 +8,7 @@ import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
+import Header from './Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -126,29 +127,25 @@ export default function SignUpForm() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="flex bg-white justify-between items-center px-8 md:px-24 py-6">
-        <div className="flex items-center">
-          <Image
-            src="/icons/LOGO.svg"
-            alt="PathLive Logo"
-            width={120}
-            height={40}
-            className="h-10 w-auto"
-          />
-        </div>
-        <div className="text-sm flex items-center">
-          <span className="text-gray-500 mr-4">Đã có tài khoản?</span>
-          <Link
-            href="/auth/signin"
-            className="bg-[#FFF7ED] text-[#F97316] font-semibold px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
-          >
-            Đăng Nhập Ngay
-          </Link>
-        </div>
-      </div>
+      <Header 
+        variant="auth" 
+        showSocialLinks={false}
+        backgroundColor="white"
+        authNavigation={
+          <div className="text-sm flex items-center">
+            <span className="text-gray-500 mr-4">Đã có tài khoản?</span>
+            <Link
+              href="/auth/signin"
+              className="bg-[#FFF7ED] text-[#F97316] font-semibold px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
+            >
+              Đăng Nhập Ngay
+            </Link>
+          </div>
+        }
+      />
 
       {/* Main Content */}
-      <div className="flex max-h-[calc(100vh-80px)]">
+      <div className="flex max-h-[calc(100vh-80px)] mt-20">
         {/* Left: Image */}
         <div className="w-1/2 flex items-center justify-center p-6">
           <div className="max-w-xl">
@@ -299,7 +296,7 @@ export default function SignUpForm() {
                 className="w-full flex items-center justify-center py-4 px-6 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-gray-700 font-medium"
               >
                 <Image
-                  src="/icons/google.svg"
+                  src="/assets/icons/google.svg"
                   alt="Google"
                   width={20}
                   height={20}
