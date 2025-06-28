@@ -51,7 +51,7 @@ class User(SharedBase):
     avatar_id = Column(String, nullable=True)  # Added to match database
     
     # Common fields
-    is_active = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

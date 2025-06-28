@@ -487,50 +487,76 @@ async def signout(credentials: HTTPAuthorizationCredentials = Depends(security),
     
     return MessageResponse(status=200)
 
-# 1.5. Quên mật khẩu
 @app.post("/api/v1/forget-password", response_model=MessageResponse)
 async def forget_password(request: ForgetPasswordRequest, db: Session = Depends(get_db)):
     """Forget password endpoint"""
-    user = db.query(User).filter(User.email == request.email).first()
-    
-    if not user:
-        # User doesn't exist
-        logger.warning(f"Password reset requested for non-existent email: {request.email}")
-        return MessageResponse(status=404, message="Email này không tồn tại trong hệ thống")
-    
-    if not user.password:
-        # User exists but is OAuth-only (no password to reset)
-        logger.warning(f"Password reset requested for OAuth-only user: {request.email}")
-        return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
-    
-    if not getattr(user, 'is_active', True):
-        # User exists but is inactive
-        logger.warning(f"Password reset requested for inactive user: {request.email}")
-        return MessageResponse(status=403, message="Tài khoản này đã bị vô hiệu hóa")
-    
-    # User exists, has password, and is active - send reset email
-    reset_token = generate_token()
-    user.password_reset_token = reset_token
-    db.commit()
-    
-    # Send reset email
-    reset_link = f"{FRONTEND_URL}/api/v1/reset-password/{reset_token}"
-    email_body = f"""
-    <html>
-    <body>
-        <h2>Đặt lại mật khẩu</h2>
-        <p>Chào bạn,</p>
-        <p>Vui lòng click vào link dưới đây để đặt lại mật khẩu:</p>
-        <a href="{reset_link}">Đặt lại mật khẩu</a>
-        <p>Link này sẽ hết hạn sau 10 phút.</p>
-    </body>
-    </html>
-    """
-    
-    send_email(request.email, "Đặt lại mật khẩu", email_body)
-    logger.info(f"Password reset email sent to {request.email}")
-    
-    return MessageResponse(status=200, message="Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư của bạn")
+    try:
+        logger.info(f"Password reset requested for email: {request.email}")
+        user = db.query(User).filter(User.email == request.email).first()
+        
+        if not user:
+            # User doesn't exist
+            logger.warning(f"Password reset requested for non-existent email: {request.email}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Email này không tồn tại trong hệ thống"
+            )
+        
+        # Check if user has a password (not OAuth-only)
+        if not user.password:
+            # User exists but is OAuth-only (no password to reset)
+            logger.warning(f"Password reset requested for OAuth-only user: {request.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu"
+            )
+        
+        # User exists and has password - send reset email (regardless of email verification status)
+        reset_token = generate_token()
+        user.password_reset_token = reset_token
+        db.commit()
+        
+        # Send reset email with proper URL formatting
+        frontend_base = FRONTEND_URL.rstrip('/')
+        if frontend_base == "*" or not frontend_base.startswith(('http://', 'https://')):
+            frontend_base = "http://localhost:3000"  # Default fallback
+        
+        reset_link = f"{frontend_base}/auth/reset-password/{reset_token}"
+        logger.info(f"Generated reset password link: {reset_link}")
+        
+        email_body = f"""
+        <html>
+        <body>
+            <h2>Đặt lại mật khẩu PathLight</h2>
+            <p>Chào bạn,</p>
+            <p>Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản PathLight của mình.</p>
+            <p>Vui lòng click vào nút dưới đây để đặt lại mật khẩu:</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="{reset_link}" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Đặt lại mật khẩu</a>
+            </p>
+            <p>Hoặc copy và paste link sau vào trình duyệt:</p>
+            <p style="word-break: break-all; color: #666;">{reset_link}</p>
+            <p style="color: #999; font-size: 12px;">Link này sẽ hết hạn sau 15 phút.</p>
+            <p style="color: #999; font-size: 12px;">Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
+        </body>
+        </html>
+        """
+        
+        send_email(request.email, "Đặt lại mật khẩu PathLight", email_body)
+        logger.info(f"Password reset email sent to {request.email}")
+        
+        return MessageResponse(status=200, message="Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư của bạn")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Forget password error for {request.email}: {str(e)}")
+        import traceback
+        logger.error(f"Forget password traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi server. Vui lòng thử lại sau"
+        )
 
 # 1.5.1. Kiểm tra token reset password
 @app.get("/api/v1/validate-reset-token/{token}", response_model=MessageResponse)
