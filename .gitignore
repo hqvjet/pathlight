@@ -52,3 +52,7 @@ yarn-error.log*
 .coverage
 htmlcov/
 .pytest_cache/
+
+
+deploy/*
+nginx/*

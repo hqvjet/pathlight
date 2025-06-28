@@ -11,18 +11,24 @@ def load_env_from_root():
     """Load environment variables from root .env file"""
     try:
         from dotenv import load_dotenv
-        # Find .env file in project root
-        current_file = Path(__file__)
-        # Navigate from libs/common-utils-py/utils/ -> pathlight/
-        root_dir = current_file.parent.parent.parent.parent
-        env_path = root_dir / ".env"
         
-        if env_path.exists():
-            load_dotenv(env_path)
-            return True
-        else:
-            print(f"Warning: .env file not found at {env_path}")
-            return False
+        # Try multiple possible paths for .env file
+        possible_paths = [
+            "/app/.env",  # Docker container path
+            "/app/pathlight/.env",  # Alternative Docker path
+            Path(__file__).parent.parent.parent.parent / ".env",  # Relative path
+            Path.cwd() / ".env",  # Current working directory
+        ]
+        
+        for env_path in possible_paths:
+            env_path = Path(env_path)
+            if env_path.exists():
+                load_dotenv(env_path)
+                print(f"Loaded .env from {env_path}")
+                return True
+        
+        print(f"Warning: .env file not found in any of these locations: {possible_paths}")
+        return False
     except ImportError:
         print("Warning: python-dotenv not installed. Using system environment variables only.")
         return False
@@ -42,9 +48,9 @@ class Config:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/pathlight")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@postgres:5432/pathlight")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "pathlight")
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "postgres")
     POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
@@ -104,36 +110,6 @@ class Config:
         return cls.ENVIRONMENT.lower() == "production"
 
 
-# Compatibility functions for legacy code
-def get_database_url() -> str:
-    """Get database URL from environment"""
-    load_env_from_root()
-    return os.getenv("DATABASE_URL", "postgresql://postgres:1210@localhost:5433/pathlight")
-
-def get_service_port(service_name: str) -> int:
-    """Get service port from environment"""
-    load_env_from_root()
-    port_map = {
-        "auth": int(os.getenv("AUTH_SERVICE_PORT", "8001")),
-        "user": int(os.getenv("USER_SERVICE_PORT", "8002")),
-        "course": int(os.getenv("COURSE_SERVICE_PORT", "8003")),
-        "quiz": int(os.getenv("QUIZ_SERVICE_PORT", "8004")),
-        "gateway": int(os.getenv("API_GATEWAY_PORT", "8000")),
-    }
-    return port_map.get(service_name, 8000)
-
-def get_service_url(service_name: str) -> str:
-    """Get service URL from environment"""
-    load_env_from_root()
-    url_map = {
-        "auth": os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001"),
-        "user": os.getenv("USER_SERVICE_URL", "http://user-service:8002"),
-        "course": os.getenv("COURSE_SERVICE_URL", "http://course-service:8003"),
-        "quiz": os.getenv("QUIZ_SERVICE_URL", "http://quiz-service:8004"),
-    }
-    return url_map.get(service_name, "http://localhost:8000")
-
-
 # Create a global config instance
 config = Config()
 
@@ -141,10 +117,6 @@ config = Config()
 def get_database_url() -> str:
     """Get database URL from environment - Legacy compatibility function"""
     return config.get_database_url()
-
-def get_debug_mode() -> bool:
-    """Get debug mode setting - Legacy compatibility function"""
-    return config.DEBUG
 
 def get_debug_mode() -> bool:
     """Get debug mode setting - Legacy compatibility function"""

@@ -128,3 +128,57 @@
 .animate-shrug {
   animation: shrug 2s ease-in-out infinite;
 }
+
+/* React Toastify Custom Styles */
+.auth-error-toast {
+  background-color: #fef2f2 !important;
+  border-left: 4px solid #ef4444 !important;
+  color: #991b1b !important;
+}
+
+.auth-success-toast {
+  background-color: #f0fdf4 !important;
+  border-left: 4px solid #22c55e !important;
+  color: #166534 !important;
+}
+
+/* Override default toastify styles */
+.Toastify__toast {
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.Toastify__toast--error {
+  background-color: #fef2f2 !important;
+  color: #991b1b !important;
+}
+
+.Toastify__toast--success {
+  background-color: #f0fdf4 !important;
+  color: #166534 !important;
+}
+
+.Toastify__toast--warning {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+}
+
+.Toastify__toast--info {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+}
+
+.Toastify__progress-bar {
+  background: linear-gradient(90deg, #f97316, #ea580c) !important;
+}
+
+.Toastify__close-button {
+  color: inherit !important;
+  opacity: 0.7 !important;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1 !important;
+}

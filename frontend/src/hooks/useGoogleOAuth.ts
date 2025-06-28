@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { AUTH_CONFIG, FEATURE_FLAGS } from '../config/env';
 
 declare global {
   interface Window {
@@ -16,6 +17,12 @@ interface GoogleOAuthConfig {
 
 export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
   useEffect(() => {
+    // Check if Google Auth is enabled
+    if (!FEATURE_FLAGS.ENABLE_GOOGLE_AUTH) {
+      console.log('🔒 Google Auth is disabled via feature flag');
+      return;
+    }
+
     const handleCredentialResponse = (response: any) => {
       try {
         // Decode JWT token to get user info
@@ -38,17 +45,17 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
           credential: response.credential
         });
       } catch (error) {
-        console.error('Error parsing Google credential:', error);
+        console.error('❌ Error parsing Google credential:', error);
         onError?.();
       }
     };
 
     const initializeGoogleSignIn = () => {
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      const clientId = AUTH_CONFIG.GOOGLE_CLIENT_ID;
       
-      console.log('🔧 Initializing Google Sign-In with Client ID:', clientId);
+      console.log('🔧 Initializing Google Sign-In with Client ID:', clientId ? 'Set' : 'Not Set');
       
-      if (!clientId || clientId === 'your_actual_google_client_id_here') {
+      if (!clientId) {
         console.warn('❌ Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local');
         return;
       }
@@ -102,7 +109,13 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
   }, [onSuccess, onError]);
 
   const signIn = () => {
-    console.log('🚀 Attempting Google Sign-In...');
+    if (!FEATURE_FLAGS.ENABLE_GOOGLE_AUTH) {
+      console.log('� Google Auth is disabled');
+      onError?.();
+      return;
+    }
+
+    console.log('�🚀 Attempting Google Sign-In...');
     if (window.google) {
       console.log('✅ Google API available, showing prompt');
       window.google.accounts.id.prompt(); // Show One Tap dialog
@@ -113,10 +126,16 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
   };
 
   const signInWithPopup = () => {
-    console.log('🚀 Attempting Google Sign-In with popup...');
+    if (!FEATURE_FLAGS.ENABLE_GOOGLE_AUTH) {
+      console.log('� Google Auth is disabled');
+      alert('Google OAuth hiện đang bị tắt. Vui lòng liên hệ quản trị viên.');
+      return;
+    }
+
+    console.log('�🚀 Attempting Google Sign-In with popup...');
     
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId || clientId === 'your_actual_google_client_id_here') {
+    const clientId = AUTH_CONFIG.GOOGLE_CLIENT_ID;
+    if (!clientId) {
       console.error('❌ Google Client ID not configured');
       alert('Google OAuth chưa được cấu hình. Vui lòng thiết lập Client ID.');
       return;
@@ -138,5 +157,10 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
     });
   };
 
-  return { signIn, signInWithPopup };
+  return { 
+    signIn, 
+    signInWithPopup,
+    isEnabled: FEATURE_FLAGS.ENABLE_GOOGLE_AUTH,
+    hasClientId: !!AUTH_CONFIG.GOOGLE_CLIENT_ID
+  };
 };

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
@@ -18,12 +19,10 @@ export default function SignInForm() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch(`${API_BASE}${endpoints.signin}`, {
@@ -32,22 +31,60 @@ export default function SignInForm() {
         body: JSON.stringify(formData),
       });
 
+      // Kiểm tra nếu response không ok (status >= 400)
+      if (!res.ok) {
+        // Xử lý các lỗi HTTP khác nhau
+        let errorMessage = 'Đăng nhập thất bại';
+        
+        try {
+          const errorResult = await res.json();
+          if (errorResult.message) {
+            errorMessage = errorResult.message;
+          } else if (errorResult.detail) {
+            errorMessage = errorResult.detail;
+          }
+        } catch {
+          // Nếu không parse được JSON, dùng message mặc định dựa trên status
+          switch (res.status) {
+            case 400:
+              errorMessage = 'Thông tin đăng nhập không hợp lệ';
+              break;
+            case 401:
+              errorMessage = 'Email hoặc mật khẩu không đúng';
+              break;
+            case 404:
+              errorMessage = 'Tài khoản không tồn tại';
+              break;
+            case 500:
+              errorMessage = 'Lỗi server. Vui lòng thử lại sau';
+              break;
+            default:
+              errorMessage = `Đăng nhập thất bại (Mã lỗi: ${res.status})`;
+          }
+        }
+        
+        showToast.authError(errorMessage);
+        return;
+      }
+
       const result = await res.json();
 
-      if (res.ok && result.access_token) {
+      if (result.access_token) {
         storage.setToken(result.access_token);
+        showToast.authSuccess('Đăng nhập thành công!');
         router.push('/dashboard');
       } else if (result.message === 'Email chưa được xác thực') {
-        setError('Email chưa được xác thực. Chuyển đến trang xác thực...');
+        showToast.warning('Email chưa được xác thực. Chuyển đến trang xác thực...');
         storage.setPendingEmail(formData.email);
         setTimeout(() => {
           router.push('/auth/verify-email');
         }, 2000);
       } else {
-        setError(result.message || 'Đăng nhập thất bại');
+        showToast.authError(result.message || 'Đăng nhập thất bại');
       }
-    } catch {
-      setError('Lỗi kết nối. Vui lòng thử lại.');
+    } catch (error) {
+      console.error('Login error:', error);
+      showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -55,7 +92,6 @@ export default function SignInForm() {
 
   const handleGoogleSuccess = async (googleUser: any) => {
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch(`${API_BASE}${endpoints.oauthSignin}`, {
@@ -64,16 +100,49 @@ export default function SignInForm() {
         body: JSON.stringify(googleUser),
       });
 
+      // Kiểm tra nếu response không ok
+      if (!res.ok) {
+        let errorMessage = 'Đăng nhập Google thất bại';
+        
+        try {
+          const errorResult = await res.json();
+          if (errorResult.message) {
+            errorMessage = errorResult.message;
+          } else if (errorResult.detail) {
+            errorMessage = errorResult.detail;
+          }
+        } catch {
+          switch (res.status) {
+            case 400:
+              errorMessage = 'Thông tin Google không hợp lệ';
+              break;
+            case 401:
+              errorMessage = 'Xác thực Google thất bại';
+              break;
+            case 500:
+              errorMessage = 'Lỗi server. Vui lòng thử lại sau';
+              break;
+            default:
+              errorMessage = `Đăng nhập Google thất bại (Mã lỗi: ${res.status})`;
+          }
+        }
+        
+        showToast.authError(errorMessage);
+        return;
+      }
+
       const result = await res.json();
 
-      if (res.ok && result.access_token) {
+      if (result.access_token) {
         storage.setToken(result.access_token);
+        showToast.authSuccess('Đăng nhập Google thành công!');
         router.push('/dashboard');
       } else {
-        setError(result.message || 'Đăng nhập Google thất bại');
+        showToast.authError(result.message || 'Đăng nhập Google thất bại');
       }
-    } catch {
-      setError('Lỗi kết nối. Vui lòng thử lại.');
+    } catch (error) {
+      console.error('Google OAuth error:', error);
+      showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -81,7 +150,7 @@ export default function SignInForm() {
 
   const { signInWithPopup } = useGoogleOAuth({
     onSuccess: handleGoogleSuccess,
-    onError: () => setError('Đăng nhập Google thất bại'),
+    onError: () => showToast.authError('Đăng nhập Google thất bại'),
   });
 
   return (
@@ -114,7 +183,7 @@ export default function SignInForm() {
         <div className="w-1/2 bg-[#FEF7F0] flex items-center justify-center p-8">
           <div className="max-w-lg">
             <Image
-              src="/assets/images/comeback_img.png"
+              src="/assets/images/login.png"
               alt="Login illustration"
               width={500}
               height={500}
@@ -129,12 +198,6 @@ export default function SignInForm() {
             <h2 className={`text-3xl font-bold text-center text-red-900 mb-8 ${montserrat.className}`}>
               Chào Mừng Trở Lại
             </h2>
-
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
 
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div>
@@ -178,7 +241,7 @@ export default function SignInForm() {
                   Ghi nhớ đăng nhập
                 </label>
                 <Link
-                  href="/auth/forget-password"
+                  href="/auth/forgot-password"
                   className="text-gray-500 hover:text-[#F97316] transition-colors"
                 >
                   Quên mật khẩu?
