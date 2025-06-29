@@ -155,6 +155,18 @@ async def admin_signin(request: Request):
 async def resend_verification(request: Request):
     return await forward_request("auth", "/api/v1/resend-verification", request)
 
+@app.put("/api/v1/user/notify-time")
+async def set_notify_time(request: Request):
+    return await forward_request("auth", "/api/v1/user/notify-time", request)
+
+@app.get("/api/v1/user/profile")
+async def get_user_profile(request: Request):
+    return await forward_request("auth", "/api/v1/user/profile", request)
+
+@app.get("/api/v1/admin/users")
+async def get_all_users(request: Request):
+    return await forward_request("auth", "/api/v1/admin/users", request)
+
 # Catch-all route for other services
 @app.api_route("/{service:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_request(service: str, request: Request):
