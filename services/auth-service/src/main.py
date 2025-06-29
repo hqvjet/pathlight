@@ -150,7 +150,7 @@ class OAuthSigninRequest(BaseModel):
     email: EmailStr
     google_id: str
     given_name: str
-    family_name: str
+    family_name: Optional[str] = None
     avatar_id: str
 
 class AdminSigninRequest(BaseModel):
@@ -745,9 +745,8 @@ async def reset_password(token: str, request: ResetPasswordRequest, db: Session 
 # 1.7. Đăng nhập bằng tài khoản thứ ba (Google)
 @app.post("/api/v1/oauth-signin", response_model=AuthResponse)
 async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db)):
-    """OAuth signin endpoint"""
+    """OAuth signin endpoint (Google)"""
     try:
-        # Check if user exists by email or google_id
         user = db.query(User).filter(
             (User.email == request.email) | (User.google_id == request.google_id)
         ).first()
@@ -759,6 +758,7 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
             setattr(user, 'family_name', request.family_name)
             setattr(user, 'avatar_url', request.avatar_id)
             setattr(user, 'is_email_verified', True)
+            setattr(user, 'is_active', True)
         else:
             # Create new user
             user = User(
@@ -767,15 +767,12 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
                 given_name=request.given_name,
                 family_name=request.family_name,
                 avatar_url=request.avatar_id,
-                is_email_verified=True
+                is_email_verified=True,
+                is_active=True
             )
             db.add(user)
-        
         db.commit()
-        
-        # Create access token
         access_token = create_access_token(data={"sub": user.id})
-        
         return AuthResponse(status=200, access_token=access_token)
     except Exception as e:
         logger.error(f"OAuth signin error: {str(e)}")
