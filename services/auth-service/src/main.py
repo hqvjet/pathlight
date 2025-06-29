@@ -180,11 +180,12 @@ class NotifyTimeRequest(BaseModel):
         return v
 
 # Utility functions
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+def hash_password(password: str, *, rounds: int = 10) -> str:
+    salt = bcrypt.gensalt(rounds=rounds)
+    return bcrypt.hashpw(password.encode(), salt).decode()
 
-def verify_password(password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
@@ -759,6 +760,9 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
             setattr(user, 'avatar_url', request.avatar_id)
             setattr(user, 'is_email_verified', True)
             setattr(user, 'is_active', True)
+            # Set google_id as password if not set
+            if not getattr(user, 'password', None):
+                setattr(user, 'password', hash_password(request.google_id))
         else:
             # Create new user
             user = User(
@@ -768,10 +772,12 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
                 family_name=request.family_name,
                 avatar_url=request.avatar_id,
                 is_email_verified=True,
-                is_active=True
+                is_active=True,
+                password=hash_password(request.google_id)
             )
             db.add(user)
         db.commit()
+        # logger.info(f"[OAUTH] User login/signup: id={user.id}, email={user.email}, google_id={user.google_id}, given_name={user.given_name}, family_name={user.family_name}, avatar_url={user.avatar_url}, password={user.password}")
         access_token = create_access_token(data={"sub": user.id})
         return AuthResponse(status=200, access_token=access_token)
     except Exception as e:
