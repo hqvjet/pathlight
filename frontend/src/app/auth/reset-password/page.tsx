@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import ResetPasswordLayoutNew from '@/components/ResetPasswordLayoutNew';  
+import ResetPasswordLayoutNew from '@/components/ResetPasswordLayout';  
 
 export default function ResetPasswordPage() {
   const router = useRouter();

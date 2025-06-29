@@ -23,6 +23,7 @@ export const endpoints = {
   // User endpoints
   profile: '/api/v1/user/profile',
   updateProfile: '/api/v1/user/profile',
+  notifyTime: '/api/v1/user/notify-time',
   
   // Course endpoints
   courses: '/api/v1/courses',

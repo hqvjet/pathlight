@@ -25,8 +25,8 @@ function VerifyEmailContent() {
     router.push('/auth/signin');
   };
 
-  const handleLoginRedirect = () => {
-    router.push('/auth/signin');
+  const handleSetupRedirect = () => {
+    router.push('/auth/study-time-setup');
   };
 
   // Nếu chưa mount, hiển thị loading
@@ -40,7 +40,7 @@ function VerifyEmailContent() {
 
   // Nếu có token trong URL, hiển thị kết quả xác thực
   if (token) {
-    return <EmailVerificationResult onLoginRedirect={handleLoginRedirect} />;
+    return <EmailVerificationResult onSetupRedirect={handleSetupRedirect} />;
   }
 
   // Nếu không có token, chuyển về signin
