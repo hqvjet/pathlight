@@ -1,6 +1,13 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Set Montserrat as the default font for the body */
+body {
+  font-family: 'Montserrat';
+}
 
 /* Custom component styles */
 .input-field {
