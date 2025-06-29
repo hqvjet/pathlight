@@ -1,8 +1,19 @@
 import sys
 import os
 
-# Add libs path to use common utilities  
-sys.path.insert(0, '/app/libs/common-utils-py/src')
+# Add libs path to use common utilities
+# For Docker: /app/libs/common-utils-py/src
+# For local development: relative path
+if os.path.exists('/app/libs/common-utils-py/src'):
+    sys.path.insert(0, '/app/libs/common-utils-py/src')
+    sys.path.insert(0, '/app/libs/common-types-py')
+else:
+    # Local development path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    libs_path = os.path.join(current_dir, '..', '..', '..', 'libs', 'common-utils-py', 'src')
+    types_path = os.path.join(current_dir, '..', '..', '..', 'libs', 'common-types-py')
+    sys.path.insert(0, os.path.abspath(libs_path))
+    sys.path.insert(0, os.path.abspath(types_path))
 
 from fastapi import FastAPI, HTTPException, Depends, status, Response, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -12,6 +23,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 import bcrypt
 import jwt
+from jose import JWTError, jwt as jose_jwt
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
@@ -23,12 +35,16 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlight_common import get_jwt_config, get_service_port
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import atexit
 
 # Load JWT configuration from common utilities
 jwt_config = get_jwt_config()
 
-from src.database import get_db, create_tables
+from src.database import get_db, create_tables, SessionLocal
 from src.models import User, Admin, TokenBlacklist
+from src.email_reminders import send_email
 
 # Import database URL
 from pathlight_common import get_database_url
@@ -73,6 +89,36 @@ FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@pathlight.com")
 
 # Frontend URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
+
+# Background Scheduler for Study Reminders
+scheduler = BackgroundScheduler()
+
+def run_study_reminders():
+    try:
+        logger.info("[REMINDER DEBUG] Scheduler đã gọi run_study_reminders()")
+        db = SessionLocal()
+        from src.email_reminders import send_reminders_to_users
+        result = send_reminders_to_users(db)
+        logger.info(f"[REMINDER DEBUG] Kết quả gửi nhắc nhở: {result}")
+        db.close()
+    except Exception as e:
+        logger.error(f"[REMINDER DEBUG] Lỗi khi gửi nhắc nhở: {str(e)}")
+
+# Schedule study reminders every 1 minute (dễ test)
+scheduler.add_job(
+    func=run_study_reminders,
+    trigger=CronTrigger(minute="*"),  # Mỗi phút chạy 1 lần
+    id='study_reminders',
+    name='Send study reminder emails',
+    replace_existing=True
+)
+
+# Start scheduler
+scheduler.start()
+logger.info("Background scheduler started for study reminders")
+
+# Ensure scheduler shuts down when app stops
+atexit.register(lambda: scheduler.shutdown())
 
 # Security
 security = HTTPBearer()
@@ -123,6 +169,16 @@ class AuthResponse(BaseModel):
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
 
+class NotifyTimeRequest(BaseModel):
+    remind_time: str
+    
+    @validator('remind_time')
+    def validate_time_format(cls, v):
+        # Validate HH:MM format
+        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', v):
+            raise ValueError('Time must be in HH:MM format (e.g., "18:30")')
+        return v
+
 # Utility functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -132,15 +188,26 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({
+        "exp": int(expire.timestamp()),
+        "type": "access",
+        "iat": int(now.timestamp())
+    })
+    return jose_jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh", "jti": str(uuid.uuid4())})
-    return jwt.encode(to_encode, JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({
+        "exp": int(expire.timestamp()),
+        "type": "refresh", 
+        "jti": str(uuid.uuid4()),
+        "iat": int(now.timestamp())
+    })
+    return jose_jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
@@ -223,24 +290,62 @@ def send_email(to_email: str, subject: str, body: str):
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        
+        logger.info(f"🔍 get_current_user: Processing token: {token[:20]}...")
+
+        try:
+            payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        except JWTError as e:
+            logger.error(f"🔍 get_current_user: JWT Error: {str(e)}")
+            logger.error(f"🔍 get_current_user: Token that failed: {token}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token expired or invalid: {str(e)}")
+
+        logger.info(f"🔍 get_current_user: Token decoded successfully. Payload: {payload}")
+
+        jti = payload.get("jti")
+        if jti:
+            blacklisted = db.query(TokenBlacklist).filter(TokenBlacklist.token_jti == jti).first()
+            if blacklisted:
+                logger.warning(f"🔍 get_current_user: Token is blacklisted: {jti}")
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been blacklisted")
+
         if payload.get("type") != "access":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
-        
-        user_id: str = payload.get("sub")
+            logger.warning(f"🔍 get_current_user: Invalid token type: {payload.get('type')}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token type: {payload.get('type')}")
+
+        user_id = payload.get("sub")
         if user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-        
+            logger.warning(f"🔍 get_current_user: No user ID in token")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: no user id")
+
+        logger.info(f"🔍 get_current_user: Looking for user with ID: {user_id}")
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
+            logger.warning(f"🔍 get_current_user: User not found in database: {user_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-        
+
+        is_email_verified = getattr(user, 'is_email_verified', False)
+        is_active = getattr(user, 'is_active', True)
+
+        logger.info(f"🔍 get_current_user: User {user.email} - email_verified: {is_email_verified}, active: {is_active}")
+
+        if not is_email_verified:
+            logger.warning(f"🔍 get_current_user: Email not verified for user: {user.email}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email not verified")
+
+        if not is_active:
+            logger.warning(f"🔍 get_current_user: User account inactive: {user.email}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive")
+
+        logger.info(f"🔍 get_current_user: Authentication successful for user: {user.email}")
         return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"🔍 get_current_user: Unexpected error: {str(e)}")
+        import traceback
+        logger.error(f"🔍 get_current_user: Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}")
 
 # Startup event
 @app.on_event("startup")
@@ -295,7 +400,7 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         
         if existing_user:
-            if existing_user.is_email_verified:
+            if getattr(existing_user, 'is_email_verified'):
                 # User exists and is verified - REJECT signup
                 logger.warning(f"Attempted signup with already verified email: {user_data.email}")
                 raise HTTPException(
@@ -309,9 +414,9 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
                 expire_minutes = EMAIL_VERIFICATION_EXPIRE_MINUTES
                 expiration_time = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
                 
-                existing_user.email_verification_token = verification_token
-                existing_user.email_verification_expires_at = expiration_time
-                existing_user.password = hash_password(user_data.password)  # Update password
+                setattr(existing_user, 'email_verification_token', verification_token)
+                setattr(existing_user, 'email_verification_expires_at', expiration_time)
+                setattr(existing_user, 'password', hash_password(user_data.password))  # Update password
                 db.commit()
                 
                 # Send verification email with proper URL
@@ -402,25 +507,42 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
         )
 
 # 1.2. Xác thực Email
-@app.get("/api/v1/verify-email", response_model=MessageResponse)
+@app.get("/api/v1/verify-email", response_model=AuthResponse)
 async def verify_email(token: str, db: Session = Depends(get_db)):
     """Verify email endpoint"""
     user = db.query(User).filter(User.email_verification_token == token).first()
     if not user:
-        return MessageResponse(status=401, message="Token không hợp lệ hoặc đã hết hạn")
+        return AuthResponse(
+            status=401, 
+            message="Token không hợp lệ hoặc đã hết hạn",
+            access_token=None
+        )
     
     # Check if token has expired
-    expiration_time = user.email_verification_expires_at
+    expiration_time = getattr(user, 'email_verification_expires_at')
     if expiration_time is not None and expiration_time < datetime.now(timezone.utc):
-        return MessageResponse(status=401, message="Token đã hết hạn. Vui lòng yêu cầu gửi lại email xác nhận")
+        return AuthResponse(
+            status=401, 
+            message="Token đã hết hạn. Vui lòng yêu cầu gửi lại email xác nhận",
+            access_token=None
+        )
     
     # Update user as verified
-    user.is_email_verified = True
-    user.email_verification_token = None
-    user.email_verification_expires_at = None
+    setattr(user, 'is_email_verified', True)
+    setattr(user, 'email_verification_token', None)
+    setattr(user, 'email_verification_expires_at', None)
     db.commit()
     
-    return MessageResponse(status=200, message="Email đã được xác thực thành công")
+    # Generate JWT token for verified user
+    access_token = create_access_token(data={"sub": user.id})
+    
+    logger.info(f"Email verified successfully for user: {user.email}")
+    
+    return AuthResponse(
+        status=200,
+        message="Email đã được xác thực thành công",
+        access_token=access_token
+    )
 
 # 1.3. Đăng nhập
 @app.post("/api/v1/signin", response_model=AuthResponse)
@@ -437,14 +559,15 @@ async def signin(user_data: SigninRequest, db: Session = Depends(get_db)):
                 detail="Email hoặc mật khẩu không đúng"
             )
         
-        if not user.password or not verify_password(user_data.password, user.password):
+        user_password = getattr(user, 'password')
+        if not user_password or not verify_password(user_data.password, user_password):
             logger.warning(f"Login failed: Invalid password for email {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email hoặc mật khẩu không đúng"
             )
         
-        if not user.is_email_verified:
+        if not getattr(user, 'is_email_verified'):
             logger.warning(f"Login failed: Email not verified for {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -474,7 +597,7 @@ async def signout(credentials: HTTPAuthorizationCredentials = Depends(security),
     """User logout endpoint"""
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         jti = payload.get("jti")
         
         if jti:
@@ -503,7 +626,8 @@ async def forget_password(request: ForgetPasswordRequest, db: Session = Depends(
             )
         
         # Check if user has a password (not OAuth-only)
-        if not user.password:
+        user_password = getattr(user, 'password')
+        if not user_password:
             # User exists but is OAuth-only (no password to reset)
             logger.warning(f"Password reset requested for OAuth-only user: {request.email}")
             raise HTTPException(
@@ -513,7 +637,7 @@ async def forget_password(request: ForgetPasswordRequest, db: Session = Depends(
         
         # User exists and has password - send reset email (regardless of email verification status)
         reset_token = generate_token()
-        user.password_reset_token = reset_token
+        setattr(user, 'password_reset_token', reset_token)
         db.commit()
         
         # Send reset email with proper URL formatting
@@ -569,7 +693,8 @@ async def validate_reset_token(token: str, db: Session = Depends(get_db)):
         logger.warning(f"Token validation failed - invalid token: {token[:8]}...")
         return MessageResponse(status=401, message="Token không hợp lệ hoặc đã hết hạn")
     
-    if not user.password:
+    user_password = getattr(user, 'password')
+    if not user_password:
         # User exists but is OAuth-only (no password to reset)
         logger.warning(f"Token validation failed - OAuth-only user: {user.email}")
         return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
@@ -593,7 +718,8 @@ async def reset_password(token: str, request: ResetPasswordRequest, db: Session 
         logger.warning(f"Reset password attempted with invalid token: {token[:8]}...")
         return MessageResponse(status=401, message="Token đã hết hạn hoặc không hợp lệ")
     
-    if not user.password:
+    user_password = getattr(user, 'password')
+    if not user_password:
         # User exists but is OAuth-only (no password to reset)
         logger.warning(f"Reset password attempted for OAuth-only user: {user.email}")
         return MessageResponse(status=400, message="Tài khoản này đăng nhập bằng Google, không thể đặt lại mật khẩu")
@@ -604,13 +730,13 @@ async def reset_password(token: str, request: ResetPasswordRequest, db: Session 
         return MessageResponse(status=403, message="Tài khoản này đã bị vô hiệu hóa")
     
     # Check if new password is same as current password in database
-    if verify_password(request.new_password, user.password):
+    if verify_password(request.new_password, user_password):
         logger.warning(f"User {user.email} attempted to use same password during reset")
         return MessageResponse(status=409, message="Mật khẩu mới không được trùng với mật khẩu cũ")
     
     # Update password and clear reset token
-    user.password = hash_password(request.new_password)
-    user.password_reset_token = None
+    setattr(user, 'password', hash_password(request.new_password))
+    setattr(user, 'password_reset_token', None)
     db.commit()
     
     logger.info(f"Password reset successful for user {user.email}")
@@ -628,11 +754,11 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
         
         if user:
             # Update user info
-            user.google_id = request.google_id
-            user.given_name = request.given_name
-            user.family_name = request.family_name
-            user.avatar_url = request.avatar_id
-            user.is_email_verified = True
+            setattr(user, 'google_id', request.google_id)
+            setattr(user, 'given_name', request.given_name)
+            setattr(user, 'family_name', request.family_name)
+            setattr(user, 'avatar_url', request.avatar_id)
+            setattr(user, 'is_email_verified', True)
         else:
             # Create new user
             user = User(
@@ -667,18 +793,83 @@ async def change_password(
 ):
     """Change password endpoint"""
     # Check if user is OAuth user
-    if current_user.google_id and not current_user.password:
+    user_google_id = getattr(current_user, 'google_id')
+    user_password = getattr(current_user, 'password')
+    if user_google_id and not user_password:
         return MessageResponse(status=401, message="Tài khoản này là của bên thứ ba, không thể đổi mật khẩu")
     
     # Verify current password
-    if not current_user.password or not verify_password(request.password, current_user.password):
+    if not user_password or not verify_password(request.password, user_password):
         return MessageResponse(status=401, message="Mật khẩu hiện tại không đúng")
     
     # Update password
-    current_user.password = hash_password(request.new_password)
+    setattr(current_user, 'password', hash_password(request.new_password))
     db.commit()
     
     return MessageResponse(status=200)
+
+# 1.8b. Đặt thời gian nhắc học tập
+@app.put("/api/v1/user/notify-time", response_model=MessageResponse)
+async def set_notify_time(
+    request: NotifyTimeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Set study reminder time for user"""
+    try:
+        logger.info(f"Setting notify time for user {current_user.email}: {request.remind_time}")
+        # Always allow setting/updating remind_time
+        setattr(current_user, 'remind_time', request.remind_time)
+        db.commit()
+        logger.info(f"Successfully set remind time for user {current_user.email} to {request.remind_time}")
+        return MessageResponse(
+            status=200, 
+            message="Đã đặt lịch thành công"
+        )
+    except Exception as e:
+        logger.error(f"Failed to set remind time for user {getattr(current_user, 'email', 'unknown')}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        db.rollback()
+        return MessageResponse(
+            status=500, 
+            message="Có lỗi xảy ra, xin vui lòng thử lại"
+        )
+
+# 1.8d. Get users with reminder settings (for admin checking)
+@app.get("/api/v1/admin/users-with-reminders")
+async def get_users_with_reminders(db: Session = Depends(get_db)):
+    """Get list of users who have set reminder times"""
+    try:
+        users = db.query(User).filter(
+            User.remind_time.isnot(None),
+            User.is_email_verified == True,
+            User.is_active == True
+        ).all()
+        
+        result = []
+        for user in users:
+            created_at_value = getattr(user, 'created_at', None)
+            result.append({
+                "id": getattr(user, 'id', ''),
+                "email": getattr(user, 'email', ''),
+                "remind_time": getattr(user, 'remind_time', ''),
+                "given_name": getattr(user, 'given_name', ''),
+                "family_name": getattr(user, 'family_name', ''),
+                "created_at": created_at_value.isoformat() if created_at_value else None
+            })
+        
+        return {
+            "status": "success",
+            "total_users": len(result),
+            "users": result
+        }
+    except Exception as e:
+        logger.error(f"Error getting users with reminders: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to get users: {str(e)}"
+        }
 
 # 1.9. Đăng nhập cho ADMIN
 @app.post("/api/v1/admin/signin", response_model=AuthResponse)
@@ -691,7 +882,8 @@ async def admin_signin(request: AdminSigninRequest, db: Session = Depends(get_db
             detail="Tên đăng nhập hoặc mật khẩu không đúng"
         )
     
-    if not verify_password(request.password, admin.password):
+    admin_password = getattr(admin, 'password')
+    if not verify_password(request.password, admin_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên đăng nhập hoặc mật khẩu không đúng"
@@ -718,8 +910,8 @@ async def resend_verification(request: ResendVerificationRequest, db: Session = 
     expire_minutes = EMAIL_VERIFICATION_EXPIRE_MINUTES
     expiration_time = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     
-    user.email_verification_token = verification_token
-    user.email_verification_expires_at = expiration_time
+    setattr(user, 'email_verification_token', verification_token)
+    setattr(user, 'email_verification_expires_at', expiration_time)
     db.commit()
     
     # Send verification email
@@ -745,55 +937,51 @@ async def resend_verification(request: ResendVerificationRequest, db: Session = 
     
     return MessageResponse(status=200, message="Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn")
 
-# Test email endpoint
-@app.post("/api/v1/test-email")
-async def test_email(email: str):
-    """Test endpoint to send email directly"""
-    try:
-        test_body = """
-        <h2>🧪 Test Email từ PathLight</h2>
-        <p>Đây là email test để kiểm tra chức năng gửi email.</p>
-        <p>Nếu bạn nhận được email này, hệ thống email đang hoạt động bình thường.</p>
-        <p>Thời gian gửi: {}</p>
-        """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        
-        send_email(email, "🧪 Test Email - PathLight", test_body)
-        return {"message": f"Test email sent to {email}", "status": "success"}
-    except Exception as e:
-        logger.error(f"Test email failed: {str(e)}")
-        return {"message": f"Failed to send test email: {str(e)}", "status": "error"}
-
-# Test password verification endpoint (for debugging)
-@app.post("/api/v1/test-password-verification")
-async def test_password_verification(
-    email: str, 
-    test_password: str, 
-    db: Session = Depends(get_db)
-):
-    """Test endpoint to verify password logic - REMOVE IN PRODUCTION"""
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return {"message": "User not found", "status": "error"}
-    
-    if not user.password:
-        return {"message": "User has no password (OAuth-only)", "status": "no_password"}
-    
-    # Test password verification
-    is_same = verify_password(test_password, user.password)
-    
+# 1.8e. Lấy thông tin profile user (bao gồm remind_time)
+@app.get("/api/v1/user/profile")
+async def get_user_profile(current_user: User = Depends(get_current_user)):
+    """Get current user's profile info including remind_time"""
     return {
-        "message": f"Password comparison result: {'SAME' if is_same else 'DIFFERENT'}",
-        "user_email": email,
-        "has_password": bool(user.password),
-        "password_hash_preview": user.password[:20] + "..." if user.password else None,
-        "test_password": test_password,
-        "verification_result": is_same,
-        "status": "success"
+        "id": getattr(current_user, 'id', None),
+        "email": getattr(current_user, 'email', None),
+        "name": getattr(current_user, 'given_name', None) or getattr(current_user, 'email', None),
+        "avatar_url": getattr(current_user, 'avatar_url', None),
+        "remind_time": getattr(current_user, 'remind_time', None),
+        "total_courses": getattr(current_user, 'total_courses', None),
+        "completed_courses": getattr(current_user, 'completed_courses', None),
+        "total_quizzes": getattr(current_user, 'total_quizzes', None),
+        "average_score": getattr(current_user, 'average_score', None),
+        "study_streak": getattr(current_user, 'study_streak', None),
+        "total_study_time": getattr(current_user, 'total_study_time', None),
+        "is_email_verified": getattr(current_user, 'is_email_verified', None),
+        "is_active": getattr(current_user, 'is_active', None)
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    
-    # Get port from environment
-    port = int(os.getenv("AUTH_SERVICE_PORT", "8001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+# TEST ONLY: Trigger study reminder email for a specific email (for manual testing)
+# @app.post("/api/v1/test/send-reminder/{email}")
+# async def test_send_reminder(email: str, db: Session = Depends(get_db)):
+#     user = db.query(User).filter(User.email == email).first()
+#     if not user:
+#         return {"status": "error", "message": f"User {email} not found"}
+#     if not getattr(user, 'is_email_verified', False) or not getattr(user, 'is_active', False):
+#         return {"status": "error", "message": f"User {email} is not active or not verified"}
+#     # Gửi email nhắc nhở học tập
+#     user_email = getattr(user, 'email', None)
+#     remind_time = getattr(user, 'remind_time', None) or "(chưa đặt)"
+#     given_name = getattr(user, 'given_name', user_email)
+#     send_email(
+#         str(user_email),
+#         "[Test] Nhắc nhở học tập PathLight",
+#         f"Chào {given_name}, đây là email test nhắc nhở học tập của bạn! Thời gian nhắc: {remind_time}"
+#     )
+#     return {"status": "success", "message": f"Đã gửi email test nhắc nhở cho {user_email}"}
+
+# TEST ONLY: Đổi remind_time cho user bằng API (dùng cho kiểm thử tự động)
+@app.post("/api/v1/test/set-remind-time/{email}/{remind_time}")
+async def test_set_remind_time(email: str, remind_time: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return {"status": "error", "message": f"User {email} not found"}
+    setattr(user, 'remind_time', remind_time)
+    db.commit()
+    return {"status": "success", "message": f"Đã đổi remind_time của {email} thành {remind_time}"}
