@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { API_BASE, endpoints } from '@/utils/api';
+import { API_BASE, endpoints, storage } from '@/utils/api';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
 import Header from './Header';
@@ -14,11 +14,12 @@ const montserrat = Montserrat({
 });
 
 interface EmailVerificationResultProps {
-  onLoginRedirect: () => void;
+  onSetupRedirect: () => void;
 }
 
-export default function EmailVerificationResult({ onLoginRedirect }: EmailVerificationResultProps) {
+export default function EmailVerificationResult({ onSetupRedirect }: EmailVerificationResultProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const [countdown, setCountdown] = useState(10);
@@ -43,6 +44,12 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
         if (res.ok) {
           setStatus('success');
           setMessage('Email đã được xác thực thành công!');
+          
+          // Nếu backend trả về token, lưu vào localStorage
+          if (result.access_token) {
+            storage.setToken(result.access_token);
+          }
+          
           showToast.authSuccess('Email đã được xác thực thành công!');
         } else {
           setStatus('error');
@@ -71,7 +78,7 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
     };
 
     verifyEmail();
-  }, [searchParams, onLoginRedirect]);
+  }, [searchParams, onSetupRedirect]);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -121,19 +128,17 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
               <h1 className={`text-3xl font-bold text-gray-800 mb-6 ${montserrat.className}`}>
                 Đăng Ký Thành Công
               </h1>
-              
               <div className="mb-8">
                 <p className="text-lg text-gray-600 leading-relaxed px-4">
-                  Email của bạn đã được xác thực thành công. Bây giờ bạn có thể đăng nhập và bắt đầu hành trình học tập thú vị cùng PathLight.
+                  Email của bạn đã được xác thực thành công. Bây giờ bạn có thể đăng nhập để bắt đầu sử dụng hệ thống.
                 </p>
               </div>
-
               <div className="space-y-4">
                 <button
-                  onClick={onLoginRedirect}
+                  onClick={() => router.push('/login')}
                   className="w-full py-4 px-8 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 hover:scale-[1.02]"
                 >
-                  Đăng Nhập Ngay
+                  Quay Lại Đăng Nhập
                 </button>
               </div>
             </div>
@@ -160,10 +165,10 @@ export default function EmailVerificationResult({ onLoginRedirect }: EmailVerifi
 
               <div className="space-y-4">
                 <button
-                  onClick={onLoginRedirect}
+                  onClick={() => window.location.href = '/login'}
                   className="w-full py-4 px-8 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
                 >
-                  Quay Lại Đăng Nhập
+                  Đăng Nhập
                 </button>
                 
                 <div className="text-center">

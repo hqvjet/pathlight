@@ -108,7 +108,8 @@ export default function SignUpForm() {
       if (res.ok && result.access_token) {
         storage.setToken(result.access_token);
         showToast.authSuccess('Đăng ký Google thành công!');
-        router.push('/dashboard');
+        // New Google users should go to study time setup
+        router.push('/auth/study-time-setup');
       } else {
         showToast.authError(result.message || 'Đăng ký Google thất bại');
       }
