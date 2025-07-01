@@ -2,35 +2,32 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-import os
 import logging
 
+# Import config
+from .config import Config, Routes
+
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=getattr(logging, Config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="PathLight API Gateway",
-    description="Central API Gateway for PathLight Microservices",
+    description="Central API Gateway for PathLight Microservices - All client requests go through here",
     version="1.0.0"
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=Config.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=Config.ALLOWED_METHODS,
+    allow_headers=Config.ALLOWED_HEADERS,
 )
 
-# Service URLs from environment
-SERVICES = {
-    "auth": os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001"),
-}
-
-# HTTP client
-http_client = httpx.AsyncClient(timeout=30.0)
+# HTTP client for forwarding requests to services
+http_client = httpx.AsyncClient(timeout=Config.SERVICE_TIMEOUT)
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -38,15 +35,14 @@ async def shutdown_event():
 
 async def forward_request(service: str, path: str, request: Request):
     """Forward request to the appropriate microservice"""
-    if service not in SERVICES:
+    if service not in Config.SERVICES:
         raise HTTPException(status_code=404, detail=f"Service {service} not found")
     
-    service_url = SERVICES[service]
+    service_url = Config.SERVICES[service]
     url = f"{service_url}{path}"
-    
-    # Forward headers
+
     headers = dict(request.headers)
-    headers.pop("host", None)  # Remove host header
+    headers.pop("host", None) 
     
     try:
         # Get request body for POST/PUT requests
@@ -72,17 +68,23 @@ async def forward_request(service: str, path: str, request: Request):
         
     except httpx.RequestError as e:
         logger.error(f"Request to {url} failed: {str(e)}")
-        raise HTTPException(status_code=503, detail=f"Service {service} unavailable")
+        return JSONResponse(
+            content={"status": 503, "message": f"Service {service} unavailable"},
+            status_code=503
+        )
     except Exception as e:
         logger.error(f"Unexpected error forwarding to {url}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return JSONResponse(
+            content={"status": 500, "message": "Internal server error"},
+            status_code=500
+        ) 
 
 @app.get("/")
 async def root():
     return {
         "message": "PathLight API Gateway",
         "version": "1.0.0",
-        "services": list(SERVICES.keys()),
+        "services": list(Config.SERVICES.keys()),
         "documentation": "/docs",
         "health": "/health"
     }
@@ -92,7 +94,7 @@ async def health_check():
     """Check health of all services"""
     health_status = {"gateway": "healthy", "services": {}}
     
-    for service_name, service_url in SERVICES.items():
+    for service_name, service_url in Config.SERVICES.items():
         try:
             response = await http_client.get(f"{service_url}/health", timeout=5.0)
             health_status["services"][service_name] = {
@@ -129,6 +131,10 @@ async def signout(request: Request):
 async def forget_password(request: Request):
     return await forward_request("auth", "/api/v1/forget-password", request)
 
+@app.get("/api/v1/validate-reset-token/{token}")
+async def validate_reset_token(token: str, request: Request):
+    return await forward_request("auth", f"/api/v1/validate-reset-token/{token}", request)
+
 @app.post("/api/v1/reset-password/{token}")
 async def reset_password(token: str, request: Request):
     return await forward_request("auth", f"/api/v1/reset-password/{token}", request)
@@ -144,6 +150,22 @@ async def change_password(request: Request):
 @app.post("/api/v1/admin/signin")
 async def admin_signin(request: Request):
     return await forward_request("auth", "/api/v1/admin/signin", request)
+
+@app.post("/api/v1/resend-verification")
+async def resend_verification(request: Request):
+    return await forward_request("auth", "/api/v1/resend-verification", request)
+
+@app.put("/api/v1/user/notify-time")
+async def set_notify_time(request: Request):
+    return await forward_request("auth", "/api/v1/user/notify-time", request)
+
+@app.get("/api/v1/user/profile")
+async def get_user_profile(request: Request):
+    return await forward_request("auth", "/api/v1/user/profile", request)
+
+@app.get("/api/v1/admin/users")
+async def get_all_users(request: Request):
+    return await forward_request("auth", "/api/v1/admin/users", request)
 
 # Catch-all route for other services
 @app.api_route("/{service:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -161,4 +183,4 @@ async def proxy_request(service: str, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=Config.GATEWAY_HOST, port=Config.GATEWAY_PORT)

@@ -1,89 +1,115 @@
 #!/bin/bash
 
-# PathLight Application Startup Script
-# This script will start all services using Docker Compose
+# PathLight - Smart Startup Script
+# Automatically loads environment variables and starts services
 
 set -e
 
-echo "🚀 Starting PathLight Application..."
-echo "=================================="
+echo "🚀 PathLight - Starting All Services"
+echo "======================================"
 
-# Check if Docker is running
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo "❌ Error: .env file not found!"
+    echo "📝 Please copy .env.example to .env and configure it:"
+    echo "   cp .env.example .env"
+    echo "   nano .env"
+    exit 1
+fi
+
+# Load environment variables
+echo "📋 Loading environment variables from .env..."
+source .env
+
+# Validate required variables
+required_vars=("POSTGRES_PASSWORD" "JWT_SECRET_KEY" "JWT_REFRESH_SECRET_KEY")
+for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo "❌ Error: Required environment variable $var is not set!"
+        echo "📝 Please update your .env file"
+        exit 1
+    fi
+done
+
+echo "✅ Environment variables loaded successfully"
+
+# Check if Docker is running  
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Check if docker-compose is available
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ docker-compose is not installed. Please install docker-compose first."
-    exit 1
-fi
+echo "🐳 Docker is running"
 
-# Load environment variables
-if [ -f .env ]; then
-    echo "📄 Loading environment variables from .env..."
-    export $(cat .env | grep -v '#' | xargs)
-else
-    echo "⚠️  No .env file found. Using default values."
+# Check if docker-compose is available
+if ! command -v docker-compose &> /dev/null && ! command -v docker &> /dev/null; then
+    echo "❌ docker-compose or docker compose is not available."
+    exit 1
 fi
 
 # Stop any existing containers
 echo "🛑 Stopping existing containers..."
-docker-compose down --remove-orphans
-
-# Clean up old images (optional)
-read -p "🗑️  Do you want to clean up old Docker images? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "🧹 Cleaning up old Docker images..."
-    docker system prune -f
-fi
+docker compose down --remove-orphans 2>/dev/null || docker-compose down --remove-orphans 2>/dev/null
 
 # Build and start services
-echo "🔨 Building and starting services..."
-docker-compose up --build -d
+echo "� Building and starting services..."
+echo "   - PostgreSQL Database (Port: $POSTGRES_PORT)"
+echo "   - Auth Service (Port: $AUTH_SERVICE_PORT)"
+echo "   - User Service (Port: $USER_SERVICE_PORT)"
+echo "   - Course Service (Port: $COURSE_SERVICE_PORT)"
+echo "   - Quiz Service (Port: $QUIZ_SERVICE_PORT)"
+echo "   - API Gateway (Port: $API_GATEWAY_PORT)"
 
-# Wait for services to be ready
-echo "⏳ Waiting for services to start..."
+# Start with Docker Compose
+docker compose up -d --build 2>/dev/null || docker-compose up -d --build
+
+echo ""
+echo "⏳ Waiting for services to be ready..."
 sleep 10
 
 # Check service health
-echo "🔍 Checking service health..."
+services=("api-gateway:$API_GATEWAY_PORT" "auth-service:$AUTH_SERVICE_PORT" "user-service:$USER_SERVICE_PORT")
+all_healthy=true
 
-services=("postgres:5433" "auth-service:8001" "api-gateway:8000")
-
-for service in "${services[@]}"; do
-    IFS=':' read -r name port <<< "$service"
-    echo -n "   Checking $name:$port... "
+for service_port in "${services[@]}"; do
+    service=$(echo $service_port | cut -d: -f1)
+    port=$(echo $service_port | cut -d: -f2)
     
-    max_attempts=30
-    attempt=0
-    
-    while [ $attempt -lt $max_attempts ]; do
-        if nc -z localhost $port 2>/dev/null; then
-            echo "✅ Ready"
-            break
-        fi
-        attempt=$((attempt + 1))
-        sleep 1
-    done
-    
-    if [ $attempt -eq $max_attempts ]; then
-        echo "❌ Failed to start"
+    if curl -s -f "http://localhost:$port/health" > /dev/null 2>&1; then
+        echo "✅ $service is healthy (port $port)"
+    else
+        echo "⚠️  $service is not responding (port $port)"
+        all_healthy=false
     fi
 done
 
-# Display service URLs
 echo ""
-echo "🌐 Service URLs:"
-echo "=================================="
-echo "   API Gateway:     http://localhost:8000"
-echo "   API Gateway Docs: http://localhost:8000/docs"
-echo "   Auth Service:     http://localhost:8001"
-echo "   Auth Service Docs: http://localhost:8001/docs"
-echo "   Frontend:         http://localhost:3000"
-echo "   Database:         postgresql://postgres:1210@localhost:5433/pathlight_db"
+if [ "$all_healthy" = true ]; then
+    echo "🎉 All services are running successfully!"
+    echo ""
+    echo "📍 Service URLs:"
+    echo "   🌐 API Gateway:    http://localhost:$API_GATEWAY_PORT"
+    echo "   🔐 Auth Service:   http://localhost:$AUTH_SERVICE_PORT"
+    echo "   👤 User Service:   http://localhost:$USER_SERVICE_PORT"
+    echo "   📚 Course Service: http://localhost:$COURSE_SERVICE_PORT"
+    echo "   📝 Quiz Service:   http://localhost:$QUIZ_SERVICE_PORT"
+    echo "   🗄️  Database:      localhost:$POSTGRES_PORT"
+    echo ""
+    echo "🔑 Admin Credentials:"
+    echo "   Username: $ADMIN_USERNAME"
+    echo "   Password: $ADMIN_PASSWORD"
+    echo ""
+    echo "📖 API Documentation: http://localhost:$API_GATEWAY_PORT/docs"
+else
+    echo "⚠️  Some services are not responding. Check logs with:"
+    echo "   docker compose logs [service-name]"
+fi
+
+echo ""
+echo "🛠️  Useful Commands:"
+echo "   docker compose logs -f          # View all logs"
+echo "   docker compose down             # Stop all services"
+echo "   docker compose restart         # Restart all services"
 echo ""
 
 # Display API endpoints

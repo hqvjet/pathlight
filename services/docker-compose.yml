@@ -1,8 +1,8 @@
-version: '3.8'
+docker image pruneversion: '3.8'
 
 services:
   auth-service:
-    build: ./auth-service
+    image: ngochoa203/pathlight-auth-service:latest
     ports:
       - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
     env_file:
@@ -11,7 +11,7 @@ services:
       - pathlight-network
 
   course-service:
-    build: ./course-service
+    image: ngochoa203/pathlight-course-service:latest
     ports:
       - "${COURSE_SERVICE_PORT}:${COURSE_SERVICE_PORT}"
     env_file:
@@ -20,7 +20,7 @@ services:
       - pathlight-network
 
   quiz-service:
-    build: ./quiz-service
+    image: ngochoa203/pathlight-quiz-service:latest
     ports:
       - "${QUIZ_SERVICE_PORT}:${QUIZ_SERVICE_PORT}"
     env_file:
@@ -29,7 +29,7 @@ services:
       - pathlight-network
 
   user-service:
-    build: ./user-service
+    image: ngochoa203/pathlight-user-service:latest
     ports:
       - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
     env_file:
