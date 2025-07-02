@@ -11,22 +11,22 @@ def extract_content_with_tags(file: UploadFile, extension: str):
         pdf_document = fitz.open(stream=file.file.read(), filetype="pdf")
         for page_number, page in enumerate(pdf_document, start=1):
             page_text = page.get_text()
-            tagged_content += f'<page number="{page_number}">{page_text}</page>'
+            tagged_content += f'<page number="{page_number}">{page_text}</page>\n'
 
     elif extension == "docx":
         doc = Document(file.file)
         for paragraph in doc.paragraphs:
             if paragraph.style.name.startswith("Heading"):
                 level = paragraph.style.name.replace("Heading", "h")
-                tagged_content += f'<heading level="{level}">{paragraph.text}</heading>'
+                tagged_content += f'<heading level="{level}">{paragraph.text}</heading>\n'
             else:
-                tagged_content += f'<paragraph>{paragraph.text}</paragraph>'
+                tagged_content += f'<paragraph>{paragraph.text}</paragraph>\n'
         for table in doc.tables:
             table_rows = ""
             for row in table.rows:
                 row_cells = "".join([f'<cell>{cell.text}</cell>' for cell in row.cells])
                 table_rows += f'<row>{row_cells}</row>'
-            tagged_content += f'<table>{table_rows}</table>'
+            tagged_content += f'<table>{table_rows}</table>\n'
 
     elif extension == "pptx":
         presentation = Presentation(file.file)
@@ -40,6 +40,6 @@ def extract_content_with_tags(file: UploadFile, extension: str):
                             slide_title = f'<slide_title>{shape.text}</slide_title>'
                         else:
                             slide_content += f'<slide_content>{shape.text}</slide_content>'
-            tagged_content += f'<slide number="{slide_number}">{slide_title}{slide_content}</slide>'
+            tagged_content += f'<slide number="{slide_number}">{slide_title}{slide_content}</slide>\n'
 
     return tagged_content

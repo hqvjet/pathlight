@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 
 from file_route import extract_content_with_tags  # Assuming this function is defined in file_route.py
+from split_text import split_into_chunks  # Assuming this function is defined in split_text.py
 
 
 # Create FastAPI instance
@@ -28,7 +29,7 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the FastAPI application!"}
 
-@app.post("/upload")
+@app.post("/vectorize")
 def upload_files(files: List[UploadFile] = File(...)):
     allowed_extensions = {"docx", "pdf", "pptx"}
     file_contents = {}
@@ -41,4 +42,8 @@ def upload_files(files: List[UploadFile] = File(...)):
         structured_content = extract_content_with_tags(file, extension)
         file_contents[file.filename] = structured_content
 
-    return {"file_contents": file_contents}
+    chunks = []
+    for filename, content in file_contents.items():
+        chunks.extend(split_into_chunks(content, source_info=filename))
+
+    return {"chunks": chunks}
