@@ -6,7 +6,7 @@ import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
-import Header from './Header';
+import Header from '../layout/Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -22,7 +22,6 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
-  const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -69,7 +68,7 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
           setMessage(errorMessage);
           showToast.authError(errorMessage);
         }
-      } catch (err) {
+      } catch {
         setStatus('error');
         const errorMessage = 'Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.';
         setMessage(errorMessage);
@@ -90,13 +89,13 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-gray-50 pt-24">
+      <div className="flex-1 flex items-center justify-center p-8 bg-white pt-24">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-12 w-full max-w-2xl">
           
           {status === 'loading' && (
             <div className="text-center">
               <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full">
+                <div className="inline-flex items-center justify-center w-20 h-20">
                   <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
               </div>
@@ -120,7 +119,7 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
                   alt="Đăng ký thành công"
                   width={350}
                   height={280}
-                  className="mx-auto drop-shadow-lg"
+                  className="mx-auto"
                   priority
                 />
               </div>
@@ -148,7 +147,7 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
             <div className="text-center">
               {/* Error Icon */}
               <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full">
+                <div className="inline-flex items-center justify-center w-20 h-20">
                   <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -159,7 +158,7 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
                 Xác Thực Thất Bại
               </h1>
               
-              <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-8">
+              <div className="bg-white border border-red-200 rounded-xl p-6 mb-8">
                 <p className="text-red-700 text-lg">{message}</p>
               </div>
 

@@ -1,4 +1,4 @@
-import ErrorPage from '@/components/ErrorPage';
+import ErrorPage from '@/components/common/ErrorPage';
 
 export default function NotFoundPage() {
   return (

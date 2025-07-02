@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import Header from './Header';
+import Header from '../layout/Header';
 
 interface ErrorPageProps {
   errorCode?: string;
@@ -20,7 +20,7 @@ export default function ErrorPage({
   buttonLink = "/"
 }: ErrorPageProps) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <Header 
         variant="auth" 
@@ -62,7 +62,7 @@ export default function ErrorPage({
                   alt="Error page illustration" 
                   width={400} 
                   height={400} 
-                  className="w-full h-auto drop-shadow-lg"
+                  className="w-full h-auto"
                   priority
                 />
               </div>

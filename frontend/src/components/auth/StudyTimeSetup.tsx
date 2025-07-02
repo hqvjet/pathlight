@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
-import Header from './Header';
+import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
 
@@ -36,12 +36,6 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
   });
 
   const selectedTime = `${selectedHour}:${selectedMinute}`;
-
-  // Debug function to reset setup status (for development)
-  const resetSetupStatus = () => {
-    storage.remove('study_time_setup_completed');
-    console.log('Setup status reset');
-  };
 
   const handleSetReminder = async () => {
     setIsLoading(true);
@@ -88,7 +82,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <Header 
         variant="minimal" 
@@ -106,7 +100,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
               alt="Đặt thời gian học tập"
               width={500}
               height={400}
-              className="w-full h-auto object-contain drop-shadow-2xl"
+              className="w-full h-auto object-contain"
               priority
             />
           </div>
@@ -118,7 +112,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
             {/* Header */}
             <div className="text-center space-y-4">
               <div className="flex justify-center">
-                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center shadow-lg">
+                <div className="w-20 h-20 flex items-center justify-center">
                   <svg className="w-10 h-10 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -187,7 +181,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
               </div>
 
               {/* Time Description */}
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
+              <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
                 <p className="text-sm text-gray-600">
                   💡 Bạn có thể thay đổi thời gian này bất cứ lúc nào trong phần cài đặt
                 </p>
@@ -223,7 +217,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
             </div>
 
             {/* Benefits Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="bg-white border border-blue-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
                   <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

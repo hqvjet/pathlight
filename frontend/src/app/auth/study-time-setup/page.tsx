@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import StudyTimeSetup from '@/components/StudyTimeSetup';
+import StudyTimeSetup from '@/components/auth/StudyTimeSetup';
 import { storage } from '@/utils/api';
 
 export default function StudyTimeSetupPage() {

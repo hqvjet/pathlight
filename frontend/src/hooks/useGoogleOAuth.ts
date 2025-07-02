@@ -5,13 +5,22 @@ import { AUTH_CONFIG, FEATURE_FLAGS } from '../config/env';
 
 declare global {
   interface Window {
-    google: any;
-    googleSignInCallback: (response: any) => void;
+    google: {
+      accounts: {
+        id: {
+          initialize: (config: unknown) => void;
+          prompt: (callback?: (notification: unknown) => void) => void;
+          renderButton: (parent: Element, options: unknown) => void;
+          disableAutoSelect: () => void;
+        };
+      };
+    };
+    googleSignInCallback: (response: unknown) => void;
   }
 }
 
 interface GoogleOAuthConfig {
-  onSuccess: (credentialResponse: any) => void;
+  onSuccess: (credentialResponse: unknown) => void;
   onError?: () => void;
 }
 
@@ -23,7 +32,7 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
       return;
     }
 
-    const handleCredentialResponse = (response: any) => {
+    const handleCredentialResponse = (response: { credential: string }) => {
       try {
         // Decode JWT token to get user info
         const base64Url = response.credential.split('.')[1];
@@ -148,7 +157,7 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
     }
 
     console.log('✅ Google API available, showing prompt');
-    window.google.accounts.id.prompt((notification: any) => {
+    window.google.accounts.id.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
       console.log('📋 Notification:', notification);
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
         console.log('ℹ️ One Tap not available');

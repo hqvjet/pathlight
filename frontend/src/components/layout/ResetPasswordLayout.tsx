@@ -23,7 +23,7 @@ export default function ResetPasswordLayout({
     switch (icon) {
       case 'error':
         return (
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 flex items-center justify-center">
             <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5l-6.928-12c-.77-.833-2.834-.833-3.604 0l-6.928 12c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
@@ -31,7 +31,7 @@ export default function ResetPasswordLayout({
         );
       case 'success':
         return (
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 flex items-center justify-center">
             <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -39,7 +39,7 @@ export default function ResetPasswordLayout({
         );
       case 'warning':
         return (
-          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 flex items-center justify-center">
             <svg className="w-10 h-10 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5l-6.928-12c-.77-.833-2.834-.833-3.604 0l-6.928 12c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
@@ -51,7 +51,7 @@ export default function ResetPasswordLayout({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <Header 
         variant="auth" 
@@ -69,7 +69,7 @@ export default function ResetPasswordLayout({
               alt="Reset password illustration"
               width={500}
               height={400}
-              className="w-full h-auto object-contain drop-shadow-2xl"
+              className="w-full h-auto object-contain"
               priority
             />
           </div>

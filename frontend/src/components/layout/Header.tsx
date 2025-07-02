@@ -3,7 +3,6 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   variant?: 'default' | 'auth' | 'minimal';
@@ -18,7 +17,6 @@ export default function Header({
   backgroundColor = 'transparent',
   authNavigation
 }: HeaderProps) {
-  const router = useRouter();
 
   const getBackgroundClass = () => {
     switch (backgroundColor) {
