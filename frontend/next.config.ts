@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
       // Example production host:
       // { protocol: 'https', hostname: 'cdn.example.com', pathname: '/**' },
     ],

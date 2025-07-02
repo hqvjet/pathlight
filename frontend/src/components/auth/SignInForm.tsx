@@ -180,7 +180,7 @@ export default function SignInForm() {
       />
 
       {/* Main Content */}
-      <div className="flex min-h-[calc(100vh-80px)] mt-20">
+      <div className="flex max-h-[calc(100vh-80px)] mt-40">
         {/* Left: Image */}
         <div className="w-1/2 flex items-center justify-center p-8">
           <div className="max-w-lg">
