@@ -183,4 +183,7 @@ async def proxy_request(service: str, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=Config.GATEWAY_HOST, port=Config.GATEWAY_PORT)
+    import os
+    host = os.getenv("GATEWAY_HOST", "0.0.0.0")
+    port = int(os.getenv("API_GATEWAY_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)

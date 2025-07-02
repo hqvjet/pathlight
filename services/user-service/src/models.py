@@ -1,15 +1,58 @@
-import sys
-import os
+"""
+Database models for User Service
+Self-contained models that don't depend on external libs
+"""
 
-# Add libs path to use shared models
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'libs', 'common-types-py'))
+from sqlalchemy import Column, String, DateTime, Integer, Boolean, BigInteger, Text
+from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
+import uuid
 
-# Import shared User model
-from shared_models import User
+# Base for user service models
+Base = declarative_base()
 
-# Make shared User model available
-__all__ = ['User']
 
-# Note: UserProfile is now merged into User model in shared_models.py
-# All user profile data is now stored in the unified users table
-# No need for separate UserProfile class
+class User(Base):
+    """
+    User model for user service
+    """
+    __tablename__ = "users"
+    
+    # Primary identifier
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Authentication fields
+    email = Column(String, nullable=False, unique=True, index=True)
+    password = Column(String, nullable=True)  # Nullable for OAuth users
+    is_email_verified = Column(Boolean, default=False)
+    
+    # Email verification fields
+    email_verification_token = Column(String, nullable=True)
+    email_verification_expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Password reset fields
+    password_reset_token = Column(String, nullable=True)
+    
+    # OAuth fields
+    google_id = Column(String, nullable=True, unique=True)
+    given_name = Column(String, nullable=True)
+    family_name = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    
+    # Profile fields
+    dob = Column(DateTime(timezone=True), nullable=True)
+    level = Column(Integer, nullable=False, default=1)
+    current_exp = Column(BigInteger, nullable=False, default=0)
+    require_exp = Column(BigInteger, nullable=False, default=10)
+    remind_time = Column(String, nullable=True)
+    sex = Column(Boolean, nullable=True)
+    bio = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
+
+
+# Make all models available for import
+__all__ = ['User', 'Base']

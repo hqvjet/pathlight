@@ -1,20 +1,3 @@
-import sys
-import os
-
-# Add libs path to use common utilities
-# For Docker: /app/libs/common-utils-py/src
-# For local development: relative path
-if os.path.exists('/app/libs/common-utils-py/src'):
-    sys.path.insert(0, '/app/libs/common-utils-py/src')
-    sys.path.insert(0, '/app/libs/common-types-py')
-else:
-    # Local development path
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    libs_path = os.path.join(current_dir, '..', '..', '..', 'libs', 'common-utils-py', 'src')
-    types_path = os.path.join(current_dir, '..', '..', '..', 'libs', 'common-types-py')
-    sys.path.insert(0, os.path.abspath(libs_path))
-    sys.path.insert(0, os.path.abspath(types_path))
-
 from fastapi import FastAPI, HTTPException, Depends, status, Response, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,24 +17,21 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from pathlight_common import get_jwt_config, get_service_port
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import atexit
 
-# Load JWT configuration from common utilities
-jwt_config = get_jwt_config()
-
-from src.database import get_db, create_tables, SessionLocal
-from src.models import User, Admin, TokenBlacklist
-from src.email_reminders import send_email
+# Import local modules
+from .config import config, get_jwt_config, get_service_port
+from .database import get_db, create_tables, SessionLocal
+from .models import User, Admin, TokenBlacklist
+from .email_reminders import send_email
 
 # Import database URL
-from pathlight_common import get_database_url
-DATABASE_URL = get_database_url()
+DATABASE_URL = config.DATABASE_URL
 
 # Email verification configuration
-EMAIL_VERIFICATION_EXPIRE_MINUTES = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_MINUTES", "10"))
+EMAIL_VERIFICATION_EXPIRE_MINUTES = config.EMAIL_VERIFICATION_EXPIRE_MINUTES
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -59,17 +39,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Auth Service", version="1.0.0")
 
-# Load configuration from environment
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
-JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "pathlight-refresh-secret-key-2025")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
-JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+# Load configuration from config
+JWT_SECRET_KEY = config.JWT_SECRET_KEY
+JWT_REFRESH_SECRET_KEY = config.JWT_REFRESH_SECRET_KEY
+JWT_ALGORITHM = config.JWT_ALGORITHM
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = config.JWT_REFRESH_TOKEN_EXPIRE_DAYS
 
 # CORS configuration
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
-ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "*").split(",")
+ALLOWED_ORIGINS = config.ALLOWED_ORIGINS
+ALLOWED_METHODS = config.ALLOWED_METHODS
+ALLOWED_HEADERS = config.ALLOWED_HEADERS
 
 # CORS middleware
 app.add_middleware(
@@ -81,14 +61,14 @@ app.add_middleware(
 )
 
 # Email configuration
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@pathlight.com")
+SMTP_SERVER = config.SMTP_SERVER
+SMTP_PORT = config.SMTP_PORT
+SMTP_USERNAME = config.SMTP_USERNAME
+SMTP_PASSWORD = config.SMTP_PASSWORD
+FROM_EMAIL = config.FROM_EMAIL
 
 # Frontend URL
-FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
+FRONTEND_URL = config.FRONTEND_URL
 
 # Background Scheduler for Study Reminders
 scheduler = BackgroundScheduler()
@@ -124,13 +104,14 @@ atexit.register(lambda: scheduler.shutdown())
 security = HTTPBearer()
 
 # Admin credentials
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_USERNAME = config.ADMIN_USERNAME
+ADMIN_PASSWORD = config.ADMIN_PASSWORD
 
 # Data Models
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
+    google_id: Optional[str] = None
 
 class SigninRequest(BaseModel):
     email: EmailStr
@@ -348,10 +329,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         logger.error(f"🔍 get_current_user: Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}")
 
-# Startup event
+# Startup event - Conditional for Lambda
 @app.on_event("startup")
 async def startup_event():
-    # Create tables
+    # Skip database operations on Lambda startup
+    import os
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        logger.info("Running on AWS Lambda - skipping database setup")
+        return
+    
+    # Create tables only in non-Lambda environments
     create_tables()
     
     # Create default admin user
@@ -367,8 +354,17 @@ async def startup_event():
             db.add(admin)
             db.commit()
             logger.info("Default admin user created")
+    except Exception as e:
+        logger.error(f"Error creating admin user: {e}")
     finally:
         db.close()
+
+# Add main execution block for standalone operation
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    port = int(os.getenv("AUTH_SERVICE_PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 # Health endpoints
 @app.get("/")
@@ -398,9 +394,15 @@ async def signup(user_data: SignupRequest, db: Session = Depends(get_db)):
         logger.info(f"Signup attempt for email: {user_data.email}")
         
         # Check if user already exists
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
-        
+        existing_user = db.query(User).filter((User.email == user_data.email) | (User.google_id == user_data.google_id)).first()
+
         if existing_user:
+            if getattr(existing_user, 'google_id', None):
+                logger.warning(f"Attempted signup with Google account already exists: {user_data.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Tài khoản này đã đăng nhập bằng Google. Vui lòng đăng nhập bằng Google hoặc quên mật khẩu để đăng nhập."
+                )
             if getattr(existing_user, 'is_email_verified'):
                 # User exists and is verified - REJECT signup
                 logger.warning(f"Attempted signup with already verified email: {user_data.email}")

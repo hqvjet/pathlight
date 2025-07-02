@@ -2,23 +2,27 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-import jwt
-import os
-from datetime import datetime
+from jose import jwt
 import logging
+from datetime import datetime
 
-# Configuration from environment
-USER_SERVICE_PORT = int(os.getenv("USER_SERVICE_PORT", "8002"))
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-secret")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+# Import local config
+from .config import config
+
+# Configuration from config
+USER_SERVICE_PORT = config.SERVICE_PORT
+JWT_SECRET_KEY = config.JWT_SECRET_KEY
+JWT_ALGORITHM = config.JWT_ALGORITHM
+DEBUG = config.DEBUG
+LOG_LEVEL = config.LOG_LEVEL
 
 # CORS - CHỈ CHO PHÉP API GATEWAY
-API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
+API_GATEWAY_URL = config.API_GATEWAY_URL
 ALLOWED_ORIGINS = [
     API_GATEWAY_URL,
     "http://localhost:8000",  # for development
+    "http://localhost:3000",  # frontend for testing
+    "*"  # allow all for standalone testing
 ]
 
 # Setup logging

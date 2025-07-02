@@ -1,20 +1,15 @@
 # db/database.py
 
-import sys
-import os
-
-# Add libs path to use common utilities
-sys.path.insert(0, '/app/libs/common-utils-py/src')
-# Add libs path for shared models
-sys.path.insert(0, '/app/libs/common-types-py')
-
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
-from pathlight_common import get_database_url, get_debug_mode
 
-# Database configuration from common utilities
+# Import local config and models
+from .config import get_database_url, get_debug_mode
+from .models import Base
+
+# Database configuration
 DATABASE_URL = get_database_url()
 DEBUG = get_debug_mode()
 
@@ -24,11 +19,7 @@ engine = create_engine(DATABASE_URL, echo=DEBUG)
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Import shared models to get the SharedBase
-from shared_models import SharedBase
-
-# Use SharedBase as our Base for this service
-Base = SharedBase
+# Use the Base from models
 metadata = Base.metadata
 
 # FastAPI-compatible dependency
@@ -48,6 +39,6 @@ def get_db_context():
     finally:
         db.close()
 
-# Create tables from Base subclasses
 def create_tables():
+    """Create all tables"""
     Base.metadata.create_all(bind=engine)
