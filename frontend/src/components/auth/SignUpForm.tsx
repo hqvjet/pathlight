@@ -121,7 +121,7 @@ export default function SignUpForm() {
   });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="max-h-screen bg-white">
       {/* Header */}
       <Header 
         variant="auth" 
@@ -141,7 +141,7 @@ export default function SignUpForm() {
       />
 
       {/* Main Content */}
-      <div className="flex max-h-[calc(100vh-80px)] mt-20">
+      <div className="flex max-h-[calc(100vh-80px)] mt-40">
         {/* Left: Image */}
         <div className="w-1/2 flex items-center justify-center p-6">
           <div className="max-w-xl">
