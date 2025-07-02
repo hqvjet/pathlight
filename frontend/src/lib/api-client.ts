@@ -22,7 +22,7 @@ export interface ApiRequestConfig extends RequestInit {
   skipAuth?: boolean;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
@@ -34,15 +34,15 @@ export interface ApiError extends Error {
   message: string;
   status: number;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
 
 export class ApiErrorClass extends Error implements ApiError {
   status: number;
   code?: string;
-  details?: any;
+  details?: unknown;
 
-  constructor(message: string, status: number, code?: string, details?: any) {
+  constructor(message: string, status: number, code?: string, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -195,19 +195,19 @@ export class ApiClient {
   }
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-    let data: any;
+    let data: unknown;
     
     try {
       const text = await response.text();
       data = text ? JSON.parse(text) : null;
-    } catch (error) {
+    } catch {
       data = null;
     }
 
     const apiResponse: ApiResponse<T> = {
-      data: response.ok ? data : undefined,
-      message: data?.message || data?.detail,
-      error: response.ok ? undefined : (data?.error || data?.detail || response.statusText),
+      data: response.ok ? (data as T) : undefined,
+      message: (data as Record<string, unknown>)?.message as string || (data as Record<string, unknown>)?.detail as string,
+      error: response.ok ? undefined : ((data as Record<string, unknown>)?.error as string || (data as Record<string, unknown>)?.detail as string || response.statusText),
       status: response.status,
       success: response.ok,
     };
@@ -366,7 +366,7 @@ export class ApiClient {
 
   async post<T>(
     endpoint: string,
-    data?: any,
+    data?: unknown,
     config: ApiRequestConfig = {}
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(endpoint, config.baseURL);
@@ -379,7 +379,7 @@ export class ApiClient {
 
   async put<T>(
     endpoint: string,
-    data?: any,
+    data?: unknown,
     config: ApiRequestConfig = {}
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(endpoint, config.baseURL);
@@ -392,7 +392,7 @@ export class ApiClient {
 
   async patch<T>(
     endpoint: string,
-    data?: any,
+    data?: unknown,
     config: ApiRequestConfig = {}
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(endpoint, config.baseURL);
@@ -422,7 +422,7 @@ export class ApiClient {
     formData.append('file', file);
 
     const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    delete (headers as any)['Content-Type']; // Let browser set content-type for FormData
+    delete (headers as Record<string, string>)['Content-Type']; // Let browser set content-type for FormData
 
     return this.executeWithRetry<T>(url, {
       ...config,
@@ -445,7 +445,7 @@ export class ApiClient {
     });
 
     const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    delete (headers as any)['Content-Type'];
+    delete (headers as Record<string, string>)['Content-Type'];
 
     return this.executeWithRetry<T>(url, {
       ...config,
@@ -470,13 +470,13 @@ export const api = {
   get: <T>(endpoint: string, config?: ApiRequestConfig) => 
     apiClient.get<T>(endpoint, config),
   
-  post: <T>(endpoint: string, data?: any, config?: ApiRequestConfig) => 
+  post: <T>(endpoint: string, data?: unknown, config?: ApiRequestConfig) => 
     apiClient.post<T>(endpoint, data, config),
   
-  put: <T>(endpoint: string, data?: any, config?: ApiRequestConfig) => 
+  put: <T>(endpoint: string, data?: unknown, config?: ApiRequestConfig) => 
     apiClient.put<T>(endpoint, data, config),
   
-  patch: <T>(endpoint: string, data?: any, config?: ApiRequestConfig) => 
+  patch: <T>(endpoint: string, data?: unknown, config?: ApiRequestConfig) => 
     apiClient.patch<T>(endpoint, data, config),
   
   delete: <T>(endpoint: string, config?: ApiRequestConfig) => 

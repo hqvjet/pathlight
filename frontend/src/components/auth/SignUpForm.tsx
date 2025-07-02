@@ -8,7 +8,7 @@ import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
-import Header from './Header';
+import Header from '../layout/Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -24,14 +24,12 @@ export default function SignUpForm() {
   });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showLoginLink, setShowLoginLink] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setShowLoginLink(false);
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
@@ -72,10 +70,8 @@ export default function SignUpForm() {
         if (res.status === 400 && errorMessage.includes('đã được sử dụng và đã được xác thực')) {
           // User already verified - should login instead
           showToast.authError(errorMessage);
-          setShowLoginLink(true);
         } else if (res.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('đã tồn tại')) {
           showToast.authError('Email này đã được đăng ký. Vui lòng sử dụng email khác hoặc đăng nhập.');
-          setShowLoginLink(true);
         } else if (errorMessage.includes('Invalid email') || errorMessage.includes('email không hợp lệ')) {
           showToast.authError('Định dạng email không hợp lệ. Vui lòng kiểm tra lại.');
         } else if (errorMessage.includes('Password') || errorMessage.includes('mật khẩu')) {
@@ -93,7 +89,7 @@ export default function SignUpForm() {
     }
   };
 
-  const handleGoogleSuccess = async (googleUser: any) => {
+  const handleGoogleSuccess = async (googleUser: unknown) => {
     setLoading(true);
 
     try {
@@ -107,9 +103,8 @@ export default function SignUpForm() {
 
       if (res.ok && result.access_token) {
         storage.setToken(result.access_token);
-        showToast.authSuccess('Đăng ký Google thành công!');
-        // New Google users should go to study time setup
-        router.push('/auth/study-time-setup');
+        showToast.authSuccess('Đăng nhập Google thành công!');
+        router.push('/dashboard');
       } else {
         showToast.authError(result.message || 'Đăng ký Google thất bại');
       }

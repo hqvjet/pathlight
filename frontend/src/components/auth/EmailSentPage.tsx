@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import Header from './Header';
+import Header from '../layout/Header';
 
 interface EmailSentPageProps {
   email?: string;
@@ -12,7 +12,7 @@ interface EmailSentPageProps {
 
 export default function EmailSentPage({ email, onResendEmail, isResending = false }: EmailSentPageProps) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <Header 
         variant="auth" 

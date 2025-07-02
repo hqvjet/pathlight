@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,7 @@ import { showToast } from '@/utils/toast';
 import { API_BASE, endpoints, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
-import Header from './Header';
+import Header from '../layout/Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -20,6 +20,11 @@ export default function SignInForm() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Khởi tạo trạng thái remember me từ storage
+  useEffect(() => {
+    setRememberMe(storage.isRemembered());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +76,7 @@ export default function SignInForm() {
       const result = await res.json();
 
       if (result.access_token) {
-        storage.setToken(result.access_token);
+        storage.setToken(result.access_token, rememberMe);
         showToast.authSuccess('Đăng nhập thành công!');
         router.push('/dashboard');
       } else if (result.message === 'Email chưa được xác thực') {
@@ -91,7 +96,7 @@ export default function SignInForm() {
     }
   };
 
-  const handleGoogleSuccess = async (googleUser: any) => {
+  const handleGoogleSuccess = async (googleUser: unknown) => {
     setLoading(true);
 
     try {
@@ -135,7 +140,7 @@ export default function SignInForm() {
       const result = await res.json();
 
       if (result.access_token) {
-        storage.setToken(result.access_token);
+        storage.setToken(result.access_token, rememberMe);
         showToast.authSuccess('Đăng nhập Google thành công!');
         router.push('/dashboard');
       } else {
@@ -177,7 +182,7 @@ export default function SignInForm() {
       {/* Main Content */}
       <div className="flex min-h-[calc(100vh-80px)] mt-20">
         {/* Left: Image */}
-        <div className="w-1/2 bg-[#FEF7F0] flex items-center justify-center p-8">
+        <div className="w-1/2 flex items-center justify-center p-8">
           <div className="max-w-lg">
             <Image
               src="/assets/images/login.png"

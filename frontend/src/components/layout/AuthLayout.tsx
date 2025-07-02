@@ -24,7 +24,7 @@ export default function AuthLayout({
   showSocialLinks = true
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <Header 
         variant={headerVariant} 
@@ -35,14 +35,14 @@ export default function AuthLayout({
       {/* Main Content */}
       <div className="flex-1 flex pt-20">
         {/* Left side - Image */}
-        <div className="hidden lg:flex flex-1 items-center justify-center p-8 bg-gradient-to-br from-orange-50 to-orange-100">
+        <div className="hidden lg:flex flex-1 items-center justify-center p-8 bg-white">
           <div className="max-w-lg w-full">
             <Image
               src={imageSrc}
               alt={imageAlt}
               width={500}
               height={400}
-              className="w-full h-auto object-contain drop-shadow-lg"
+              className="w-full h-auto object-contain"
               priority
             />
           </div>
