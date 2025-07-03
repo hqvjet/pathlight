@@ -9,21 +9,21 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from sqlalchemy.orm import Session
-import os
 import secrets
 import time
 
-from src.models import User
+from .models import User
+from .config import config
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # Email configuration
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@pathlight.vn")
+SMTP_SERVER = config.SMTP_SERVER
+SMTP_PORT = config.SMTP_PORT
+SMTP_USERNAME = config.SMTP_USERNAME
+SMTP_PASSWORD = config.SMTP_PASSWORD
+FROM_EMAIL = config.FROM_EMAIL
 
 
 def create_study_reminder_email_html(user_name: str = "") -> str:

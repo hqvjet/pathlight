@@ -1,11 +1,35 @@
+"""
+Configuration for API Gateway
+Self-contained configuration that doesn't depend on external libs
+"""
 import os
 from pathlib import Path
 from typing import Dict, List
 from dotenv import load_dotenv
 
 # Load global .env from project root
-root_dir = Path(__file__).parent.parent.parent.parent
-load_dotenv(root_dir / ".env")
+def load_env():
+    """Load environment variables"""
+    try:
+        # Try different locations for .env file
+        env_paths = [
+            ".env",
+            "../.env", 
+            "../../.env",
+            "../../../.env",
+            "/tmp/.env"  # For Lambda
+        ]
+        
+        for env_path in env_paths:
+            if Path(env_path).exists():
+                load_dotenv(env_path)
+                return True
+        return False
+    except ImportError:
+        return False
+
+# Auto-load environment
+load_env()
 
 class Config:
     # =============================================================================
@@ -23,10 +47,10 @@ class Config:
     
     # Service Discovery - API Gateway cần biết tất cả services
     SERVICES = {
-        "auth": os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001"),
-        "user": os.getenv("USER_SERVICE_URL", "http://user-service:8002"),
-        "course": os.getenv("COURSE_SERVICE_URL", "http://course-service:8003"),
-        "quiz": os.getenv("QUIZ_SERVICE_URL", "http://quiz-service:8004"),
+        "auth": os.getenv("AUTH_SERVICE_URL", "http://localhost:8001"),
+        "user": os.getenv("USER_SERVICE_URL", "http://localhost:8002"),
+        "course": os.getenv("COURSE_SERVICE_URL", "http://localhost:8003"),
+        "quiz": os.getenv("QUIZ_SERVICE_URL", "http://localhost:8004"),
     }
     
     # Authentication (để verify JWT từ clients)
@@ -37,6 +61,9 @@ class Config:
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+    
+    # Timeout settings
+    SERVICE_TIMEOUT: float = float(os.getenv("SERVICE_TIMEOUT", "30.0"))
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", 100))

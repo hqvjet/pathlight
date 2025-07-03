@@ -2,26 +2,36 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import jwt
-import os
+from jose import jwt
 from datetime import datetime, timedelta
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# Import local config
+from .config import config
+
+# Configure logging
+logging.basicConfig(level=getattr(logging, config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Course Service", version="1.0.0")
 
+# Load configuration from config
+JWT_SECRET_KEY = config.JWT_SECRET_KEY
+JWT_ALGORITHM = config.JWT_ALGORITHM
+
+# CORS configuration
+ALLOWED_ORIGINS = config.ALLOWED_ORIGINS
+ALLOWED_METHODS = config.ALLOWED_METHODS
+ALLOWED_HEADERS = config.ALLOWED_HEADERS
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
 )
-
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
-JWT_ALGORITHM = "HS256"
 
 class Course(BaseModel):
     id: Optional[int] = None
@@ -283,4 +293,5 @@ async def get_user_test_results(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    port = config.SERVICE_PORT
+    uvicorn.run(app, host="0.0.0.0", port=port)
