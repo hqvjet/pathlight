@@ -25,7 +25,6 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
 async def signin(user_data: SigninRequest, db: Session = Depends(get_db)):
     """User login endpoint"""
     return await signin_user(user_data, db)
-
 # 1.4. Đăng xuất
 @router.get("/signout", response_model=MessageResponse)
 async def signout(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
