@@ -1,13 +1,30 @@
+# =============================================================================
+# 📦 PATHLIGHT AUTH SERVICE - STANDALONE REQUIREMENTS
+# =============================================================================
+
+# Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+pydantic[email]==2.5.1
+python-multipart==0.0.6
+
+# Database
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 alembic==1.13.1
-pydantic[email]==2.5.1
-python-multipart==0.0.6
+
+# Authentication & Security
 bcrypt==4.1.2
-PyJWT==2.8.0
 python-jose[cryptography]==3.3.0
-python-dotenv==1.0.0
+PyJWT==2.8.0
+
+# Email
 email-validator==2.1.0
+
+# Scheduler
 apscheduler==3.10.4
+
+# Environment
+python-dotenv==1.0.0
+
+# CORS is included in FastAPI/Starlette

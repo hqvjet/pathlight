@@ -6,23 +6,25 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 import bcrypt
 import jwt
-from jose import JWTError, jwt as jose_jwt
-import secrets
-import time
-from datetime import datetime, timedelta, timezone
-import uuid
-from datetime import datetime, timedelta
+import os
 import logging
 import re
 import smtplib
+import traceback
+import secrets
+import time
+import uuid
+import atexit
+from jose import JWTError, jwt as jose_jwt
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import atexit
 
-# Import local modules
-from .config import config, get_jwt_config, get_service_port
+# Import local modules - using config
+from .config import config, get_jwt_config, get_service_port, get_cors_config, get_email_config
 from .database import get_db, create_tables, SessionLocal
 from .models import User, Admin, TokenBlacklist
 from .email_reminders import send_email
@@ -77,7 +79,7 @@ def run_study_reminders():
     try:
         logger.info("[REMINDER DEBUG] Scheduler đã gọi run_study_reminders()")
         db = SessionLocal()
-        from src.email_reminders import send_reminders_to_users
+        from .email_reminders import send_reminders_to_users
         result = send_reminders_to_users(db)
         logger.info(f"[REMINDER DEBUG] Kết quả gửi nhắc nhở: {result}")
         db.close()
@@ -342,7 +344,7 @@ async def startup_event():
     create_tables()
     
     # Create default admin user
-    from src.database import SessionLocal
+    from .database import SessionLocal
     db = SessionLocal()
     try:
         admin = db.query(Admin).filter(Admin.username == ADMIN_USERNAME).first()
@@ -362,9 +364,8 @@ async def startup_event():
 # Add main execution block for standalone operation
 if __name__ == "__main__":
     import uvicorn
-    import os
-    port = int(os.getenv("AUTH_SERVICE_PORT", "8001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    port = int(os.getenv("SERVICE_PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
 
 # Health endpoints
 @app.get("/")
