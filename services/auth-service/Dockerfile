@@ -3,6 +3,7 @@ FROM python:3.12-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Set work directory
 WORKDIR /app
@@ -13,6 +14,8 @@ RUN apt-get update \
         gcc \
         python3-dev \
         python3-venv \
+        netcat-traditional \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
@@ -30,8 +33,12 @@ COPY . .
 RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app /opt/venv
 USER appuser
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 # Expose port
-EXPOSE 8001
+EXPOSE 8000
 
 # Run the application
-CMD ["/opt/venv/bin/python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["/opt/venv/bin/python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
