@@ -104,7 +104,7 @@ load_env() {
     
     # Set default values if not provided
     export POSTGRES_USER=${POSTGRES_USER:-postgres}
-    export POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    export POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-1210}
     export POSTGRES_DB=${POSTGRES_DB:-pathlight}
     export POSTGRES_HOST=${POSTGRES_HOST:-pathlight-postgres}
     export POSTGRES_PORT=${POSTGRES_PORT:-5432}
