@@ -111,61 +111,61 @@ async def health_check():
     return health_status
 
 # Auth service routes
-@app.post("/api/v1/signup")
+@app.post("/api/v1/auth/signup")
 async def signup(request: Request):
-    return await forward_request("auth", "/api/v1/signup", request)
+    return await forward_request("auth", "/api/v1/auth/signup", request)
 
-@app.get("/api/v1/verify-email")
+@app.get("/api/v1/auth/verify-email")
 async def verify_email(request: Request):
-    return await forward_request("auth", "/api/v1/verify-email", request)
+    return await forward_request("auth", "/api/v1/auth/verify-email", request)
 
-@app.post("/api/v1/signin")
+@app.post("/api/v1/auth/signin")
 async def signin(request: Request):
-    return await forward_request("auth", "/api/v1/signin", request)
+    return await forward_request("auth", "/api/v1/auth/signin", request)
 
-@app.get("/api/v1/signout")
+@app.get("/api/v1/auth/signout")
 async def signout(request: Request):
-    return await forward_request("auth", "/api/v1/signout", request)
+    return await forward_request("auth", "/api/v1/auth/signout", request)
 
-@app.post("/api/v1/forget-password")
+@app.post("/api/v1/auth/forget-password")
 async def forget_password(request: Request):
-    return await forward_request("auth", "/api/v1/forget-password", request)
+    return await forward_request("auth", "/api/v1/auth/forget-password", request)
 
-@app.get("/api/v1/validate-reset-token/{token}")
+@app.get("/api/v1/auth/validate-reset-token/{token}")
 async def validate_reset_token(token: str, request: Request):
-    return await forward_request("auth", f"/api/v1/validate-reset-token/{token}", request)
+    return await forward_request("auth", f"/api/v1/auth/validate-reset-token/{token}", request)
 
-@app.post("/api/v1/reset-password/{token}")
+@app.post("/api/v1/auth/reset-password/{token}")
 async def reset_password(token: str, request: Request):
-    return await forward_request("auth", f"/api/v1/reset-password/{token}", request)
+    return await forward_request("auth", f"/api/v1/auth/reset-password/{token}", request)
 
-@app.post("/api/v1/oauth-signin")
+@app.post("/api/v1/auth/oauth-signin")
 async def oauth_signin(request: Request):
-    return await forward_request("auth", "/api/v1/oauth-signin", request)
+    return await forward_request("auth", "/api/v1/auth/oauth-signin", request)
 
-@app.post("/api/v1/user/change-password")
+@app.post("/api/v1/auth/change-password")
 async def change_password(request: Request):
-    return await forward_request("auth", "/api/v1/user/change-password", request)
+    return await forward_request("auth", "/api/v1/auth/change-password", request)
 
-@app.post("/api/v1/admin/signin")
+@app.post("/api/v1/auth/admin/signin")
 async def admin_signin(request: Request):
-    return await forward_request("auth", "/api/v1/admin/signin", request)
+    return await forward_request("auth", "/api/v1/auth/admin/signin", request)
 
-@app.post("/api/v1/resend-verification")
+@app.post("/api/v1/auth/resend-verification")
 async def resend_verification(request: Request):
-    return await forward_request("auth", "/api/v1/resend-verification", request)
+    return await forward_request("auth", "/api/v1/auth/resend-verification", request)
 
 @app.put("/api/v1/user/notify-time")
 async def set_notify_time(request: Request):
-    return await forward_request("auth", "/api/v1/user/notify-time", request)
+    return await forward_request("user", "/api/v1/user/notify-time", request)
 
 @app.get("/api/v1/user/profile")
 async def get_user_profile(request: Request):
-    return await forward_request("auth", "/api/v1/user/profile", request)
+    return await forward_request("user", "/api/v1/user/profile", request)
 
-@app.get("/api/v1/admin/users")
+@app.get("/api/v1/user/all")
 async def get_all_users(request: Request):
-    return await forward_request("auth", "/api/v1/admin/users", request)
+    return await forward_request("user", "/api/v1/user/all", request)
 
 # Catch-all route for other services
 @app.api_route("/{service:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
