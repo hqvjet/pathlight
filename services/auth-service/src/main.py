@@ -13,6 +13,7 @@ from .models import Admin
 from .services.auth_service import hash_password
 from .routes.auth_routes import router as auth_router
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,7 +36,9 @@ def run_study_reminders():
     try:
         logger.info("[REMINDER DEBUG] Scheduler đã gọi run_study_reminders()")
         db = SessionLocal()
+        
         from .services.email_reminders import send_reminders_to_users
+
         result = send_reminders_to_users(db)
         logger.info(f"[REMINDER DEBUG] Kết quả gửi nhắc nhở: {result}")
         db.close()
