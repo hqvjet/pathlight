@@ -1,95 +1,72 @@
-import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+import openai
 from dotenv import load_dotenv
+import os
 from mangum import Mangum
 
-from config import config
-from routers import file_router
+from file_route import extract_content_with_tags  # Assuming this function is defined in file_route.py
+from split_text import split_into_chunks  # Assuming this function is defined in split_text.py
 
-
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Load environment variables (only needed for local development)
-if not config.IS_LAMBDA:
-    load_dotenv()
-
-# Validate configuration
-config_errors = config.validate_config()
-if config_errors:
-    logger.error(f"Configuration errors: {config_errors}")
-    if config.IS_LAMBDA:
-        raise ValueError(f"Configuration errors: {config_errors}")
 
 # Create FastAPI instance
-app = FastAPI(
-    title="Agentic Service",
-    description="Service for file processing, vectorization, and AI-powered document analysis",
-    version="1.0.0",
-    docs_url="/docs" if not config.IS_LAMBDA else None,  # Disable docs in Lambda
-    redoc_url="/redoc"
-)
+app = FastAPI()
+
+# Load environment variables
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Configure CORS
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://example.com"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.ALLOWED_ORIGINS,
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=config.ALLOWED_METHODS,
-    allow_headers=config.ALLOWED_HEADERS,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(file_router)
-
-# Health check endpoints
+# Define a basic route
 @app.get("/")
-async def root():
-    return {
-        "message": "Agentic Service is running", 
-        "version": "1.0.0",
-        "environment": "lambda" if config.IS_LAMBDA else "local"
-    }
+def read_root():
+    return {"message": "Welcome to the FastAPI application!"}
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy", 
-        "service": "agentic-service",
-        "environment": "lambda" if config.IS_LAMBDA else "local"
-    }
+@app.post("/vectorize")
+def upload_files(files: List[UploadFile] = File(...)):
+    allowed_extensions = {"docx", "pdf", "pptx"}
+    file_contents = {}
 
-@app.get("/debug/config")
-async def debug_config():
-    """Debug endpoint to check configuration (without sensitive data)"""
-    return {
-        "IS_LAMBDA": config.IS_LAMBDA,
-        "AWS_REGION": config.AWS_REGION,
-        "AWS_S3_BUCKET_NAME": config.AWS_S3_BUCKET_NAME,
-        "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
-        "MAX_FILE_SIZE_MB": config.MAX_FILE_SIZE_MB,
-        "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
-        "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
-        "AWS_CREDENTIALS_SET": bool(config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY),
-        "LOG_LEVEL": config.LOG_LEVEL,
-    }
+    for file in files:
+        extension = file.filename.split(".")[-1]
+        if extension not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
 
-# AWS Lambda handler
-handler = Mangum(app, lifespan="off")
+        structured_content = extract_content_with_tags(file, extension)
+        file_contents[file.filename] = structured_content
 
-# Local development server
-if __name__ == "__main__":
-    import uvicorn
-    logger.info(f"Starting server on port {config.SERVICE_PORT}")
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=config.SERVICE_PORT, 
-        reload=True,
-        log_level=config.LOG_LEVEL.lower()
-    )
+    chunks = []
+    for filename, content in file_contents.items():
+        chunks.extend(split_into_chunks(content, source_info=filename))
+
+    embeddings = []
+    for chunk in chunks:
+        response = openai.Embedding.create(
+            input=chunk["chunk_text"],
+            model="text-embedding-3-small"
+        )
+        embeddings.append({
+            "chunk_id": chunk["chunk_id"],
+            "embedding": response["data"][0]["embedding"],
+            "chunk_text": chunk["chunk_text"],
+            "source_info": chunk["source_info"]
+        })
+
+    return {"embeddings": embeddings}
+
+handler = Mangum(app)
