@@ -6,11 +6,6 @@ Collection of FastAPI microservices that power the platform APIs.
 ## Full Directory Tree
 ```text
 services/
-  ├── api-gateway/
-  │   ├── Dockerfile
-  │   ├── requirements.txt
-  │   └── src/
-  │       └── .gitkeep
   ├── auth-service/
   │   ├── Dockerfile
   │   ├── alembic.ini

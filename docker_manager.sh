@@ -4,10 +4,12 @@
 # 🐳 PATHLIGHT DOCKER MANAGEMENT SCRIPT
 # ==============================================================================
 # All-in-one Docker management tool for PathLight project
+# Direct service access architecture
 # 
 # Usage: ./docker_manager.sh [command]
 # Commands:
 #   status    - Show comprehensive status of all services
+#   services  - Show all service URLs and endpoints
 #   restart   - Restart all services (preserves data)  
 #   cleanup   - Clean unused Docker resources
 #   reset     - Complete reset (DESTROYS ALL DATA!)
@@ -69,14 +71,23 @@ show_status() {
     fi
     
     echo ""
-    print_section "2️⃣ Service Health Checks"
+    print_section "2️⃣ Service Architecture"
+    print_info "Direct service access - each service runs independently:"
+    echo "   📊 Auth Service    → http://localhost:8001"
+    echo "   👤 User Service    → http://localhost:8002" 
+    echo "   📚 Course Service  → http://localhost:8003"
+    echo "   📝 Quiz Service    → http://localhost:8004"
+    echo "   🤖 Agentic Service → http://localhost:8005"
+    
+    echo ""
+    print_section "3️⃣ Service Health Checks"
     
     services=(
-        "api-gateway:8000:/health"
         "auth-service:8001:/health" 
         "user-service:8002:/health"
         "course-service:8003:/health"
         "quiz-service:8004:/health"
+        "agentic-service:8005:/health"
     )
 
     for service in "${services[@]}"; do
@@ -92,7 +103,7 @@ show_status() {
     done
 
     echo ""
-    print_section "3️⃣ Database Status"
+    print_section "4️⃣ Database Status"
     
     if docker exec pathlight-postgres-1 pg_isready -U postgres > /dev/null 2>&1; then
         print_success "PostgreSQL is running"
@@ -113,7 +124,7 @@ show_status() {
     fi
 
     echo ""
-    print_section "4️⃣ Resource Usage"
+    print_section "5️⃣ Resource Usage"
     
     if docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $(docker ps --format "{{.Names}}" | grep pathlight) 2>/dev/null; then
         print_success "Resource usage retrieved"
@@ -123,11 +134,11 @@ show_status() {
 
     echo ""
     print_info "Quick Access URLs:"
-    echo "   - API Gateway: http://localhost:8000/docs"
     echo "   - Auth Service: http://localhost:8001/docs"
     echo "   - User Service: http://localhost:8002/docs"
     echo "   - Course Service: http://localhost:8003/docs"
     echo "   - Quiz Service: http://localhost:8004/docs"
+    echo "   - Agentic Service: http://localhost:8005/docs"
 }
 
 restart_services() {
@@ -304,11 +315,11 @@ build_images() {
 
 show_health_check() {
     services=(
-        "api-gateway:8000"
-        "auth-service:8001" 
+        "auth-service:8001"
         "user-service:8002"
         "course-service:8003"
         "quiz-service:8004"
+        "agentic-service:8005"
     )
 
     for service in "${services[@]}"; do
@@ -323,12 +334,58 @@ show_health_check() {
     done
 }
 
+show_services() {
+    print_header
+    print_section "🌐 Pathlight Services (Direct Access)"
+    
+    echo "📊 Authentication Service:"
+    echo "   URL: http://localhost:8001"
+    echo "   API: http://localhost:8001/docs"
+    echo "   Health: http://localhost:8001/health"
+    echo ""
+    
+    echo "👤 User Management Service:"
+    echo "   URL: http://localhost:8002"
+    echo "   API: http://localhost:8002/docs"
+    echo "   Health: http://localhost:8002/health"
+    echo ""
+    
+    echo "📚 Course Service:"
+    echo "   URL: http://localhost:8003"
+    echo "   API: http://localhost:8003/docs"
+    echo "   Health: http://localhost:8003/health"
+    echo ""
+    
+    echo "📝 Quiz Service:"
+    echo "   URL: http://localhost:8004"
+    echo "   API: http://localhost:8004/docs"
+    echo "   Health: http://localhost:8004/health"
+    echo ""
+    
+    echo "🤖 Agentic Service:"
+    echo "   URL: http://localhost:8005"
+    echo "   API: http://localhost:8005/docs"
+    echo "   Health: http://localhost:8005/health"
+    echo ""
+    
+    echo "🗃️ Database:"
+    echo "   PostgreSQL: localhost:5432"
+    echo "   Database: pathlight"
+    echo ""
+    
+    print_info "All services are accessible directly"
+}
+
 show_help() {
     print_header
     echo "Usage: $0 [command]"
     echo ""
+    echo "🏗️ Architecture: Direct Service Access"
+    echo "   Each service runs independently on its own port"
+    echo ""
     echo "Commands:"
     echo "  status    - Show comprehensive status of all services"
+    echo "  services  - Show all service URLs and endpoints"
     echo "  restart   - Restart all services (preserves data)"  
     echo "  cleanup   - Clean unused Docker resources"
     echo "  reset     - Complete reset (DESTROYS ALL DATA!)"
@@ -336,8 +393,16 @@ show_help() {
     echo "  build     - Rebuild all images"
     echo "  help      - Show this help message"
     echo ""
+    echo "🌐 Quick Service Access:"
+    echo "  Auth Service:    http://localhost:8001/docs"
+    echo "  User Service:    http://localhost:8002/docs"
+    echo "  Course Service:  http://localhost:8003/docs"
+    echo "  Quiz Service:    http://localhost:8004/docs"
+    echo "  Agentic Service: http://localhost:8005/docs"
+    echo ""
     echo "Examples:"
     echo "  $0 status                    # Check service status"
+    echo "  $0 services                  # Show all service URLs"
     echo "  $0 restart                   # Restart services"
     echo "  $0 cleanup                   # Clean up resources"
     echo "  $0 reset                     # Reset everything"
@@ -349,6 +414,9 @@ show_help() {
 case "${1:-help}" in
     "status"|"s")
         show_status
+        ;;
+    "services"|"urls"|"sv")
+        show_services
         ;;
     "restart"|"r")
         restart_services

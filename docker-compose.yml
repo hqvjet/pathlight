@@ -14,22 +14,6 @@ services:
     networks:
       - pathlight-network
 
-  # API Gateway
-  api-gateway:
-    build: ./services/api-gateway
-    ports:
-      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
-    env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
-      - auth-service
-      - user-service
-    networks:
-      - pathlight-network
-
   # Auth Service
   auth-service:
     build: ./services/auth-service
