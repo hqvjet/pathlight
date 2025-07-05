@@ -132,7 +132,7 @@ export const userService = {
         type: string;
         description: string;
         created_at: string;
-        metadata?: any;
+        metadata?: unknown;
       }>;
       total: number;
       page: number;

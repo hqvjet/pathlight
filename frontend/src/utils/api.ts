@@ -47,14 +47,43 @@ export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
 // 💾 LOCAL STORAGE UTILITIES
 // =============================================================================
 export const storage = {
-  // Token management
-  getToken: (): string | null => 
-    typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-  setToken: (token: string): void => {
-    if (typeof window !== 'undefined') localStorage.setItem('token', token);
+  // Token management with remember me support
+  getToken: (): string | null => {
+    if (typeof window === 'undefined') return null;
+    // Kiểm tra trong localStorage trước (persistent), sau đó sessionStorage (temporary)
+    return localStorage.getItem('token') || sessionStorage.getItem('token');
+  },
+  setToken: (token: string, remember: boolean = false): void => {
+    if (typeof window === 'undefined') return;
+    
+    if (remember) {
+      // Lưu trong localStorage (persistent)
+      localStorage.setItem('token', token);
+      localStorage.setItem('remember_me', 'true');
+      // Xóa khỏi sessionStorage nếu có
+      sessionStorage.removeItem('token');
+    } else {
+      // Lưu trong sessionStorage (temporary)
+      sessionStorage.setItem('token', token);
+      // Xóa khỏi localStorage nếu có
+      localStorage.removeItem('token');
+      localStorage.removeItem('remember_me');
+    }
   },
   removeToken: (): void => {
-    if (typeof window !== 'undefined') localStorage.removeItem('token');
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
+    localStorage.removeItem('remember_me');
+  },
+  clearSessionToken: (): void => {
+    if (typeof window === 'undefined') return;
+    // Chỉ xóa session token, giữ lại persistent token nếu có remember me
+    sessionStorage.removeItem('token');
+  },
+  isRemembered: (): boolean => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('remember_me') === 'true';
   },
   
   // Email verification
@@ -109,14 +138,14 @@ export const getAuthHeaders = (): Record<string, string> => {
 // =============================================================================
 // 🌐 API REQUEST WRAPPER
 // =============================================================================
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
   status: number;
 }
 
-export const apiRequest = async <T = any>(
+export const apiRequest = async <T = unknown>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> => {

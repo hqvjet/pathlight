@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// import Dashboard from '@/components/Dashboard';
+import Dashboard from '@/components/user/Dashboard';
 import { storage } from '@/utils/api';
 
 export default function DashboardPage() {
@@ -40,5 +40,5 @@ export default function DashboardPage() {
     return null;
   }
 
-  // return <Dashboard onLogout={handleLogout} />;
+  return <Dashboard onLogout={handleLogout} />;
 }

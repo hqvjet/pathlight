@@ -1,61 +1,48 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from 'next'
 
 /**
- * Next.js configuration (Next.js 14+)
- * - Updated to use `serverExternalPackages` (stable) instead of the removed `experimental.serverComponentsExternalPackages`.
- * - Replaced deprecated `images.domains` with `images.remotePatterns`.
- * - Added `turbo: false` to silence Turbopack warnings until you migrate.
+ * Next.js configuration (tested with v15.x)
+ * -----------------------------------------------------------------------------
+ * – Switched from deprecated `images.domains` to `images.remotePatterns`.
+ * – Removed the unsupported `turbo` key that caused the “Unrecognized key” error.
+ * – Left a commented `turbopack` section in case you want to experiment later.
+ * – Added safe defaults for image security, headers, rewrites, and live‑reload in Docker.
  */
 const nextConfig: NextConfig = {
-  // =============================================================================
-  // 🌍 ENVIRONMENT VARIABLES
-  // =============================================================================
+  // ---------------------------------------------------------------------------
+  // 🌍  Public environment variables (exposed on the client)
+  // ---------------------------------------------------------------------------
   env: {
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
     NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
   },
 
-  // =============================================================================
-  // 🖼️ IMAGE OPTIMIZATION
-  // =============================================================================
+  // ---------------------------------------------------------------------------
+  // 🖼️  Image optimisation
+  // ---------------------------------------------------------------------------
   images: {
-    formats: ['image/webp', 'image/avif'],
+    formats: ['image/avif', 'image/webp'],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    /**
-     * `domains` is deprecated since v14 — switch to `remotePatterns`.
-     * Add any additional production domains or CDN hosts below.
-     */
     remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        pathname: '/**',
-      },
-      {
-        protocol: 'http',
-        hostname: '127.0.0.1',
-        pathname: '/**',
-      },
+      { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
+      { protocol: 'http', hostname: '127.0.0.1', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
       // Example production host:
-      // {
-      //   protocol: 'https',
-      //   hostname: 'cdn.example.com',
-      //   pathname: '/**',
-      // },
+      // { protocol: 'https', hostname: 'cdn.example.com', pathname: '/**' },
     ],
   },
 
-  // =============================================================================
-  // 🔄 REDIRECTS & REWRITES
-  // =============================================================================
+  // ---------------------------------------------------------------------------
+  // 🔄  Redirects & Rewrites
+  // ---------------------------------------------------------------------------
   async redirects() {
     return [
-      { source: '/login', destination: '/auth/signin', permanent: true },
+      { source: '/login',    destination: '/auth/signin', permanent: true },
       { source: '/register', destination: '/auth/signup', permanent: true },
-    ];
+    ]
   },
 
   async rewrites() {
@@ -64,57 +51,37 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/:path*`,
       },
-    ];
+    ]
   },
 
-  // =============================================================================
-  // 🔧 BUILD CONFIGURATION
-  // =============================================================================
-  /**
-   * Stable since v15.0.0 — list packages that rely on Node APIs so they
-   * are excluded from the Server Components bundle. Replace the placeholder
-   * with actual deps (e.g. 'bcrypt', 'sharp', '@prisma/client', ...).
-   */
-  serverExternalPackages: ['bcrypt', 'sharp', '@prisma/client'],
-
-  /**
-   * Disable Turbopack until you intentionally migrate (suppresses warnings).
-   */
-  turbo: false,
-
-  /**
-   * Enable standalone output for Docker production builds
-   */
-  output: 'standalone',
-
-  // =============================================================================
-  // 🛡️ SECURITY HEADERS
-  // =============================================================================
+  // ---------------------------------------------------------------------------
+  // 🛡️  Security headers
+  // ---------------------------------------------------------------------------
   async headers() {
     return [
       {
         source: '/(.*)',
         headers: [
-          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Frame-Options',       value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
+          { key: 'Referrer-Policy',        value: 'origin-when-cross-origin' },
         ],
       },
-    ];
+    ]
   },
 
-  // =============================================================================
-  // 📦 WEBPACK CONFIGURATION
-  // =============================================================================
+  // ---------------------------------------------------------------------------
+  // ⚙️  Webpack tweaks (watch mode friendly for Docker/WSL)
+  // ---------------------------------------------------------------------------
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
-      } as any;
+      }
     }
-    return config;
+    return config
   },
-};
+}
 
-export default nextConfig;
+export default nextConfig

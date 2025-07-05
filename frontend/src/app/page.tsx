@@ -242,7 +242,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="text-gray-700 leading-relaxed">
-                "Hệ thống analytics giúp tôi sớm phát hiện vấn đề 'nguy cơ', cảm thấy nhẹ nhàng và chỉ cần thi là hoàn thành khóa học lên 87%."
+                &quot;Hệ thống analytics giúp tôi sớm phát hiện vấn đề &apos;nguy cơ&apos;, cảm thấy nhẹ nhàng và chỉ cần thi là hoàn thành khóa học lên 87%.&quot;
               </p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
@@ -254,7 +254,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="text-gray-700 leading-relaxed">
-                "Hệ thống giúp tôi soạn bài giảng siêu nhanh, bớt lặp lại. Học viên phản hồi rất tích cực và về sau tỉ lệ có đủ điểm để đậu tăng đều. Tỉ lệ học sinh vượt chuẩn các lần test lên đến 95%."
+                &quot;Hệ thống giúp tôi soạn bài giảng siêu nhanh, bớt lặp lại. Học viên phản hồi rất tích cực và về sau tỉ lệ có đủ điểm để đậu tăng đều. Tỉ lệ học sinh vượt chuẩn các lần test lên đến 95%.&quot;
               </p>
             </div>
           </div>
