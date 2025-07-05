@@ -1,100 +1,95 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+import logging
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
-import openai
 from dotenv import load_dotenv
-import os
 from mangum import Mangum
-from boto3 import client
 
-from file_route import extract_content_with_tags  # Assuming this function is defined in file_route.py
-from split_text import split_into_chunks  # Assuming this function is defined in split_text.py
+from config import config
+from routers import file_router
 
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables (only needed for local development)
+if not config.IS_LAMBDA:
+    load_dotenv()
+
+# Validate configuration
+config_errors = config.validate_config()
+if config_errors:
+    logger.error(f"Configuration errors: {config_errors}")
+    if config.IS_LAMBDA:
+        raise ValueError(f"Configuration errors: {config_errors}")
 
 # Create FastAPI instance
-app = FastAPI()
-
-# Load environment variables
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+app = FastAPI(
+    title="Agentic Service",
+    description="Service for file processing, vectorization, and AI-powered document analysis",
+    version="1.0.0",
+    docs_url="/docs" if not config.IS_LAMBDA else None,  # Disable docs in Lambda
+    redoc_url="/redoc"
+)
 
 # Configure CORS
-origins = [
-    "*"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=config.ALLOWED_METHODS,
+    allow_headers=config.ALLOWED_HEADERS,
 )
 
-# Initialize S3 client
-s3_client = client(
-    's3',
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    region_name=os.getenv("AWS_REGION")
-)
+# Include routers
+app.include_router(file_router)
 
-# Define a basic route
+# Health check endpoints
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to the FastAPI application!"}
+async def root():
+    return {
+        "message": "Agentic Service is running", 
+        "version": "1.0.0",
+        "environment": "lambda" if config.IS_LAMBDA else "local"
+    }
 
-@app.post("/vectorize")
-def upload_files(files: List[UploadFile] = File(...)):
-    allowed_extensions = {"docx", "pdf", "pptx"}
-    file_contents = {}
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy", 
+        "service": "agentic-service",
+        "environment": "lambda" if config.IS_LAMBDA else "local"
+    }
 
-    for file in files:
-        extension = file.filename.split(".")[-1]
-        if extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
+@app.get("/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration (without sensitive data)"""
+    return {
+        "IS_LAMBDA": config.IS_LAMBDA,
+        "AWS_REGION": config.AWS_REGION,
+        "AWS_S3_BUCKET_NAME": config.AWS_S3_BUCKET_NAME,
+        "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
+        "MAX_FILE_SIZE_MB": config.MAX_FILE_SIZE_MB,
+        "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
+        "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
+        "AWS_CREDENTIALS_SET": bool(config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY),
+        "LOG_LEVEL": config.LOG_LEVEL,
+    }
 
-        structured_content = extract_content_with_tags(file, extension)
-        file_contents[file.filename] = structured_content
+# AWS Lambda handler
+handler = Mangum(app, lifespan="off")
 
-    chunks = []
-    for filename, content in file_contents.items():
-        chunks.extend(split_into_chunks(content, source_info=filename))
-
-    embeddings = []
-    for chunk in chunks:
-        response = openai.Embedding.create(
-            input=chunk["chunk_text"],
-            model="text-embedding-3-small"
-        )
-        embeddings.append({
-            "chunk_id": chunk["chunk_id"],
-            "embedding": response["data"][0]["embedding"],
-            "chunk_text": chunk["chunk_text"],
-            "source_info": chunk["source_info"]
-        })
-
-    return {"embeddings": embeddings}
-
-@app.post("/upload-to-s3")
-def upload_to_s3(files: List[UploadFile] = File(...)):
-    bucket_name = os.getenv("AWS_S3_BUCKET_NAME")
-    if not bucket_name:
-        raise HTTPException(status_code=500, detail="S3 bucket name not configured.")
-
-    uploaded_files = []
-
-    for file in files:
-        try:
-            s3_client.upload_fileobj(
-                file.file,
-                bucket_name,
-                file.filename
-            )
-            uploaded_files.append(file.filename)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}: {str(e)}")
-
-    return {"uploaded_files": uploaded_files}
-
-handler = Mangum(app)                                                                                                                                                       yghtt
+# Local development server
+if __name__ == "__main__":
+    import uvicorn
+    logger.info(f"Starting server on port {config.SERVICE_PORT}")
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=config.SERVICE_PORT, 
+        reload=True,
+        log_level=config.LOG_LEVEL.lower()
+    )

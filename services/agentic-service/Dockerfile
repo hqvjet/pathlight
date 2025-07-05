@@ -1,18 +1,20 @@
+# Use AWS Lambda Python 3.12 base image
 FROM public.ecr.aws/lambda/python:3.12
 
-# Set the working directory in the container
-WORKDIR /app
+# Set working directory
+WORKDIR ${LAMBDA_TASK_ROOT}
 
-# Copy the requirements file into the container
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install the dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code into the container
-COPY . .
+# Copy source code
+COPY src/ ./src/
 
-ENV PYTHONPATH="/app/src"
+# Set Python path to include source directory
+ENV PYTHONPATH="${LAMBDA_TASK_ROOT}/src:${PYTHONPATH}"
 
-# Command to run the application
-CMD ["main.handler"]
+# Lambda handler
+CMD ["src.main.handler"]
