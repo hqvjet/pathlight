@@ -37,8 +37,6 @@ def load_env_file():
         print("Auth Service: python-dotenv not installed, using environment variables")
         return False
 
-
-# Auto-load environment
 load_env_file()
 
 
