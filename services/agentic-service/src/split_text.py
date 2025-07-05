@@ -1,4 +1,3 @@
-
 def split_into_chunks(text, source_info, max_tokens=500):
     chunks = []
     current_chunk = ""
