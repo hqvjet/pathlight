@@ -17,11 +17,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: cd to Agentic Service Directory
+        run: cd services/agentic-service
+
       - name: Install Test Dependencies
-        run: pip install -r services/agentic-service/test-requirements.txt
+        run: pip install -r test-requirements.txt
 
       - name: Run Tests
-        run: pytest services/agentic-service/tests
+        run: pytest -v
 
   build:
     runs-on: ubuntu-latest
