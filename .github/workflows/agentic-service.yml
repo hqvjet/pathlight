@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, develop ]
     paths:
-      - 'agentic-service/**'
+      - 'services/agentic-service/**'
       - '.github/workflows/agentic-service.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'agentic-service/**'
+      - 'services/agentic-service/**'
       - '.github/workflows/agentic-service.yml'
   workflow_dispatch:
     inputs:
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./agentic-service
+        working-directory: ./services/agentic-service
     
     steps:
     - name: 📥 Checkout code
@@ -114,7 +114,7 @@ jobs:
     - name: 📊 Upload coverage reports
       uses: codecov/codecov-action@v3
       with:
-        file: ./agentic-service/coverage.xml
+        file: ./services/agentic-service/coverage.xml
         flags: agentic-service
         name: agentic-service-coverage
 
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./agentic-service
+        working-directory: ./services/agentic-service
     
     steps:
     - name: 📥 Checkout code
@@ -152,7 +152,7 @@ jobs:
       if: always()
       with:
         name: security-reports
-        path: ./agentic-service/bandit-report.json
+        path: ./services/agentic-service/bandit-report.json
 
   # ==================== BUILD & DEPLOY ====================
   deploy:
@@ -162,7 +162,7 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
-        working-directory: ./agentic-service
+        working-directory: ./services/agentic-service
     
     strategy:
       matrix:
@@ -428,7 +428,7 @@ jobs:
     if: always()
     defaults:
       run:
-        working-directory: ./agentic-service
+        working-directory: ./services/agentic-service
     
     steps:
     - name: 🔧 Configure AWS credentials
