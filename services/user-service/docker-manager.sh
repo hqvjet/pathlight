@@ -1,9 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # 🐳 PathLight User Service - Docker Manager
 # =============================================================================
 
 set -e  # Exit on any error
+set -u  # Exit on undefined variables
+set -o pipefail  # Exit on pipe failures
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,6 +31,12 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to clear terminal and reset cursor
+clear_terminal() {
+    # Clear screen and reset cursor position
+    printf "\033[2J\033[H"
+}
+
 # Function to show usage
 show_usage() {
     echo "🐳 PathLight User Service - Docker Manager"
@@ -37,12 +45,12 @@ show_usage() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  start    - Start all services (PostgreSQL + User Service)"
-    echo "  stop     - Stop and remove all containers"
-    echo "  restart  - Stop and start services"
+    echo "  start    - Start user service (connects to shared PostgreSQL)"
+    echo "  stop     - Stop user service (leave shared PostgreSQL running)"
+    echo "  restart  - Stop and start user service"
     echo "  status   - Show status of containers"
     echo "  logs     - Show logs of user service"
-    echo "  clean    - Stop, remove containers and clean network"
+    echo "  clean    - Stop and remove user service container"
     echo "  help     - Show this help message"
     echo ""
     echo "Examples:"
@@ -56,13 +64,15 @@ show_usage() {
 load_env() {
     local env_file=""
     
-    if [ -f ".env.local" ]; then
-        env_file=".env.local"
-    elif [ -f "../.env.local" ]; then
-        env_file="../.env.local"
-    elif [ -f "../../.env.local" ]; then
-        env_file="../../.env.local"
-    else
+    # Find environment file
+    for possible_env in ".env.local" "../.env.local" "../../.env.local"; do
+        if [[ -f "$possible_env" ]]; then
+            env_file="$possible_env"
+            break
+        fi
+    done
+    
+    if [[ -z "$env_file" ]]; then
         print_error "No .env.local file found!"
         print_error "Please create .env.local with the following variables:"
         echo "  POSTGRES_USER=your_db_user"
@@ -86,7 +96,7 @@ load_env() {
     fi
     
     # Check for problematic lines
-    if grep -n "^[[:space:]]*[^#].*[[:space:]].*=" "$env_file" 2>/dev/null; then
+    if grep -qn "^[[:space:]]*[^#].*[[:space:]].*=" "$env_file" 2>/dev/null; then
         print_error "Found problematic lines in $env_file:"
         grep -n "^[[:space:]]*[^#].*[[:space:]].*=" "$env_file" || true
         print_error "Please remove spaces around the '=' sign"
@@ -95,6 +105,7 @@ load_env() {
     
     # Source the file safely
     set -a  # Automatically export all variables
+    # shellcheck source=/dev/null
     if ! source "$env_file"; then
         print_error "Failed to load environment variables from $env_file"
         print_error "Please check the file syntax"
@@ -122,34 +133,19 @@ start_services() {
     print_status "Creating Docker network..."
     docker network create pathlight-network 2>/dev/null || print_warning "Network pathlight-network already exists"
 
-    # Stop and remove existing containers
-    print_status "Cleaning up existing containers..."
-    docker stop pathlight-user-service pathlight-postgres 2>/dev/null || true
-    docker rm pathlight-user-service pathlight-postgres 2>/dev/null || true
+    # Stop and remove existing user service container
+    print_status "Cleaning up existing user service container..."
+    docker stop pathlight-user-service 2>/dev/null || true
+    docker rm pathlight-user-service 2>/dev/null || true
 
-    # Start PostgreSQL
-    print_status "Starting PostgreSQL container..."
-    docker run --name pathlight-postgres \
-        --network pathlight-network \
-        -e POSTGRES_USER="$POSTGRES_USER" \
-        -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-        -e POSTGRES_DB="$POSTGRES_DB" \
-        -p "${POSTGRES_PORT}:5432" \
-        -d postgres:15-alpine
-
-    # Wait for PostgreSQL to be ready
-    print_status "Waiting for PostgreSQL to be ready..."
-    for i in {1..30}; do
-        if docker exec pathlight-postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
-            print_success "PostgreSQL is ready!"
-            break
-        fi
-        if [ $i -eq 30 ]; then
-            print_error "PostgreSQL failed to start within 30 seconds"
-            exit 1
-        fi
-        sleep 1
-    done
+    # Check if PostgreSQL is available (shared container)
+    print_status "Checking for PostgreSQL availability..."
+    if ! docker exec pathlight-postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
+        print_warning "PostgreSQL container not available. Please ensure it's running."
+        print_warning "You may need to start another service first (e.g., auth-service)."
+    else
+        print_success "PostgreSQL is ready!"
+    fi
 
     # Build user service image
     print_status "Building user service image..."
@@ -160,23 +156,31 @@ start_services() {
     docker run --name pathlight-user-service \
         --network pathlight-network \
         --env-file .env.local \
-        -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}" \
         -p "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}" \
         -d pathlight-user-service
 
     # Wait for user service to be ready
     print_status "Waiting for user service to be ready..."
-    for i in {1..30}; do
+    local max_attempts=30
+    local attempt=1
+    
+    while [[ $attempt -le $max_attempts ]]; do
         if curl -f "http://localhost:${USER_SERVICE_PORT}/health" >/dev/null 2>&1; then
             print_success "User service is ready!"
             break
         fi
-        if [ $i -eq 30 ]; then
-            print_warning "User service health check failed, but container is running"
+        
+        if [[ $attempt -eq $max_attempts ]]; then
+            print_warning "User service health check failed after ${max_attempts} attempts"
+            print_warning "Container may still be starting. Check logs with: docker logs pathlight-user-service"
             break
         fi
+        
+        printf "."
         sleep 1
+        ((attempt++))
     done
+    echo ""  # New line after dots
 
     print_success "Services started successfully!"
     echo ""
@@ -195,38 +199,36 @@ start_services() {
 stop_services() {
     echo "🛑 Stopping PathLight User Service..."
     
-    # Stop containers
-    print_status "Stopping containers..."
-    docker stop pathlight-user-service pathlight-postgres 2>/dev/null || print_warning "Some containers were not running"
+    # Stop user service container only (leave shared PostgreSQL running)
+    print_status "Stopping user service container..."
+    docker stop pathlight-user-service 2>/dev/null || print_warning "User service container was not running"
 
-    # Remove containers  
-    print_status "Removing containers..."
-    docker rm pathlight-user-service pathlight-postgres 2>/dev/null || print_warning "Some containers were already removed"
+    # Remove user service container  
+    print_status "Removing user service container..."
+    docker rm pathlight-user-service 2>/dev/null || print_warning "User service container was already removed"
 
-    print_success "Services stopped successfully!"
+    print_success "User service stopped successfully!"
+    print_warning "Note: Shared PostgreSQL container is still running for other services"
     echo ""
-    echo "💡 To restart services, run: $0 start"
+    echo "💡 To restart user service, run: $0 start"
 }
 
 # Function to clean everything
 clean_services() {
     echo "🧹 Cleaning PathLight User Service..."
     
-    # Stop containers
-    print_status "Stopping containers..."
-    docker stop pathlight-user-service pathlight-postgres 2>/dev/null || print_warning "Some containers were not running"
+    # Stop user service container only
+    print_status "Stopping user service container..."
+    docker stop pathlight-user-service 2>/dev/null || print_warning "User service container was not running"
 
-    # Remove containers  
-    print_status "Removing containers..."
-    docker rm pathlight-user-service pathlight-postgres 2>/dev/null || print_warning "Some containers were already removed"
+    # Remove user service container  
+    print_status "Removing user service container..."
+    docker rm pathlight-user-service 2>/dev/null || print_warning "User service container was already removed"
 
-    # Remove network
-    print_status "Removing network..."
-    docker network rm pathlight-network 2>/dev/null || print_warning "Network was already removed"
-
-    print_success "Everything cleaned successfully!"
+    print_success "User service cleaned successfully!"
+    print_warning "Note: Shared PostgreSQL container and network are preserved for other services"
     echo ""
-    echo "💡 To start services, run: $0 start"
+    echo "💡 To start user service, run: $0 start"
 }
 
 # Function to show status
@@ -253,7 +255,7 @@ show_status() {
     fi
     
     if docker ps --filter "name=pathlight-postgres" --filter "status=running" | grep -q pathlight-postgres; then
-        echo "   ✅ PostgreSQL: localhost:5432"
+        echo "   ✅ PostgreSQL: localhost:5432 (shared)"
     else
         echo "   ❌ PostgreSQL: Not running"
     fi

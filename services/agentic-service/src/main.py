@@ -42,10 +42,18 @@ def upload_files(files: List[UploadFile] = File(...)):
     allowed_extensions = {"docx", "pdf", "pptx"}
     file_contents = {}
 
-    for file in files:
-        extension = file.filename.split(".")[-1]
-        if extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
+
+@app.get("/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration (without sensitive data)"""
+    return {
+        "IS_LAMBDA": config.IS_LAMBDA,
+        "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
+        "MAX_FILE_SIZE_MB": config.MAX_FILE_SIZE_MB,
+        "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
+        "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
+        "LOG_LEVEL": config.LOG_LEVEL,
+    }
 
         structured_content = extract_content_with_tags(file, extension)
         file_contents[file.filename] = structured_content

@@ -16,7 +16,7 @@ from ..models import User
 logger = logging.getLogger(__name__)
 
 # Create router for user endpoints
-router = APIRouter(prefix="/user", tags=["User Management"])
+router = APIRouter(prefix="", tags=["User Management"])
 
 # 2.1. Đổi thông tin cá nhân
 @router.put("/change-info", response_model=MessageResponse)
@@ -48,7 +48,7 @@ async def update_avatar(
     return await update_user_avatar(avatar_file, current_user, db)
 
 # 2.4. Lấy thông tin USER
-@router.get("/", response_model=UserInfoResponse)
+@router.get("/info", response_model=UserInfoResponse)
 async def get_user(
     id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
@@ -116,5 +116,6 @@ async def get_current_user_basic_info(
         "given_name": getattr(current_user, 'given_name', None),
         "family_name": getattr(current_user, 'family_name', None),
         "level": getattr(current_user, 'level', 1),
-        "avatar_url": getattr(current_user, 'avatar_url', None)
+        "avatar_url": getattr(current_user, 'avatar_url', None),
+        "remind_time": getattr(current_user, 'remind_time', None)
     }

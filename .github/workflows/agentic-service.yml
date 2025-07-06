@@ -5,39 +5,141 @@ on:
     branches:
       - main
       - develop
+    paths:
+      - 'services/agentic-service/**'
   pull_request:
     branches:
       - main
       - develop
+    paths:
+      - 'services/agentic-service/**'
 
 jobs:
-  test:
+
+  # Build Docker Image
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Test Dependencies
-        run: pip install -r services/agentic-service/test-requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Build Docker Image
+        run: |
+          docker build -t pathlight/agentic_service services/agentic-service
+          docker save pathlight/agentic_service -o agentic-service.tar
+          echo "Docker image 'pathlight/agentic_service' built successfully."
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-agentic-service
+          path: agentic-service.tar
+
+  # Run Tests
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: pip install -r services/agentic-service/requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Validate AWS Credentials
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ AWS credentials are not set"
+            exit 1
+          fi
+          echo "✅ AWS credentials are set"
+
+      - name: Check S3 Bucket Exists
+        run: |
+          if aws s3 ls s3://pathlight-document > /dev/null 2>&1; then
+            echo "✅ S3 bucket 'pathlight-document' exists"
+          else
+            echo "❌ S3 bucket 'pathlight-document' does not exist"
+            exit 1
+          fi
+
+      - name: Check Lambda Function Exists
+        run: |
+          if aws lambda get-function --function-name pathlight-agentic-service > /dev/null 2>&1; then
+            echo "✅ Lambda function 'pathlight-agentic-service' exists"
+          else
+            echo "❌ Lambda function 'pathlight-agentic-service' does not exist"
+            exit 1
+          fi
+
+      - name: Check ECR Repository Exists
+        run: |
+          if aws ecr describe-repositories --repository-names pathlight/agentic_service > /dev/null 2>&1; then
+            echo "✅ ECR repository 'pathlight/agentic_service' exists"
+          else
+            echo "❌ ECR repository 'pathlight/agentic_service' does not exist"
+            exit 1
+          fi
 
       - name: Run Tests
         run: |
           cd services/agentic-service
           pytest -v
-
-  build:
+    
+  # Push Image to ECR and Deploy to Lambda
+  deploy:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - name: Step 1
-        run: echo "Running tests for Agentic Service"
-      
-      - name: AWS S3 Object List
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-1
-        run: aws s3 ls s3://pathlight-document
+      - name: Use Artifact from Build
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-agentic-service
 
-      - name: Hello World
-        run: echo "Hello, world!"
+      - name: Load Docker Image Artifact
+        run: |
+          docker load -i agentic-service.tar 
+          echo "Docker image 'pathlight/agent_service' loaded successfully."
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Push Agentic Service Image into AWS ECR
+        run: |
+          aws ecr get-login-password --region ap-northeast-1| docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/agentic_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
+          echo "✅ Docker image 'pathlight/agentic_service' pushed to ECR successfully."
+          sleep 10 # Wait for ECR to process the image
+          aws ecr batch-delete-image --repository-name pathlight/agentic_service --image-ids imageTag=-
+          echo "✅ Old images deleted from ECR repository 'pathlight/agentic_service'."
+
+      - name: Update Lambda Function Code from ECR
+        run: |
+          aws lambda update-function-code --function-name pathlight-agentic-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
+          echo "✅ Lambda function code updated successfully."
+
+      - name: Update Lambda Environment Variables (Non-AWS secrets only)
+        run: |
+          sleep 20 # Wait for the Lambda function to be updated
+          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment Variables="{OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }},REGION=${{ secrets.REGION }}}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, ySECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}"
+          echo "✅ Lambda environment variables updated successfully."
+
+      - name: Notify Deployment Success
+        run: echo "Deployment of Agentic Service completed successfully."

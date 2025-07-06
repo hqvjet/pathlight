@@ -104,7 +104,8 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             "current_exp": getattr(target_user, 'current_exp', 0),
             "require_exp": getattr(target_user, 'require_exp', 1000),
             "sex": getattr(target_user, 'sex', None),
-            "bio": getattr(target_user, 'bio', None)
+            "bio": getattr(target_user, 'bio', None),
+            "remind_time": getattr(target_user, 'remind_time', None)
         }
         
         return UserInfoResponse(
@@ -140,7 +141,8 @@ async def get_all_users(db: Session) -> UsersListResponse:
                 "current_exp": getattr(user, 'current_exp', 0),
                 "require_exp": getattr(user, 'require_exp', 1000),
                 "sex": getattr(user, 'sex', None),
-                "bio": getattr(user, 'bio', None)
+                "bio": getattr(user, 'bio', None),
+                "remind_time": getattr(user, 'remind_time', None)
             }
             users_info.append(user_data)
         
@@ -196,7 +198,8 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "email": getattr(current_user, 'email', None),
             "average_quiz_score": getattr(current_user, 'average_score', 0.83),
             "learning_history": [],  # This would come from activity tracking
-            "user_top_rank": []  # This would be calculated from user rankings
+            "user_top_rank": [],  # This would be calculated from user rankings
+            "remind_time": getattr(current_user, 'remind_time', None)
         }
         
         return DashboardResponse(

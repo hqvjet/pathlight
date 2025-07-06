@@ -54,7 +54,7 @@ class UserServiceConfig:
         "pathlight-super-secret-key-2025-standalone"
     )
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     
     # File Upload Configuration
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")

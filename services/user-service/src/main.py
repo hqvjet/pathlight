@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # Include routers without prefix (direct access)
-app.include_router(user_router, prefix="/api/v1")
+app.include_router(user_router, prefix="", tags=["User Management"])
 
 @app.on_event("startup")
 async def startup_event():
