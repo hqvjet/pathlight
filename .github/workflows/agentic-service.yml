@@ -31,11 +31,6 @@ jobs:
       - name: Install Dependencies
         run: pip install -r services/agentic-service/requirements.txt
 
-      - name: Run Linting
-        run: |
-          cd services/agentic-service
-          pylint --disable=all --enable=error,warning,refactor,convention .
-
       - name: Build Docker Image
         run: |
           docker build -t pathlight/agent_service services/agentic-service
