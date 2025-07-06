@@ -28,14 +28,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Dependencies
-        run: pip install -r services/agentic-service/requirements.txt
-
       - name: Build Docker Image
         run: |
-          docker build -t pathlight/agent_service services/agentic-service
-          docker save pathlight/agent_service -o agentic-service.tar
-          echo "Docker image 'pathlight/agent_service' built successfully."
+          docker build -t pathlight/agentic_service services/agentic-service
+          docker save pathlight/agentic_service -o agentic-service.tar
+          echo "Docker image 'pathlight/agentic_service' built successfully."
 
       - name: Upload Docker Image Artifact
         uses: actions/upload-artifact@v4
@@ -89,10 +86,10 @@ jobs:
 
       - name: Check ECR Repository Exists
         run: |
-          if aws ecr describe-repositories --repository-names pathlight/agent_service > /dev/null 2>&1; then
-            echo "✅ ECR repository 'pathlight/agent_service' exists"
+          if aws ecr describe-repositories --repository-names pathlight/agentic_service > /dev/null 2>&1; then
+            echo "✅ ECR repository 'pathlight/agentic_service' exists"
           else
-            echo "❌ ECR repository 'pathlight/agent_service' does not exist"
+            echo "❌ ECR repository 'pathlight/agentic_service' does not exist"
             exit 1
           fi
 
