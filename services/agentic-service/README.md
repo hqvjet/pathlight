@@ -91,8 +91,8 @@ Navigate to your repository **Settings** → **Secrets and variables** → **Act
 
 #### Required Secrets:
 ```
-AWS_ACCESS_KEY_ID         # AWS access key for deployment
-AWS_SECRET_ACCESS_KEY     # AWS secret key for deployment
+ACCESS_KEY_ID         # AWS access key for deployment
+SECRET_ACCESS_KEY     # AWS secret key for deployment
 OPENAI_API_KEY           # OpenAI API key for the service
 AWS_S3_BUCKET_NAME       # S3 bucket name for file storage
 ```

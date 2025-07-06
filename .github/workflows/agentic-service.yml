@@ -54,13 +54,13 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-1
 
       - name: Validate AWS Credentials
         run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+          if [ -z "$ACCESS_KEY_ID" ] || [ -z "$SECRET_ACCESS_KEY" ]; then
             echo "❌ AWS credentials are not set"
             exit 1
           fi
@@ -116,15 +116,15 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-1
 
       - name: Push Agentic Service Image into AWS ECR
         run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }}| docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          docker tag pathlight/agentic_service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
+          aws ecr get-login-password --region ap-northeast-1| docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/agentic_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
           echo "✅ Docker image 'pathlight/agentic_service' pushed to ECR successfully."
           sleep 10 # Wait for ECR to process the image
           aws ecr batch-delete-image --repository-name pathlight/agentic_service --image-ids imageTag=-
@@ -132,13 +132,13 @@ jobs:
 
       - name: Update Lambda Function Code from ECR
         run: |
-          aws lambda update-function-code --function-name pathlight-agentic-service --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
+          aws lambda update-function-code --function-name pathlight-agentic-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/agentic_service:latest
           echo "✅ Lambda function code updated successfully."
 
       - name: Update Lambda Environment Variables (Non-AWS secrets only)
         run: |
           sleep 20 # Wait for the Lambda function to be updated
-          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment Variables="{OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }},AWS_REGION=${{ secrets.AWS_REGION }}}"
+          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment Variables="{OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }},REGION=${{ secrets.REGION }}}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success

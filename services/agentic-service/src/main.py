@@ -69,13 +69,10 @@ async def debug_config():
     """Debug endpoint to check configuration (without sensitive data)"""
     return {
         "IS_LAMBDA": config.IS_LAMBDA,
-        "AWS_REGION": config.AWS_REGION,
-        "AWS_S3_BUCKET_NAME": config.AWS_S3_BUCKET_NAME,
         "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
         "MAX_FILE_SIZE_MB": config.MAX_FILE_SIZE_MB,
         "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
         "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
-        "AWS_CREDENTIALS_SET": bool(config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY),
         "LOG_LEVEL": config.LOG_LEVEL,
     }
 
