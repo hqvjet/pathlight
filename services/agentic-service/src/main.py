@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from mangum import Mangum
 
+load_dotenv()
+
 from config import config
 from routers import file_router
 
@@ -14,10 +16,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Load environment variables (only needed for local development)
-if not config.IS_LAMBDA:
-    load_dotenv()
 
 # Validate configuration
 config_errors = config.validate_config()
