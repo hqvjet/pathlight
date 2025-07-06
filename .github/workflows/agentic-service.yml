@@ -28,15 +28,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Load Secret Keys into env
-        run: |
-          touch services/agentic-service/.env
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> services/agentic-service/src/.env
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> services/agentic-service/src/.env
-          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> services/agentic-service/src/.env
-          echo "AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}" >> services/agentic-service/src/.env
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/src/.env
-
       - name: Build Docker Image
         run: |
           docker build -t pathlight/agentic_service services/agentic-service
@@ -142,6 +133,11 @@ jobs:
       - name: Update Lambda Function Code from ECR
         run: |
           aws lambda update-function-code --function-name pathlight-agentic-service --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
+          
+      - name: Update Lambda Environment Variables
+        run: |
+          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment Variables="{AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }},AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},AWS_REGION=${{ secrets.AWS_REGION }},AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}}"
+          echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
         run: echo "Deployment of Agentic Service completed successfully."
