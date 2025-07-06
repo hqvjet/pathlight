@@ -137,6 +137,7 @@ jobs:
 
       - name: Update Lambda Environment Variables (Non-AWS secrets only)
         run: |
+          sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-agentic-service --environment Variables="{OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }},AWS_REGION=${{ secrets.AWS_REGION }}}"
           echo "✅ Lambda environment variables updated successfully."
 
