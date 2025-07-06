@@ -31,11 +31,11 @@ jobs:
       - name: Load Secret Keys into env
         run: |
           touch services/agentic-service/.env
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> services/agentic-service/.env
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> services/agentic-service/.env
-          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> services/agentic-service/.env
-          echo "AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}" >> services/agentic-service/.env
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/.env
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> services/agentic-service/src/.env
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> services/agentic-service/src/.env
+          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> services/agentic-service/src/.env
+          echo "AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}" >> services/agentic-service/src/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/src/.env
 
       - name: Build Docker Image
         run: |
