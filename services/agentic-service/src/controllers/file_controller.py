@@ -21,16 +21,25 @@ class FileController:
         
         # Initialize S3 client with proper error handling
         try:
-            if config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY:
-                self.s3_client = boto3.client(
-                    's3',
-                    aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-                    aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
-                    region_name=config.AWS_REGION
-                )
-            else:
-                # Use default AWS credentials (IAM role, etc.)
+            # Check if running in Lambda environment
+            if config.IS_LAMBDA:
+                # In Lambda, use IAM role (no need for explicit credentials)
                 self.s3_client = boto3.client('s3', region_name=config.AWS_REGION)
+                logger.info("Using IAM role for S3 access in Lambda environment")
+            else:
+                # In local/development environment, try to use credentials if available
+                if config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY:
+                    self.s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=config.AWS_ACCESS_KEY_ID,
+                        aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
+                        region_name=config.AWS_REGION
+                    )
+                    logger.info("Using explicit AWS credentials for S3 access")
+                else:
+                    # Use default AWS credentials (AWS CLI profile, IAM role, etc.)
+                    self.s3_client = boto3.client('s3', region_name=config.AWS_REGION)
+                    logger.info("Using default AWS credentials for S3 access")
         except Exception as e:
             logger.error(f"Failed to initialize S3 client: {e}")
             self.s3_client = None
