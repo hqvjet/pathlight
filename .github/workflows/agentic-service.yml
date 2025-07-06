@@ -135,6 +135,7 @@ jobs:
           docker tag pathlight/agentic_service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
           echo "✅ Docker image 'pathlight/agentic_service' pushed to ECR successfully."
+          sleep 10 # Wait for ECR to process the image
           aws ecr batch-delete-image --repository-name pathlight-agentic-service --image-ids imageTag=-
           echo "✅ Old images deleted from ECR repository 'pathlight-agentic-service'."
 
