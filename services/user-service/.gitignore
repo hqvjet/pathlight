@@ -199,6 +199,7 @@ alembic/versions/__pycache__/
 *.temp
 .tmp/
 .temp/
+.coverage
 
 # =============================================================================
 # 🏗️ Build artifacts
