@@ -378,7 +378,7 @@ curl localhost:8000/health
 
 ## 📈 Performance Optimization
 
-### Lambda Optimization
+### Lambda Optimizations
 
 1. **Memory allocation**: Start with 1024MB, adjust based on usage
 2. **Timeout settings**: Set appropriate timeouts (max 15 minutes)
