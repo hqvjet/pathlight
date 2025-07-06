@@ -28,6 +28,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Load Secret Keys into env
+        run: |
+          touch services/agentic-service/.env
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> services/agentic-service/.env
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> services/agentic-service/.env
+          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> services/agentic-service/.env
+          echo "AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}" >> services/agentic-service/.env
+          echo "OPENAI_API_KEY"=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/.env
+
       - name: Build Docker Image
         run: |
           docker build -t pathlight/agentic_service services/agentic-service
@@ -125,6 +134,9 @@ jobs:
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }}| docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
           docker tag pathlight/agentic_service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pathlight/agentic_service:latest
+          echo "✅ Docker image 'pathlight/agentic_service' pushed to ECR successfully."
+          aws ecr batch-delete-image --repository-name pathlight-agentic-service --image-ids imageTag=-
+          echo "✅ Old images deleted from ECR repository 'pathlight-agentic-service'."
 
       - name: Update Lambda Function Code from ECR
         run: |
