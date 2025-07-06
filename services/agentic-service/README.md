@@ -419,7 +419,7 @@ curl localhost:8000/health
 
 ## 📞 Support
 
-If you encounter issues:
+If you encounter issue:
 
 1. Check the troubleshooting section
 2. Review GitHub Actions logs
