@@ -35,7 +35,7 @@ jobs:
           echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> services/agentic-service/.env
           echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> services/agentic-service/.env
           echo "AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}" >> services/agentic-service/.env
-          echo "OPENAI_API_KEY"=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/.env
 
       - name: Build Docker Image
         run: |
