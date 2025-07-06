@@ -1,0 +1,149 @@
+name: CICD For User Service
+
+on: 
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/user-service/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/user-service/**'
+
+jobs:
+  # Build Docker Image
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Build Docker Image
+        run: |
+          docker build -t pathlight/user_service services/user-service
+          docker save pathlight/user_service -o user-service.tar
+          echo "Docker image 'pathlight/user_service' built successfully."
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-user-service
+          path: user-service.tar
+
+  # Run Tests
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: pip install -r services/user-service/requirements.txt
+
+      - name: Install Test Dependencies
+        run: pip install -r services/user-service/test-requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Validate AWS Credentials
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ AWS credentials are not set"
+            exit 1
+          fi
+          echo "✅ AWS credentials are set"
+
+      - name: Check RDS Database Connection
+        run: |
+          echo "✅ Database connection check (placeholder for user-service)"
+
+      - name: Check Lambda Function Exists
+        run: |
+          if aws lambda get-function --function-name pathlight-user-service > /dev/null 2>&1; then
+            echo "✅ Lambda function 'pathlight-user-service' exists"
+          else
+            echo "❌ Lambda function 'pathlight-user-service' does not exist"
+            exit 1
+          fi
+
+      - name: Check ECR Repository Exists
+        run: |
+          if aws ecr describe-repositories --repository-names pathlight/user_service > /dev/null 2>&1; then
+            echo "✅ ECR repository 'pathlight/user_service' exists"
+          else
+            echo "❌ ECR repository 'pathlight/user_service' does not exist"
+            exit 1
+          fi
+
+      - name: Run Database Migrations
+        run: |
+          cd services/user-service
+          alembic upgrade head
+          cd ../..
+
+      - name: Run Tests
+        run: |
+          cd services/user-service
+          python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=45
+          echo "✅ All tests passed with sufficient coverage"
+
+  # Push Image to ECR and Deploy to Lambda
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Use Artifact from Build
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-user-service
+
+      - name: Load Docker Image Artifact
+        run: |
+          docker load -i user-service.tar 
+          echo "Docker image 'pathlight/user_service' loaded successfully."
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Push User Service Image into AWS ECR
+        run: |
+          aws ecr get-login-password --region ap-northeast-1| docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/user_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/user_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/user_service:latest
+          echo "✅ Docker image 'pathlight/user_service' pushed to ECR successfully."
+          sleep 10 # Wait for ECR to process the image
+          aws ecr batch-delete-image --repository-name pathlight/user_service --image-ids imageTag=-
+          echo "✅ Old images deleted from ECR repository 'pathlight/user_service'."
+
+      - name: Update Lambda Function Code from ECR
+        run: |
+          aws lambda update-function-code --function-name pathlight-user-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/user_service:latest
+          echo "✅ Lambda function code updated successfully."
+
+      - name: Update Lambda Environment Variables (Non-AWS secrets only)
+        run: |
+          sleep 20 # Wait for the Lambda function to be updated
+          aws lambda update-function-configuration --function-name pathlight-user-service --environment Variables="{DATABASE_URL=${{ secrets.DATABASE_URL }},JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }},ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }},SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}}"
+          echo "✅ Lambda environment variables updated successfully."
+
+      - name: Notify Deployment Success
+        run: echo "Deployment of User Service completed successfully."
