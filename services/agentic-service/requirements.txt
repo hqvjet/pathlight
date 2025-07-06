@@ -94,3 +94,4 @@ watchfiles==1.1.0
 websockets==15.0.1
 xlsxwriter==3.2.5
 yarl==1.20.1
+pylint
