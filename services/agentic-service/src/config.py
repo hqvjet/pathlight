@@ -61,9 +61,6 @@ class Config:
         if not cls.AWS_S3_BUCKET_NAME:
             errors.append("AWS_S3_BUCKET_NAME is required")
             
-        if cls.IS_LAMBDA and not (cls.AWS_ACCESS_KEY_ID and cls.AWS_SECRET_ACCESS_KEY):
-            errors.append("AWS credentials are required for Lambda deployment")
-            
         return errors
 
 
