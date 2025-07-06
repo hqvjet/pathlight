@@ -1,7 +1,6 @@
 name: CICD For Agentic Service
 
 on: 
-  workflow_dispatch:
   push:
     branches:
       - main
