@@ -6,16 +6,16 @@ class Config:
     """Configuration settings for the agentic service."""
     
     # Environment Detection
-    IS_LAMBDA: bool = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+    IS_LAMBDA: bool = bool(os.getenv("LAMBDA_FUNCTION_NAME"))
     
     # OpenAI Configuration
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
     # AWS Configuration
-    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
-    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "")
+    ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")
+    SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
+    REGION: str = os.getenv("REGION", "us-east-1")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
     
     # CORS Configuration
     # ALLOWED_ORIGINS: List[str] = [
@@ -58,10 +58,10 @@ class Config:
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is required")
             
-        if not cls.AWS_S3_BUCKET_NAME:
-            errors.append("AWS_S3_BUCKET_NAME is required")
+        if not cls.S3_BUCKET_NAME:
+            errors.append("S3_BUCKET_NAME is required")
             
-        if cls.IS_LAMBDA and not (cls.AWS_ACCESS_KEY_ID and cls.AWS_SECRET_ACCESS_KEY):
+        if cls.IS_LAMBDA and not (cls.ACCESS_KEY_ID and cls.SECRET_ACCESS_KEY):
             errors.append("AWS credentials are required for Lambda deployment")
             
         return errors
