@@ -99,10 +99,12 @@ def verify_email_token(db: Session, user: User) -> bool:
 
 def blacklist_token(db: Session, jti: str) -> None:
     """Add token to blacklist"""
-    blacklist_token = TokenBlacklist(token_jti=jti)
-    db.add(blacklist_token)
+    from datetime import datetime, timezone, timedelta
+    expire_time = datetime.now(timezone.utc) + timedelta(hours=24)
+    blacklist_entry = TokenBlacklist(token=jti, expires_at=expire_time)
+    db.add(blacklist_entry)
     db.commit()
 
 def is_token_blacklisted(db: Session, jti: str) -> bool:
     """Check if token is blacklisted"""
-    return db.query(TokenBlacklist).filter(TokenBlacklist.token_jti == jti).first() is not None
+    return db.query(TokenBlacklist).filter(TokenBlacklist.token == jti).first() is not None

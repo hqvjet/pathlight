@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { showToast } from '@/utils/toast';
-import { API_BASE, endpoints, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
@@ -47,31 +47,20 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
       }
 
       console.log('Setting reminder time:', selectedTime);
-      console.log('API URL:', `${API_BASE}${endpoints.notifyTime}`);
-      console.log('Token available:', !!token);
 
-      const response = await fetch(`${API_BASE}${endpoints.notifyTime}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          remind_time: selectedTime
-        })
+      const response = await api.user.setNotifyTime({
+        remind_time: selectedTime
       });
 
-      console.log('Response status:', response.status);
-      const result = await response.json();
-      console.log('Response result:', result);
+      console.log('Response:', response);
 
-      if (response.ok) {
+      if (response.status === 200) {
         // Mark setup as completed
         storage.set('study_time_setup_completed', 'true');
         showToast.authSuccess('Đã đặt lịch nhắc học tập thành công!');
         onComplete();
       } else {
-        showToast.authError(result.message || 'Có lỗi xảy ra, vui lòng thử lại');
+        showToast.authError(response.error || 'Có lỗi xảy ra, vui lòng thử lại');
       }
     } catch (error) {
       console.error('API Error:', error);

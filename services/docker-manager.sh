@@ -45,7 +45,6 @@ declare -A SERVICES=(
     ["user"]="user-service:8002"
     ["course"]="course-service:8003"
     ["quiz"]="quiz-service:8004"
-    ["gateway"]="api-gateway:8000"
 )
 
 # Function to show usage
@@ -61,6 +60,7 @@ show_usage() {
     echo "  restart-all  - Restart all services"
     echo "  status-all   - Show status of all services"
     echo "  clean-all    - Clean all services and networks"
+    echo "  clean-db     - Clean database and volumes"
     echo ""
     echo "  start [service]   - Start specific service"
     echo "  stop [service]    - Stop specific service"
@@ -73,14 +73,14 @@ show_usage() {
     echo "  user     - User Service (port 8002)"
     echo "  course   - Course Service (port 8003)"
     echo "  quiz     - Quiz Service (port 8004)"
-    echo "  gateway  - API Gateway (port 8000)"
     echo ""
     echo "Examples:"
     echo "  $0 start-all"
     echo "  $0 start auth user"
-    echo "  $0 stop gateway"
+    echo "  $0 stop user"
     echo "  $0 logs auth"
     echo "  $0 status-all"
+    echo "  $0 clean-db"
     echo ""
 }
 
@@ -98,10 +98,6 @@ check_service_dir() {
 start_service() {
     local service="$1"
     local service_dir="${service}-service"
-    
-    if [ "$service" = "gateway" ]; then
-        service_dir="api-gateway"
-    fi
     
     check_service_dir "$service_dir" || return 1
     
@@ -126,10 +122,6 @@ stop_service() {
     local service="$1"
     local service_dir="${service}-service"
     
-    if [ "$service" = "gateway" ]; then
-        service_dir="api-gateway"
-    fi
-    
     check_service_dir "$service_dir" || return 1
     
     print_service "Stopping $service service..."
@@ -149,10 +141,6 @@ status_service() {
     local service="$1"
     local service_dir="${service}-service"
     
-    if [ "$service" = "gateway" ]; then
-        service_dir="api-gateway"
-    fi
-    
     check_service_dir "$service_dir" || return 1
     
     print_service "Status of $service service:"
@@ -170,10 +158,6 @@ logs_service() {
     local service="$1"
     local service_dir="${service}-service"
     
-    if [ "$service" = "gateway" ]; then
-        service_dir="api-gateway"
-    fi
-    
     check_service_dir "$service_dir" || return 1
     
     print_service "Logs of $service service:"
@@ -190,42 +174,37 @@ logs_service() {
 start_all_services() {
     print_header "🚀 Starting all PathLight services..."
     
-    # Start backend services first (they need database)
+    # Start backend services
     for service in auth user course quiz; do
         start_service "$service"
         sleep 2  # Small delay between services
     done
     
-    # Start gateway last (needs backend services)
-    sleep 5  # Wait for backend services to be ready
-    start_service "gateway"
-    
-    print_header "✅ All services started successfully!"
+    print_header "✅ All services started!"
     echo ""
     echo "🔗 Service URLs:"
     echo "   🔑 Auth Service: http://localhost:8001"
     echo "   👤 User Service: http://localhost:8002"
     echo "   📚 Course Service: http://localhost:8003"
     echo "   🧠 Quiz Service: http://localhost:8004"
-    echo "   🌐 API Gateway: http://localhost:8000"
     echo ""
-    echo "📚 API Documentation: http://localhost:8000/docs"
-    echo "🏥 Health Checks: http://localhost:8000/health"
+    echo "📚 API Documentation:"
+    echo "   🔑 Auth: http://localhost:8001/docs"
+    echo "   👤 User: http://localhost:8002/docs"
+    echo "   📚 Course: http://localhost:8003/docs"
+    echo "   🧠 Quiz: http://localhost:8004/docs"
 }
 
 # Function to stop all services
 stop_all_services() {
     print_header "🛑 Stopping all PathLight services..."
     
-    # Stop gateway first
-    stop_service "gateway" 2>/dev/null || true
-    
-    # Stop backend services
+    # Stop all services
     for service in quiz course user auth; do
         stop_service "$service" 2>/dev/null || true
     done
     
-    print_header "✅ All services stopped successfully!"
+    print_header "✅ All services stopped!"
 }
 
 # Function to show status of all services
@@ -234,7 +213,7 @@ status_all_services() {
     echo "============================="
     echo ""
     
-    for service in auth user course quiz gateway; do
+    for service in auth user course quiz; do
         status_service "$service"
         echo ""
     done
@@ -248,11 +227,8 @@ clean_all_services() {
     stop_all_services
     
     # Clean each service
-    for service in gateway quiz course user auth; do
+    for service in quiz course user auth; do
         local service_dir="${service}-service"
-        if [ "$service" = "gateway" ]; then
-            service_dir="api-gateway"
-        fi
         
         if [ -d "$service_dir" ] && [ -f "$service_dir/docker-manager.sh" ]; then
             print_service "Cleaning $service service..."
@@ -267,7 +243,35 @@ clean_all_services() {
     print_status "Cleaning shared network..."
     docker network rm pathlight-network 2>/dev/null || print_warning "Network already removed"
     
-    print_header "✅ All services cleaned successfully!"
+    print_header "✅ All services cleaned!"
+}
+
+# Function to clean database and volumes
+clean_database() {
+    print_header "🗑️ Cleaning PathLight database and volumes..."
+    
+    # Stop all services first
+    stop_all_services
+    
+    # Stop and remove PostgreSQL container
+    print_status "Stopping PostgreSQL container..."
+    docker stop pathlight-postgres 2>/dev/null || print_warning "PostgreSQL container not running"
+    docker rm pathlight-postgres 2>/dev/null || print_warning "PostgreSQL container not found"
+    
+    # Remove PostgreSQL volume
+    print_status "Removing PostgreSQL volume..."
+    docker volume rm postgres_data 2>/dev/null || print_warning "PostgreSQL volume not found"
+    
+    # Remove all PathLight related volumes
+    print_status "Removing other volumes..."
+    docker volume ls -q | grep -E "(pathlight|postgres)" | xargs -r docker volume rm 2>/dev/null || true
+    
+    # Clean unused volumes
+    print_status "Cleaning unused volumes..."
+    docker volume prune -f 2>/dev/null || true
+    
+    print_header "✅ Database and volumes cleaned!"
+    print_warning "All data has been permanently deleted!"
 }
 
 # Main script logic
@@ -288,6 +292,9 @@ case "${1:-help}" in
         ;;
     "clean-all")
         clean_all_services
+        ;;
+    "clean-db")
+        clean_database
         ;;
     "start")
         shift

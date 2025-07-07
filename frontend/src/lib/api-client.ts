@@ -115,7 +115,7 @@ class TokenManager {
       throw new Error('No refresh token available');
     }
 
-    const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/auth/refresh`, {
+    const response = await fetch(`${API_CONFIG.AUTH_SERVICE_URL}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -142,6 +142,72 @@ class TokenManager {
 }
 
 // =============================================================================
+// 🗺️ SERVICE ROUTER
+// =============================================================================
+
+class ServiceRouter {
+  private static instance: ServiceRouter;
+  
+  static getInstance(): ServiceRouter {
+    if (!ServiceRouter.instance) {
+      ServiceRouter.instance = new ServiceRouter();
+    }
+    return ServiceRouter.instance;
+  }
+
+  /**
+   * Route endpoint to appropriate service URL
+   */
+  getServiceUrl(endpoint: string): string {
+    const cleanEndpoint = endpoint.toLowerCase();
+    
+    // Auth service endpoints
+    if (cleanEndpoint.includes('/signin') || 
+        cleanEndpoint.includes('/signup') || 
+        cleanEndpoint.includes('/login') || 
+        cleanEndpoint.includes('/register') || 
+        cleanEndpoint.includes('/signout') ||
+        cleanEndpoint.includes('/refresh') ||
+        cleanEndpoint.includes('/verify') ||
+        cleanEndpoint.includes('/forgot-password') ||
+        cleanEndpoint.includes('/reset-password') ||
+        cleanEndpoint.includes('/oauth')) {
+      return API_CONFIG.AUTH_SERVICE_URL;
+    }
+    
+    // User service endpoints
+    if (cleanEndpoint.includes('/profile') ||
+        cleanEndpoint.includes('/me') ||
+        cleanEndpoint.includes('/dashboard') ||
+        cleanEndpoint.includes('/activity') ||
+        cleanEndpoint.includes('/avatar') ||
+        cleanEndpoint.includes('/notify-time') ||
+        cleanEndpoint.includes('/change-info') ||
+        cleanEndpoint.includes('/all')) {
+      return API_CONFIG.USER_SERVICE_URL;
+    }
+    
+    // Course service endpoints
+    if (cleanEndpoint.includes('/course') || 
+        cleanEndpoint.includes('/lesson') ||
+        cleanEndpoint.includes('/curriculum')) {
+      return API_CONFIG.COURSE_SERVICE_URL;
+    }
+    
+    // Quiz service endpoints
+    if (cleanEndpoint.includes('/quiz') || 
+        cleanEndpoint.includes('/question') ||
+        cleanEndpoint.includes('/exam') ||
+        cleanEndpoint.includes('/test')) {
+      return API_CONFIG.QUIZ_SERVICE_URL;
+    }
+    
+    // Default to auth service for unmatched endpoints
+    return API_CONFIG.AUTH_SERVICE_URL;
+  }
+}
+
+// =============================================================================
 // 🌐 API CLIENT CLASS
 // =============================================================================
 
@@ -149,11 +215,13 @@ export class ApiClient {
   private baseURL: string;
   private defaultTimeout: number;
   private tokenManager: TokenManager;
+  private serviceRouter: ServiceRouter;
 
   constructor(baseURL: string = API_CONFIG.BASE_URL) {
     this.baseURL = baseURL;
     this.defaultTimeout = API_CONSTANTS.TIMEOUT;
     this.tokenManager = TokenManager.getInstance();
+    this.serviceRouter = ServiceRouter.getInstance();
   }
 
   // =============================================================================
@@ -165,7 +233,8 @@ export class ApiClient {
   }
 
   private buildUrl(endpoint: string, baseURL?: string): string {
-    const base = baseURL || this.baseURL;
+    // Use provided baseURL, or route to appropriate service, or fallback to default
+    const base = baseURL || this.serviceRouter.getServiceUrl(endpoint) || this.baseURL;
     const cleanBase = base.replace(/\/$/, '');
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     return `${cleanBase}${cleanEndpoint}`;

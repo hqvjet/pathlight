@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EmailSentPage from '@/components/auth/EmailSentPage';
-import { API_BASE, endpoints, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 
 export default function EmailSentRoute() {
   const router = useRouter();
@@ -29,19 +29,13 @@ export default function EmailSentRoute() {
     setResendMessage('');
 
     try {
-      const res = await fetch(`${API_BASE}${endpoints.resendVerification}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      const response = await api.auth.resendVerification(email);
 
-      const result = await res.json();
-
-      if (res.ok) {
+      if (response.status === 200) {
         setResendMessage('Email xác nhận đã được gửi lại thành công!');
         setTimeout(() => setResendMessage(''), 5000);
       } else {
-        setResendMessage(result.message || 'Gửi lại email thất bại. Vui lòng thử lại.');
+        setResendMessage(response.error || 'Gửi lại email thất bại. Vui lòng thử lại.');
       }
     } catch (error) {
       console.error('Resend email error:', error);

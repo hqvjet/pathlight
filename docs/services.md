@@ -61,10 +61,6 @@ services/
 ## Item-by-Item Table
 | Path | Role |
 | --- | --- |
-| api-gateway/ | Gateway routing requests to services. |
-| api-gateway/Dockerfile | Container build instructions. |
-| api-gateway/requirements.txt | Python dependencies for gateway. |
-| api-gateway/src/.gitkeep | Placeholder for gateway code. |
 | auth-service/ | Authentication microservice skeleton. |
 | auth-service/Dockerfile | Build file for auth service. |
 | auth-service/alembic.ini | Alembic configuration. |
