@@ -48,6 +48,9 @@ class User(Base):
     sex = Column(Boolean, nullable=True)
     bio = Column(Text, nullable=True)
     
+    # Account status
+    is_active = Column(Boolean, default=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

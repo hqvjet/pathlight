@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE, endpoints } from '@/utils/api';
+import { api } from '@/utils/api';
 import AuthLayout from '@/components/layout/AuthLayout';
 
 export default function ForgotPasswordPage() {
@@ -27,18 +27,12 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}${endpoints.forgotPassword}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      const response = await api.auth.forgotPassword(email);
 
-      const result = await response.json();
-
-      if (response.ok) {
+      if (response.status === 200) {
         setSuccess(true);
       } else {
-        const errorMessage = result.message || result.detail || 'Có lỗi xảy ra';
+        const errorMessage = response.error || response.message || 'Có lỗi xảy ra';
         
         // Handle specific error cases
         if (response.status === 404) {

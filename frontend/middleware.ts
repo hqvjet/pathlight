@@ -14,21 +14,21 @@ export function middleware(request: NextRequest) {
   // =============================================================================
   
   // Handle reset password redirects from backend
-  if (pathname.startsWith('/api/v1/reset-password/')) {
-    const token = pathname.split('/api/v1/reset-password/')[1];
+  if (pathname.startsWith('/reset-password/')) {
+    const token = pathname.split('/reset-password/')[1];
     if (token && token.length > 0) {
       // Redirect to the frontend reset password page
-      url.pathname = `/auth/reset-password/${token}`;
+      url.pathname = `/reset-password/${token}`;
       return NextResponse.redirect(url);
     }
   }
 
   // Handle email verification redirects from backend
-  if (pathname.startsWith('/api/v1/verify-email/')) {
-    const token = pathname.split('/api/v1/verify-email/')[1];
+  if (pathname.startsWith('/verify-email/')) {
+    const token = pathname.split('/verify-email/')[1];
     if (token && token.length > 0) {
       // Redirect to the frontend email verification page
-      url.pathname = `/auth/verify-email/${token}`;
+      url.pathname = `/verify-email/${token}`;
       return NextResponse.redirect(url);
     }
   }
@@ -52,9 +52,9 @@ export function middleware(request: NextRequest) {
 
   // Public routes that should redirect authenticated users
   const publicRoutes = [
-    '/auth/signin',
-    '/auth/signup',
-    '/auth/forgot-password',
+    '/signin',
+    '/signup',
+    '/forgot-password',
   ];
 
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -67,7 +67,7 @@ export function middleware(request: NextRequest) {
 
   // Redirect unauthenticated users from protected routes
   if (isProtectedRoute && !token) {
-    url.pathname = '/auth/signin';
+    url.pathname = '/signin';
     url.searchParams.set('redirect', pathname);
     return NextResponse.redirect(url);
   }
@@ -82,7 +82,7 @@ export function middleware(request: NextRequest) {
   // 🌐 CORS HEADERS (for API routes)
   // =============================================================================
   
-  if (pathname.startsWith('/api/')) {
+  if (pathname.startsWith('/')) {
     const response = NextResponse.next();
     
     // Add CORS headers for API routes
@@ -123,8 +123,8 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|public|assets).*)',
     
     // Specifically match API routes and auth redirects
-    '/api/v1/reset-password/:token*',
-    '/api/v1/verify-email/:token*',
+    '/reset-password/:token*',
+    '/verify-email/:token*',
     
     // Match protected and public routes
     '/dashboard/:path*',
@@ -132,6 +132,6 @@ export const config = {
     '/courses/:path*',
     '/quizzes/:path*',
     '/admin/:path*',
-    '/auth/:path*',
+    '/:path*',
   ],
 };

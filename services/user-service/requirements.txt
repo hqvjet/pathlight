@@ -1,6 +1,28 @@
+# Pathlight User Service - Standalone Requirements
+# Core FastAPI and web framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
 PyJWT==2.8.0
+
+# Environment and configuration
 python-dotenv==1.0.0
 email-validator==2.1.0
+
+# Type hints and development
+typing-extensions==4.8.0
+
+# Optional: Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2

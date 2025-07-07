@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { API_BASE, endpoints, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
 import Header from '../layout/Header';
@@ -34,19 +34,15 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
 
     const verifyEmail = async () => {
       try {
-        const res = await fetch(`${API_BASE}${endpoints.verifyEmail}?token=${token}`, {
-          method: 'GET'
-        });
+        const response = await api.auth.verifyEmail(token);
 
-        const result = await res.json();
-
-        if (res.ok) {
+        if (response.status === 200) {
           setStatus('success');
           setMessage('Email đã được xác thực thành công!');
           
           // Nếu backend trả về token, lưu vào localStorage
-          if (result.access_token) {
-            storage.setToken(result.access_token);
+          if (response.data?.access_token) {
+            storage.setToken(response.data.access_token);
           }
           
           showToast.authSuccess('Email đã được xác thực thành công!');
@@ -54,13 +50,13 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
           setStatus('error');
           // Hiển thị thông báo lỗi cụ thể từ backend
           let errorMessage = '';
-          if (result.message) {
-            errorMessage = result.message;
-          } else if (result.detail) {
-            errorMessage = result.detail;
-          } else if (res.status === 401) {
+          if (response.error) {
+            errorMessage = response.error;
+          } else if (response.message) {
+            errorMessage = response.message;
+          } else if (response.status === 401) {
             errorMessage = 'Token đã hết hạn hoặc không hợp lệ. Vui lòng đăng ký lại.';
-          } else if (res.status === 404) {
+          } else if (response.status === 404) {
             errorMessage = 'Token không tồn tại. Vui lòng kiểm tra lại email của bạn.';
           } else {
             errorMessage = 'Xác thực email thất bại. Vui lòng thử lại.';

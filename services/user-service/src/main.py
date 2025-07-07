@@ -1,178 +1,99 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List
-from jose import jwt
 import logging
-from datetime import datetime
+import os
 
-# Import local config
+# Import local modules
 from .config import config
+from .database import create_tables, engine
+from .routes.user_routes import router as user_router
 
-# Configuration from config
-USER_SERVICE_PORT = config.SERVICE_PORT
-JWT_SECRET_KEY = config.JWT_SECRET_KEY
-JWT_ALGORITHM = config.JWT_ALGORITHM
-DEBUG = config.DEBUG
-LOG_LEVEL = config.LOG_LEVEL
-
-# CORS - CHỈ CHO PHÉP API GATEWAY
-API_GATEWAY_URL = config.API_GATEWAY_URL
-ALLOWED_ORIGINS = [
-    API_GATEWAY_URL,
-    "http://localhost:8000",  # for development
-    "http://localhost:3000",  # frontend for testing
-    "*"  # allow all for standalone testing
-]
-
-# Setup logging
-logging.basicConfig(level=getattr(logging, LOG_LEVEL))
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="User Service", version="1.0.0")
+# Create FastAPI app
+app = FastAPI(
+    title="Pathlight User Service",
+    description="Standalone User Management Service for Pathlight Platform",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-# CORS - CHỈ CHO PHÉP API GATEWAY
+# CORS configuration for standalone service
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # Chỉ API Gateway
+    allow_origins=["*"],  # In production, specify actual frontend URLs
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Pydantic models
-class UserProfile(BaseModel):
-    email: str
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+# Include routers without prefix (direct access)
+app.include_router(user_router, prefix="", tags=["User Management"])
 
-class UpdateProfileRequest(BaseModel):
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-
-class EnrollmentRequest(BaseModel):
-    course_id: str
-
-class CourseProgress(BaseModel):
-    course_id: str
-    course_title: str
-    progress_percentage: float
-    last_accessed: Optional[datetime] = None
-
-class UserStats(BaseModel):
-    total_courses: int
-    completed_courses: int
-    total_hours: float
-
-# Mock users database (in real app, use proper database)
-mock_users = {
-    "user123": {
-        "email": "john@example.com",
-        "given_name": "John",
-        "family_name": "Doe",
-        "avatar_url": "https://example.com/avatar.jpg"
-    }
-}
-
-def verify_token(request: Request):
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the service on startup"""
     try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return None
+        logger.info("🚀 Starting Pathlight User Service...")
         
-        token = auth_header.split(" ")[1]
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        return payload.get("sub")
-    except:
-        return None
+        # Test database connection
+        with engine.connect() as connection:
+            logger.info("✅ Database connection successful")
+        
+        # Create tables if they don't exist
+        create_tables()
+        logger.info("✅ Database tables created/verified")
+        
+        logger.info("🎉 User service started successfully!")
+        logger.info(f"📝 API Documentation available at: http://localhost:{config.SERVICE_PORT}/docs")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to start service: {str(e)}")
+        raise
 
-@app.get("/")
+@app.get("/", tags=["Health"])
 async def root():
-    return {"message": "User Service đang chạy"}
+    """Root endpoint - service information"""
+    return {
+        "service": "Pathlight User Service",
+        "version": "1.0.0",
+        "status": "running",
+        "docs": "/docs"
+    }
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "user-service"}
-
-@app.get("/api/v1/profile")
-async def get_profile(request: Request):
-    """Lấy thông tin profile người dùng"""
-    user_id = verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint"""
+    try:
+        # Test database connection
+        with engine.connect() as connection:
+            db_status = "healthy"
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        db_status = "unhealthy"
     
-    # Mock response - in real app, query database
-    user_data = mock_users.get(user_id, {
-        "email": "user@example.com",
-        "given_name": "User",
-        "family_name": "Name",
-        "avatar_url": None
-    })
-    
-    return {"status": 200, "data": user_data}
-
-@app.put("/api/v1/profile")
-async def update_profile(request: Request, profile_data: UpdateProfileRequest):
-    """Cập nhật thông tin profile"""
-    user_id = verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    # Mock update - in real app, update database
-    logger.info(f"Updating profile for user {user_id}: {profile_data}")
-    
-    return {"status": 200, "message": "Profile updated successfully"}
-
-@app.get("/api/v1/courses/enrolled")
-async def get_enrolled_courses(request: Request):
-    """Lấy danh sách khóa học đã đăng ký"""
-    user_id = verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    # Mock data - in real app, query database
-    enrolled_courses = [
-        {
-            "course_id": "course1",
-            "course_title": "Python Cơ Bản",
-            "progress_percentage": 75.5,
-            "last_accessed": "2025-06-20T10:30:00"
-        },
-        {
-            "course_id": "course2", 
-            "course_title": "Web Development",
-            "progress_percentage": 42.0,
-            "last_accessed": "2025-06-22T14:15:00"
-        }
-    ]
-    
-    return {"status": 200, "data": enrolled_courses}
-
-@app.post("/api/v1/courses/enroll")
-async def enroll_course(request: Request, enrollment: EnrollmentRequest):
-    """Đăng ký khóa học"""
-    user_id = verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    # Mock enrollment - in real app, add to database
-    logger.info(f"User {user_id} enrolling in course {enrollment.course_id}")
-    
-    return {"status": 200, "message": "Enrolled successfully"}
-
-@app.delete("/api/v1/courses/{course_id}/unenroll")
-async def unenroll_course(request: Request, course_id: str):
-    """Hủy đăng ký khóa học"""
-    user_id = verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
-    
-    # Mock unenrollment - in real app, remove from database
-    logger.info(f"User {user_id} unenrolling from course {course_id}")
-    
-    return {"status": 200, "message": "Unenrolled successfully"}
+    return {
+        "status": "healthy",
+        "service": "user-service",
+        "database": db_status,
+        "version": "1.0.0"
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=USER_SERVICE_PORT)
+    from .config import config
+    
+    logger.info("🚀 Starting Pathlight User Service directly...")
+    uvicorn.run(
+        "src.main:app", 
+        host="0.0.0.0", 
+        port=config.SERVICE_PORT, 
+        reload=config.DEBUG,
+        log_level="info" if not config.DEBUG else "debug"
+    )
