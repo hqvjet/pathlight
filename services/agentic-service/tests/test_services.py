@@ -67,9 +67,9 @@ def test_file_controller_initialization():
         
         # Mock environment variables for testing
         os.environ["OPENAI_API_KEY"] = "test-key"
-        os.environ["AWS_ACCESS_KEY_ID"] = "test-access-key"
-        os.environ["AWS_SECRET_ACCESS_KEY"] = "test-secret-key"
-        os.environ["AWS_S3_BUCKET_NAME"] = "test-bucket"
+        os.environ["ACCESS_KEY_ID"] = "test-access-key"
+        os.environ["SECRET_ACCESS_KEY"] = "test-secret-key"
+        os.environ["S3_BUCKET_NAME"] = "test-bucket"
         
         controller = FileController()
         assert controller is not None

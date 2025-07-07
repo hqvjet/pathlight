@@ -91,8 +91,8 @@ Navigate to your repository **Settings** → **Secrets and variables** → **Act
 
 #### Required Secrets:
 ```
-AWS_ACCESS_KEY_ID         # AWS access key for deployment
-AWS_SECRET_ACCESS_KEY     # AWS secret key for deployment
+ACCESS_KEY_ID         # AWS access key for deployment
+SECRET_ACCESS_KEY     # AWS secret key for deployment
 OPENAI_API_KEY           # OpenAI API key for the service
 AWS_S3_BUCKET_NAME       # S3 bucket name for file storage
 ```
@@ -378,7 +378,7 @@ curl localhost:8000/health
 
 ## 📈 Performance Optimization
 
-### Lambda Optimization
+### Lambda Optimizations
 
 1. **Memory allocation**: Start with 1024MB, adjust based on usage
 2. **Timeout settings**: Set appropriate timeouts (max 15 minutes)
@@ -419,7 +419,7 @@ curl localhost:8000/health
 
 ## 📞 Support
 
-If you encounter issues:
+If you encounter issue:
 
 1. Check the troubleshooting section
 2. Review GitHub Actions logs
