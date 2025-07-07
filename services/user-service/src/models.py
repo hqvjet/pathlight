@@ -45,8 +45,11 @@ class User(Base):
     current_exp = Column(BigInteger, nullable=False, default=0)
     require_exp = Column(BigInteger, nullable=False, default=10)
     remind_time = Column(String, nullable=True)
-    sex = Column(Boolean, nullable=True)
+    sex = Column(String, nullable=True)  # Changed from Boolean to String for "Male"/"Female"/"Other"
     bio = Column(Text, nullable=True)
+    
+    # Account status
+    is_active = Column(Boolean, default=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

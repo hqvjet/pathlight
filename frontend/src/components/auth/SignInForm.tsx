@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { API_BASE, endpoints, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
 import Header from '../layout/Header';
@@ -21,7 +21,6 @@ export default function SignInForm() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Khởi tạo trạng thái remember me từ storage
   useEffect(() => {
     setRememberMe(storage.isRemembered());
   }, []);
@@ -31,27 +30,15 @@ export default function SignInForm() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}${endpoints.signin}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+      const response = await api.auth.signin(formData);
 
-      // Kiểm tra nếu response không ok (status >= 400)
-      if (!res.ok) {
-        // Xử lý các lỗi HTTP khác nhau
+      if (response.status !== 200) {
         let errorMessage = 'Đăng nhập thất bại';
         
-        try {
-          const errorResult = await res.json();
-          if (errorResult.message) {
-            errorMessage = errorResult.message;
-          } else if (errorResult.detail) {
-            errorMessage = errorResult.detail;
-          }
-        } catch {
-          // Nếu không parse được JSON, dùng message mặc định dựa trên status
-          switch (res.status) {
+        if (response.error) {
+          errorMessage = response.error;
+        } else {
+          switch (response.status) {
             case 400:
               errorMessage = 'Thông tin đăng nhập không hợp lệ';
               break;
@@ -65,7 +52,7 @@ export default function SignInForm() {
               errorMessage = 'Lỗi server. Vui lòng thử lại sau';
               break;
             default:
-              errorMessage = `Đăng nhập thất bại (Mã lỗi: ${res.status})`;
+              errorMessage = `Đăng nhập thất bại (Mã lỗi: ${response.status})`;
           }
         }
         
@@ -73,7 +60,7 @@ export default function SignInForm() {
         return;
       }
 
-      const result = await res.json();
+      const result = response.data;
 
       if (result.access_token) {
         storage.setToken(result.access_token, rememberMe);
@@ -100,25 +87,15 @@ export default function SignInForm() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}${endpoints.oauthSignin}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(googleUser),
-      });
+      const response = await api.auth.oauthSignin(googleUser);
 
-      // Kiểm tra nếu response không ok
-      if (!res.ok) {
+      if (response.status !== 200) {
         let errorMessage = 'Đăng nhập Google thất bại';
         
-        try {
-          const errorResult = await res.json();
-          if (errorResult.message) {
-            errorMessage = errorResult.message;
-          } else if (errorResult.detail) {
-            errorMessage = errorResult.detail;
-          }
-        } catch {
-          switch (res.status) {
+        if (response.error) {
+          errorMessage = response.error;
+        } else {
+          switch (response.status) {
             case 400:
               errorMessage = 'Thông tin Google không hợp lệ';
               break;
@@ -129,7 +106,7 @@ export default function SignInForm() {
               errorMessage = 'Lỗi server. Vui lòng thử lại sau';
               break;
             default:
-              errorMessage = `Đăng nhập Google thất bại (Mã lỗi: ${res.status})`;
+              errorMessage = `Đăng nhập Google thất bại (Mã lỗi: ${response.status})`;
           }
         }
         
@@ -137,7 +114,7 @@ export default function SignInForm() {
         return;
       }
 
-      const result = await res.json();
+      const result = response.data;
 
       if (result.access_token) {
         storage.setToken(result.access_token, rememberMe);

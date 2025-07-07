@@ -40,16 +40,17 @@ const nextConfig: NextConfig = {
   // ---------------------------------------------------------------------------
   async redirects() {
     return [
-      { source: '/login',    destination: '/auth/signin', permanent: true },
-      { source: '/register', destination: '/auth/signup', permanent: true },
+      { source: '/login',    destination: '/signin', permanent: true },
+      { source: '/register', destination: '/signup', permanent: true },
     ]
   },
 
   async rewrites() {
     return [
+      // Legacy API routes (fallback to base URL)
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001'}/api/:path*`,
       },
     ]
   },

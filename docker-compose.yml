@@ -1,96 +1,41 @@
+docker image pruneversion: '3.8'
+
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - pathlight-network
-
-  # API Gateway
-  api-gateway:
-    build: ./services/api-gateway
-    ports:
-      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
-    env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
-      - auth-service
-      - user-service
-    networks:
-      - pathlight-network
-
-  # Auth Service
   auth-service:
-    build: ./services/auth-service
+    image: ngochoa203/pathlight-auth-service:latest
     ports:
       - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
     env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
+      - ../.env
     networks:
       - pathlight-network
 
-  # User Service  
-  user-service:
-    build: ./services/user-service
-    ports:
-      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
-    env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
-      - auth-service
-    networks:
-      - pathlight-network
-
-  # Course Service
   course-service:
-    build: ./services/course-service
+    image: ngochoa203/pathlight-course-service:latest
     ports:
       - "${COURSE_SERVICE_PORT}:${COURSE_SERVICE_PORT}"
     env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
-      - auth-service
+      - ../.env
     networks:
       - pathlight-network
 
-  # Quiz Service
   quiz-service:
-    build: ./services/quiz-service
+    image: ngochoa203/pathlight-quiz-service:latest
     ports:
       - "${QUIZ_SERVICE_PORT}:${QUIZ_SERVICE_PORT}"
     env_file:
-      - .env
-    volumes:
-      - ./libs:/app/libs:ro
-    depends_on:
-      - postgres
-      - auth-service
+      - ../.env
     networks:
       - pathlight-network
 
-volumes:
-  postgres_data:
+  user-service:
+    image: ngochoa203/pathlight-user-service:latest
+    ports:
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+    env_file:
+      - ../.env
+    networks:
+      - pathlight-network
 
 networks:
   pathlight-network:

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { API_BASE, endpoints, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
 import Header from '../layout/Header';
@@ -46,31 +46,25 @@ export default function SignUpForm() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}${endpoints.signup}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
+      const response = await api.auth.signup({
+        email: formData.email,
+        password: formData.password,
       });
 
-      const result = await res.json();
-
-      if (res.ok) {
+      if (response.status === 200) {
         // Success - email verification sent
         storage.setPendingEmail(formData.email);
         showToast.authSuccess('Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.');
         router.push('/auth/email-sent');
       } else {
         // Get error message from response - backend may use 'detail' or 'message'
-        const errorMessage = result.detail || result.message || 'Đăng ký thất bại. Vui lòng thử lại.';
+        const errorMessage = response.error || response.message || 'Đăng ký thất bại. Vui lòng thử lại.';
         
         // Handle different error cases
-        if (res.status === 400 && errorMessage.includes('đã được sử dụng và đã được xác thực')) {
+        if (response.status === 400 && errorMessage.includes('đã được sử dụng và đã được xác thực')) {
           // User already verified - should login instead
           showToast.authError(errorMessage);
-        } else if (res.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('đã tồn tại')) {
+        } else if (response.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('đã tồn tại')) {
           showToast.authError('Email này đã được đăng ký. Vui lòng sử dụng email khác hoặc đăng nhập.');
         } else if (errorMessage.includes('Invalid email') || errorMessage.includes('email không hợp lệ')) {
           showToast.authError('Định dạng email không hợp lệ. Vui lòng kiểm tra lại.');
@@ -93,20 +87,14 @@ export default function SignUpForm() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}${endpoints.oauthSignin}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(googleUser),
-      });
+      const response = await api.auth.oauthSignin(googleUser);
 
-      const result = await res.json();
-
-      if (res.ok && result.access_token) {
-        storage.setToken(result.access_token);
+      if (response.status === 200 && response.data?.access_token) {
+        storage.setToken(response.data.access_token);
         showToast.authSuccess('Đăng nhập Google thành công!');
         router.push('/dashboard');
       } else {
-        showToast.authError(result.message || 'Đăng ký Google thất bại');
+        showToast.authError(response.error || 'Đăng ký Google thất bại');
       }
     } catch {
       showToast.authError('Lỗi kết nối. Vui lòng thử lại.');

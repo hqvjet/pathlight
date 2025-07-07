@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { showToast } from '@/utils/toast';
-import { API_BASE } from '@/utils/api';
+import { api } from '@/utils/api';
 import { Montserrat } from 'next/font/google';
 
 const montserrat = Montserrat({
@@ -23,17 +23,13 @@ export default function ResetPasswordTokenPage() {
 
   const validateToken = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/validate-reset-token/${token}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await api.auth.validateResetToken(token);
 
-      if (response.ok) {
+      if (response.status === 200) {
         setTokenValid(true);
       } else {
-        const result = await response.json();
         setTokenValid(false);
-        showToast.error(result.message || 'Token không hợp lệ hoặc đã hết hạn');
+        showToast.error(response.error || 'Token không hợp lệ hoặc đã hết hạn');
       }
     } catch {
       setTokenValid(false);
@@ -71,19 +67,15 @@ export default function ResetPasswordTokenPage() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/reset-password/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          new_password: passwords.new
-        }),
+      const response = await api.auth.resetPassword(token, {
+        new_password: passwords.new
       });
-      if (response.ok) {
+      
+      if (response.status === 200) {
         setSuccess(true);
         showToast.success('Đặt lại mật khẩu thành công!');
       } else {
-        const result = await response.json();
-        const errorMessage = result.message || result.detail || 'Có lỗi xảy ra';
+        const errorMessage = response.error || response.message || 'Có lỗi xảy ra';
         if (response.status === 400) {
           if (errorMessage.includes('token')) {
             showToast.error('Token không hợp lệ hoặc đã hết hạn');

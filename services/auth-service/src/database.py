@@ -41,4 +41,6 @@ def get_db_context():
 
 def create_tables():
     """Create all tables"""
+    # Import all models to ensure they're registered
+    from .models import User, Admin, TokenBlacklist, Base
     Base.metadata.create_all(bind=engine)

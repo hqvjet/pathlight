@@ -1,0 +1,38 @@
+name: CICD For User Service
+
+on: 
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/user-service/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/user-service/**'
+
+jobs:
+  # Build Docker Image
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: echo "Installing dependencies..."
+  # Run Tests
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout Code
+        run: echo "hi"
+
+  # Push Image to ECR and Deploy to Lambda
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Hello World
+        run: echo "Hello, World! This is the deploy job."

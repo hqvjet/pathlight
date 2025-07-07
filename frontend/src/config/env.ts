@@ -27,15 +27,11 @@ export const API_CONFIG = {
   BASE_URL: getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:8000'),
   APP_URL: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'),
   
-  // Service URLs (fallback to base URL if not set)
-  AUTH_SERVICE_URL: process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 
-                   getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:8000'),
-  USER_SERVICE_URL: process.env.NEXT_PUBLIC_USER_SERVICE_URL || 
-                   getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:8000'),
-  COURSE_SERVICE_URL: process.env.NEXT_PUBLIC_COURSE_SERVICE_URL || 
-                     getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:8000'),
-  QUIZ_SERVICE_URL: process.env.NEXT_PUBLIC_QUIZ_SERVICE_URL || 
-                   getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:8000'),
+  // Service URLs with proper defaults
+  AUTH_SERVICE_URL: process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:8001',
+  USER_SERVICE_URL: process.env.NEXT_PUBLIC_USER_SERVICE_URL || 'http://localhost:8002',
+  COURSE_SERVICE_URL: process.env.NEXT_PUBLIC_COURSE_SERVICE_URL || 'http://localhost:8003',
+  QUIZ_SERVICE_URL: process.env.NEXT_PUBLIC_QUIZ_SERVICE_URL || 'http://localhost:8004',
 } as const;
 
 // =============================================================================

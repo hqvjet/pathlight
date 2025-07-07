@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { API_BASE, storage } from '@/utils/api';
+import { api, storage } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 import {
   HomeIcon,
@@ -56,18 +56,23 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       try {
         const token = storage.getToken();
         if (!token) throw new Error('No token');
-        const res = await fetch(`${API_BASE}/api/v1/user/profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.status === 401) {
+        
+        const response = await api.user.getInfo();
+        
+        if (response.status === 401) {
           setLoading(false);
           onLogout();
           return;
         }
-        if (!res.ok) throw new Error('Failed to fetch profile');
-        const data = await res.json();
+        
+        if (response.status !== 200) {
+          throw new Error('Failed to fetch profile');
+        }
+        
+        const data = response.data?.Info || response.data;
         setUser(data);
         setLoading(false);
+        
         if (!data.remind_time) {
           router.replace('/auth/study-time-setup');
         }
