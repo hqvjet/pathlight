@@ -34,9 +34,5 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - name: Use Artifact from Build
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-user-service
       - name: Hello World
         run: echo "Hello, World! This is the deploy job."
