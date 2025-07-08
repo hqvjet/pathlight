@@ -14,6 +14,7 @@ coverage==7.9.2
 dnspython==2.7.0
 email_validator==2.2.0
 et_xmlfile==2.0.0
+Events==0.5
 factory_boy==3.3.3
 Faker==37.4.0
 fastapi==0.115.14
@@ -43,6 +44,7 @@ mypy_extensions==1.1.0
 numpy==2.3.1
 openai==0.28.0
 openpyxl==3.1.5
+opensearch-py==3.0.0
 orjson==3.10.18
 packaging==25.0
 pandas==2.3.0
