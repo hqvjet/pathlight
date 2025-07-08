@@ -58,6 +58,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-1
 
+      - name: Load Environment Variables
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> services/agentic-service/.env
+          echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> services/agentic-service/.env
+          echo "REGION=${{ secrets.REGION }}" >> services/agentic-service/.env
+          echo "ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/agentic-service/.env
+          echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/agentic-service/.env
+          echo "OPENSEARCH_HOST=${{ secrets.OPENSEARCH_HOST }}" >> services/agentic-service/.env
+          echo "OPENSEARCH_PORT=${{ secrets.OPENSEARCH_PORT }}" >> services/agentic-service/.env
+          echo "OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}" >> services/agentic-service/.
+          echo "OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }}" >> services/agentic-service/.env
+
       - name: Run Tests
         run: |
           cd services/agentic-service
