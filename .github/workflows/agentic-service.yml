@@ -67,7 +67,7 @@ jobs:
           echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/agentic-service/.env
           echo "OPENSEARCH_HOST=${{ secrets.OPENSEARCH_HOST }}" >> services/agentic-service/.env
           echo "OPENSEARCH_PORT=${{ secrets.OPENSEARCH_PORT }}" >> services/agentic-service/.env
-          echo "OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}" >> services/agentic-service/.
+          echo "OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}" >> services/agentic-service/.env
           echo "OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }}" >> services/agentic-service/.env
 
       - name: Run Tests
