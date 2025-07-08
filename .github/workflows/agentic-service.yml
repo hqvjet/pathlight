@@ -120,7 +120,7 @@ jobs:
           "Variables={OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}, S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, REGION=${{ secrets.REGION }}, \
           ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, \
           OPENSEARCH_HOST=${{ secrets.OPENSEARCH_HOST }}, OPENSEARCH_PORT=${{ secrets.OPENSEARCH_PORT }}, \
-          OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}, OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }} \
+          OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}, OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }}, \
           OPENSEARCH_INDEX_NAME=${{ secrets.OPENSEARCH_INDEX_NAME }}}"
           echo "✅ Lambda environment variables updated successfully."
 
