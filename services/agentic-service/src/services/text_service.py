@@ -28,7 +28,7 @@ def split_into_chunks(text: str, source_info: str, max_tokens: int = 500) -> Lis
                 "chunk_id": chunk_id,
                 "chunk_text": current_chunk.strip(),
                 "approx_token_count": current_token_count,
-                "source_info": source_info
+                "chunk_source": source_info
             })
             chunk_id += 1
             current_chunk = ""
@@ -43,7 +43,7 @@ def split_into_chunks(text: str, source_info: str, max_tokens: int = 500) -> Lis
             "chunk_id": chunk_id,
             "chunk_text": current_chunk.strip(),
             "approx_token_count": current_token_count,
-            "source_info": source_info
+            "chunk_source": source_info
         })
 
     return chunks

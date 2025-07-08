@@ -4,9 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from mangum import Mangum
 
+load_dotenv(override=True)  # Override existing .env variables
 from config import config
-from routers import file_router
-
 
 # Configure logging
 logging.basicConfig(
@@ -15,16 +14,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables (only needed for local development)
-if not config.IS_LAMBDA:
-    load_dotenv()
-
 # Validate configuration
 config_errors = config.validate_config()
 if config_errors:
     logger.error(f"Configuration errors: {config_errors}")
     if config.IS_LAMBDA:
         raise ValueError(f"Configuration errors: {config_errors}")
+    
+
+from routers import file_router
 
 # Create FastAPI instance
 app = FastAPI(
@@ -74,7 +72,54 @@ async def debug_config():
         "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
         "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
         "LOG_LEVEL": config.LOG_LEVEL,
+        "OPENSEARCH_HOST": config.OPENSEARCH_HOST,
+        "OPENSEARCH_PORT": config.OPENSEARCH_PORT,
+        "OPENSEARCH_USER_SET": bool(config.OPENSEARCH_USER),
+        "OPENSEARCH_PASSWORD_SET": bool(config.OPENSEARCH_PASSWORD),
+        "OPENSEARCH_USE_SSL": config.OPENSEARCH_USE_SSL,
+        "OPENSEARCH_VERIFY_CERTS": config.OPENSEARCH_VERIFY_CERTS,
+        "S3_BUCKET_NAME": config.S3_BUCKET_NAME,
+        "AWS_REGION": config.REGION
     }
+
+@app.get("/debug/opensearch")
+async def debug_opensearch():
+    """Debug endpoint to test OpenSearch connection"""
+    from controllers.file_controller import FileController
+    
+    try:
+        controller = FileController()
+        if not controller.opensearch_client:
+            return {
+                "status": "error",
+                "message": "OpenSearch client not initialized",
+                "config": {
+                    "host": config.OPENSEARCH_HOST,
+                    "port": config.OPENSEARCH_PORT,
+                    "use_ssl": config.OPENSEARCH_USE_SSL,
+                    "verify_certs": config.OPENSEARCH_VERIFY_CERTS
+                }
+            }
+        
+        # Test connection
+        info = controller.opensearch_client.info()
+        return {
+            "status": "success",
+            "message": "OpenSearch connection successful",
+            "cluster_info": info
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"OpenSearch connection failed: {str(e)}",
+            "config": {
+                "host": config.OPENSEARCH_HOST,
+                "port": config.OPENSEARCH_PORT,
+                "use_ssl": config.OPENSEARCH_USE_SSL,
+                "verify_certs": config.OPENSEARCH_VERIFY_CERTS
+            }
+        }
 
 # AWS Lambda handler
 handler = Mangum(app, lifespan="off")
@@ -88,5 +133,6 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=config.SERVICE_PORT, 
         reload=True,
-        log_level=config.LOG_LEVEL.lower()
+        log_level=config.LOG_LEVEL.lower(),
+        timeout_keep_alive=60  # Keep-alive timeout for long-running requests
     )

@@ -58,44 +58,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-1
 
-      - name: Validate AWS Credentials
-        run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "❌ AWS credentials are not set"
-            exit 1
-          fi
-          echo "✅ AWS credentials are set"
-
-      - name: Check S3 Bucket Exists
-        run: |
-          if aws s3 ls s3://pathlight-document > /dev/null 2>&1; then
-            echo "✅ S3 bucket 'pathlight-document' exists"
-          else
-            echo "❌ S3 bucket 'pathlight-document' does not exist"
-            exit 1
-          fi
-
-      - name: Check Lambda Function Exists
-        run: |
-          if aws lambda get-function --function-name pathlight-agentic-service > /dev/null 2>&1; then
-            echo "✅ Lambda function 'pathlight-agentic-service' exists"
-          else
-            echo "❌ Lambda function 'pathlight-agentic-service' does not exist"
-            exit 1
-          fi
-
-      - name: Check ECR Repository Exists
-        run: |
-          if aws ecr describe-repositories --repository-names pathlight/agentic_service > /dev/null 2>&1; then
-            echo "✅ ECR repository 'pathlight/agentic_service' exists"
-          else
-            echo "❌ ECR repository 'pathlight/agentic_service' does not exist"
-            exit 1
-          fi
-
       - name: Run Tests
         run: |
           cd services/agentic-service
+          echo "🧪 Running unit tests..."
           pytest -v
     
   # Push Image to ECR and Deploy to Lambda
@@ -138,7 +104,12 @@ jobs:
       - name: Update Lambda Environment Variables (Non-AWS secrets only)
         run: |
           sleep 20 # Wait for the Lambda function to be updated
-          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment "Variables={OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}, S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, REGION=${{ secrets.REGION }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}}"
+          aws lambda update-function-configuration --function-name pathlight-agentic-service --environment \
+          "Variables={OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}, S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, REGION=${{ secrets.REGION }}, \
+          ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}}, \
+          OPENSEARCH_HOST=${{ secrets.OPENSEARCH_HOST }}, OPENSEARCH_PORT=${{ secrets.OPENSEARCH_PORT }}, \
+          OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}, OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }} \
+          OPENSEARCH_INDEX_NAME=${{ secrets.OPENSEARCH_INDEX_NAME }}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success

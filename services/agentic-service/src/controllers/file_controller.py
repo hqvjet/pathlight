@@ -5,9 +5,11 @@ import openai
 import boto3
 from botocore.exceptions import ClientError
 from io import BytesIO
+from opensearchpy import OpenSearch
 
 from services.file_service import extract_content_with_tags
 from services.text_service import split_into_chunks
+from schemas.vectorize_schemas import ChunkData, DocumentData, MaterialData
 from config import config
 
 
@@ -21,6 +23,7 @@ class FileController:
         
         # Initialize S3 client with proper error handling
         try:
+            logger.info("Initializing S3 client...")
             if config.ACCESS_KEY_ID and config.SECRET_ACCESS_KEY:
                 self.s3_client = boto3.client(
                     's3',
@@ -34,6 +37,35 @@ class FileController:
         except Exception as e:
             logger.error(f"Failed to initialize S3 client: {e}")
             self.s3_client = None
+
+        # Initialize Opensearch client
+        try:
+            logger.info(f"Initializing Opensearch client with host: {config.OPENSEARCH_HOST}")
+            
+            # Parse the host URL properly
+            opensearch_host = config.OPENSEARCH_HOST
+            
+            self.opensearch_client = OpenSearch(
+                hosts=[{
+                    'host': opensearch_host,
+                    'port': config.OPENSEARCH_PORT
+                }],
+                http_auth=(config.OPENSEARCH_USER, config.OPENSEARCH_PASSWORD),
+                use_ssl=config.OPENSEARCH_USE_SSL,
+                verify_certs=config.OPENSEARCH_VERIFY_CERTS,
+                connection_class=None,
+                timeout=30,
+                max_retries=3
+            )
+            
+            # Test the connection
+            info = self.opensearch_client.info()
+            logger.info(f"Opensearch client initialized successfully. Cluster info: {info}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Opensearch client: {e}")
+            self.opensearch_client = None
+            self.opensearch_client = None
 
     def get_files_by_names(self, file_names: List[str]):
         """
@@ -129,7 +161,7 @@ class FileController:
             "total_failed": len(failed_files)
         }
 
-    async def vectorize_files(self, file_streams_dict):
+    async def vectorize_files(self, file_streams_dict, id: str, category: int):
         """
         Process file streams and create embeddings for text chunks.
         
@@ -174,38 +206,63 @@ class FileController:
                 )
 
         # Split content into chunks
-        chunks = []
+        documents = []
+        count = 0
         for filename, content in file_contents.items():
             file_chunks = split_into_chunks(content, source_info=filename, max_tokens=config.MAX_TOKENS_PER_CHUNK)
-            chunks.extend(file_chunks)
-            logger.info(f"Created {len(file_chunks)} chunks from {filename}")
+            chunks = []
 
-        # Create embeddings for each chunk
-        embeddings = []
-        for i, chunk in enumerate(chunks):
-            try:
+            for chunk in file_chunks:
+                # Create ChunkData object using the schema
                 response = openai.Embedding.create(
                     input=chunk["chunk_text"],
                     model="text-embedding-3-small"
                 )
-                embeddings.append({
-                    "chunk_id": chunk["chunk_id"],
-                    "embedding": response["data"][0]["embedding"],
-                    "chunk_text": chunk["chunk_text"],
-                    "source_info": chunk["source_info"],
-                    "approx_token_count": chunk.get("approx_token_count", 0)
-                })
-                    
-            except Exception as e:
-                logger.error(f"Failed to create embedding for chunk {chunk['chunk_id']}: {e}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to create embedding for chunk {chunk['chunk_id']}: {str(e)}"
-                )
 
-        logger.info(f"Successfully created {len(embeddings)} embeddings")
+                chunk_data = ChunkData(
+                    chunk_id=chunk["chunk_id"],
+                    embedding=response["data"][0]["embedding"],
+                    chunk_text=chunk["chunk_text"]
+                )
+                chunks.append(chunk_data)
+
+            documents.append(DocumentData(
+                document_id=count+1,
+                document_source=filename,
+                chunks=chunks
+            ))
+            count += 1
+        
+        # Create Opensearch Document
+        material_data = MaterialData(
+            id=id,
+            category=category,
+            documents=documents
+        )
+        logger.info(f"Prepared {len(material_data.documents)} documents for Opensearch indexing")
+
+        # Index the material data in Opensearch
+        if not self.opensearch_client:
+            raise HTTPException(
+                status_code=500,
+                detail="Opensearch client not initialized. Check Opensearch configuration."
+            )
+        
+        try:
+            response = self.opensearch_client.index(
+                index=config.OPENSEARCH_INDEX_NAME,
+                body=material_data.model_dump(),
+                id=id,
+                refresh=True
+            )
+            logger.info(f"Indexed material data in Opensearch: {response}")
+        except Exception as e:
+            logger.error(f"Failed to index material data in Opensearch: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to index material data in Opensearch: {str(e)}"
+            )
+        
         return {
-            "embeddings": embeddings,
-            "total_chunks": len(embeddings),
-            "files_processed": len(file_contents)
+            "status": 200,
         }

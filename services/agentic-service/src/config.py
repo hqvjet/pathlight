@@ -17,6 +17,15 @@ class Config:
     REGION: str = os.getenv("REGION", "us-east-1")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
     
+    # OpenSearch Configuration
+    OPENSEARCH_HOST: str = os.getenv("OPENSEARCH_HOST", "")
+    OPENSEARCH_PORT: int = int(os.getenv("OPENSEARCH_PORT", "443"))
+    OPENSEARCH_USER: str = os.getenv("OPENSEARCH_USERNAME", "")
+    OPENSEARCH_PASSWORD: str = os.getenv("OPENSEARCH_PASSWORD", "")
+    OPENSEARCH_INDEX_NAME: str = os.getenv("OPENSEARCH_INDEX_NAME", "pathlight-vectors")
+    OPENSEARCH_USE_SSL: bool = os.getenv("OPENSEARCH_USE_SSL", "true").lower() == "true"
+    OPENSEARCH_VERIFY_CERTS: bool = os.getenv("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
+    
     # CORS Configuration
     # ALLOWED_ORIGINS: List[str] = [
     #     "http://localhost:3000",
@@ -60,6 +69,15 @@ class Config:
             
         if not cls.S3_BUCKET_NAME:
             errors.append("S3_BUCKET_NAME is required")
+            
+        if not cls.OPENSEARCH_HOST:
+            errors.append("OPENSEARCH_HOST is required")
+            
+        if not cls.OPENSEARCH_USER:
+            errors.append("OPENSEARCH_USERNAME is required")
+            
+        if not cls.OPENSEARCH_PASSWORD:
+            errors.append("OPENSEARCH_PASSWORD is required")
             
         if cls.IS_LAMBDA and not (cls.ACCESS_KEY_ID and cls.SECRET_ACCESS_KEY):
             errors.append("AWS credentials are required for Lambda deployment")
