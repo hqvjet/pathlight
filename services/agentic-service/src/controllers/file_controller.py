@@ -3,7 +3,7 @@ import traceback
 import asyncio
 from fastapi import HTTPException
 from typing import List, Dict, Any, Optional
-from openai import OpenAI
+import openai
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 from io import BytesIO
@@ -30,7 +30,7 @@ class FileController:
         try:
             if not config.OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY is not configured")
-            self.openai_client = OpenAI(api_key=config.OPENAI_API_KEY)
+            self.openai_client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
             logger.info("OpenAI client configured successfully")
         except Exception as e:
             logger.error(f"Failed to configure OpenAI client: {e}")
@@ -42,8 +42,13 @@ class FileController:
         # Initialize S3 client with comprehensive error handling
         self.s3_client = self._initialize_s3_client()
         
-        # Initialize Opensearch client with comprehensive error handling
-        # self.opensearch_client = self._initialize_opensearch_client()
+        # Initialize Opensearch client with comprehensive error handling (optional for tests)
+        # try:
+        #     self.opensearch_client = self._initialize_opensearch_client()
+        # except HTTPException:
+        #     # In test environment, opensearch might not be available
+        #     logger.warning("Opensearch client initialization failed, continuing without it")
+        #     self.opensearch_client = None
         
         logger.info("FileController initialization completed successfully")
 
