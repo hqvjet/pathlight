@@ -213,7 +213,7 @@ class FileController:
 
         for filename in file_names:
             try:
-                logger.debug(f"Processing file: {filename}")
+                logger.info(f"Processing file: {filename}")
                 
                 if not filename or not filename.strip():
                     failed_files.append({
@@ -224,7 +224,7 @@ class FileController:
 
                 # Check if file exists and get metadata
                 try:
-                    logger.debug(f"Checking existence of file: {filename}")
+                    logger.info(f"Checking existence of file: {filename}")
                     response = self.s3_client.head_object(Bucket=bucket_name, Key=filename)
                     file_size = response['ContentLength']
                     content_type = response.get('ContentType', 'application/octet-stream')
@@ -274,7 +274,7 @@ class FileController:
 
                 # Get file object
                 try:
-                    logger.debug(f"Downloading file: {filename}")
+                    logger.info(f"Downloading file: {filename}")
                     file_obj = self.s3_client.get_object(Bucket=bucket_name, Key=filename)
                     file_content = file_obj['Body'].read()
                     file_stream = BytesIO(file_content)
@@ -419,7 +419,7 @@ class FileController:
                         
                 try:
                     mock_file = MockUploadFile(file_stream, filename)
-                    logger.debug(f"Extracting content from {filename}")
+                    logger.info(f"Extracting content from {filename}")
                     structured_content = extract_content_with_tags(mock_file, extension)
                     
                     if not structured_content or not structured_content.strip():
@@ -467,7 +467,7 @@ class FileController:
         
         for filename, content in file_contents.items():
             try:
-                logger.debug(f"Creating chunks for {filename}")
+                logger.info(f"Creating chunks for {filename}")
                 file_chunks = split_into_chunks(content, source_info=filename, max_tokens=max_tokens)
                 
                 if not file_chunks:
@@ -492,7 +492,7 @@ class FileController:
                         
                         for attempt in range(max_retries):
                             try:
-                                logger.debug(f"Creating embedding for chunk {chunk_idx} of {filename} (attempt {attempt + 1})")
+                                logger.info(f"Creating embedding for chunk {chunk_idx} of {filename} (attempt {attempt + 1})")
                                 response = self.openai_client.embeddings.create(
                                     input=chunk["chunk_text"],
                                     model="text-embedding-3-small"
