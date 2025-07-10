@@ -57,10 +57,6 @@ def test_file_controller_initialization():
     os.environ["ACCESS_KEY_ID"] = "test-access-key"
     os.environ["SECRET_ACCESS_KEY"] = "test-secret-key"
     os.environ["S3_BUCKET_NAME"] = "test-bucket"
-    os.environ["OPENSEARCH_HOST"] = "test-host"
-    os.environ["OPENSEARCH_PORT"] = "443"
-    os.environ["OPENSEARCH_USERNAME"] = "test-user"
-    os.environ["OPENSEARCH_PASSWORD"] = "test-pass"
     
     controller = FileController()
     assert controller is not None
