@@ -45,14 +45,14 @@ class AuthConfig:
     
     # Service Info
     SERVICE_NAME: str = "auth-service"
-    SERVICE_PORT: int = int(os.getenv("SERVICE_PORT", "8000"))
+    SERVICE_PORT: int = int(os.getenv("SERVICE_PORT", "8001"))
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     # Database - Priority: .env.local > .env > default
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL", 
-        "postgresql://postgres:1210@localhost:5432/pathlight"
+        ""
     )
     
     # JWT Configuration
@@ -87,8 +87,8 @@ class AuthConfig:
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
     # Admin
-    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
-    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
+    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
     
     # Other Services (for microservice communication)
     USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://localhost:8002")

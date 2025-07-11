@@ -8,7 +8,7 @@ import atexit
 
 # Import local modules
 from .config import config
-from .database import create_tables, SessionLocal
+from .database import create_tables, SessionLocal, ensure_tables
 from .models import Admin
 from .services.auth_service import hash_password
 from .routes.auth_routes import router as auth_router
@@ -34,7 +34,6 @@ scheduler = BackgroundScheduler()
 
 def run_study_reminders():
     try:
-        logger.info("[REMINDER DEBUG] Scheduler đã gọi run_study_reminders()")
         db = SessionLocal()
         
         from .services.email_reminders import send_reminders_to_users
@@ -67,23 +66,32 @@ async def startup_event():
         logger.info("Running on AWS Lambda - skipping database setup")
         return
     
-    create_tables()
-    db = SessionLocal()
     try:
-        # Create default admin user
-        admin = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
-        if not admin:
-            admin = Admin(
-                username=config.ADMIN_USERNAME,
-                password=hash_password(config.ADMIN_PASSWORD)
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Default admin user created")
+        # Use ensure_tables for more robust table creation
+        ensure_tables()
+        logger.info("Database setup completed successfully")
+        
+        # Then create admin user in a separate transaction
+        db = SessionLocal()
+        try:
+            # Create default admin user
+            admin = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
+            if not admin:
+                admin = Admin(
+                    username=config.ADMIN_USERNAME,
+                    password=hash_password(config.ADMIN_PASSWORD)
+                )
+                db.add(admin)
+                db.commit()
+                logger.info("Default admin user created")
+        except Exception as e:
+            logger.error(f"Error creating admin user: {e}")
+            db.rollback()
+        finally:
+            db.close()
     except Exception as e:
-        logger.error(f"Error creating admin user: {e}")
-    finally:
-        db.close()
+        logger.error(f"Error during startup: {e}")
+        raise
 
 @app.get("/")
 async def root():
@@ -106,5 +114,5 @@ async def debug_config():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("SERVICE_PORT", "8000"))
+    port = int(os.getenv("SERVICE_PORT", "8001"))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=True)

@@ -236,24 +236,18 @@ def get_users_to_remind(db: Session) -> List[User]:
         return []
 
 
-# --- SỬA HÀM GỬI REMINDER TỰ ĐỘNG THEO remind_time ---
+# --- remind_time ---
 def send_reminders_to_users(db: Session):
-    # Lấy giờ hiện tại theo múi giờ Việt Nam (UTC+7)
     vietnam_time = datetime.now(timezone(timedelta(hours=7)))
     now = vietnam_time.strftime("%H:%M")
-    logger.info(f"[REMINDER DEBUG] Giờ Việt Nam hiện tại: {now}")
-    # In ra tất cả user có remind_time khác None để kiểm tra
     all_users = db.query(User).filter(User.remind_time.isnot(None)).all()
-    logger.info(f"[REMINDER DEBUG] Tổng số user có remind_time khác None: {len(all_users)}")
     for u in all_users:
         logger.info(f"[REMINDER DEBUG] User: email={getattr(u, 'email', None)}, remind_time={getattr(u, 'remind_time', None)}, is_active={getattr(u, 'is_active', None)}, is_email_verified={getattr(u, 'is_email_verified', None)}")
-    # Lọc user đúng giờ
     users = db.query(User).filter(
         User.remind_time == now,
         User.is_active == True,
         User.is_email_verified == True
     ).all()
-    logger.info(f"[REMINDER DEBUG] Số user được gửi nhắc nhở tại {now}: {len(users)}")
     for user in users:
         logger.info(f"[REMINDER DEBUG] Sẽ gửi cho: email={getattr(user, 'email', None)}, remind_time={getattr(user, 'remind_time', None)}")
     count = 0
@@ -263,7 +257,6 @@ def send_reminders_to_users(db: Session):
         if not given_name:
             given_name = user_email or "bạn"
         remind_time = getattr(user, 'remind_time', now)
-        # Sử dụng template HTML đẹp
         subject = "🕐 Đến giờ học rồi! - PathLight"
         html_body = create_study_reminder_email_html(str(given_name))
         send_email(
@@ -272,11 +265,9 @@ def send_reminders_to_users(db: Session):
             html_body
         )
         count += 1
-    logger.info(f"[REMINDER DEBUG] Đã gửi nhắc nhở cho {count} user tại {now} (giờ Việt Nam)")
-    return f"Đã gửi nhắc nhở cho {count} user tại {now} (giờ Việt Nam)"
+    return f"Đã gửi nhắc nhở cho {count} user tại {now}"
 
 
-# --- MOVE send_email FROM main.py TO HERE TO AVOID CIRCULAR IMPORT ---
 def send_email(to_email: str, subject: str, body: str):
     """Send email using SMTP with improved reliability"""
     try:
