@@ -51,12 +51,16 @@ show_usage() {
     echo "  status   - Show status of containers"
     echo "  logs     - Show logs of user service"
     echo "  clean    - Stop and remove user service container"
+    echo "  cleanup  - Clean dangling Docker images (remove <none> images)"
+    echo "  deep-clean - Stop service, remove container and clean all images"
     echo "  help     - Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 start"
     echo "  $0 stop"
     echo "  $0 logs"
+    echo "  $0 cleanup     # Remove dangling images"
+    echo "  $0 deep-clean  # Full cleanup including images"
     echo ""
 }
 
@@ -268,6 +272,91 @@ show_logs() {
     docker logs -f pathlight-user-service
 }
 
+# Function to cleanup dangling images
+cleanup_images() {
+    echo "🧹 Cleaning up dangling Docker images..."
+    echo "========================================"
+    
+    # Show current images before cleanup
+    print_status "Current Docker images:"
+    docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
+    echo ""
+    
+    # Find dangling images
+    local dangling_images
+    dangling_images=$(docker images -f "dangling=true" -q)
+    
+    if [[ -z "$dangling_images" ]]; then
+        print_success "No dangling images found! 🎉"
+        return 0
+    fi
+    
+    print_status "Found dangling images (tagged as <none>):"
+    docker images -f "dangling=true" --format "table {{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
+    echo ""
+    
+    # Ask for confirmation
+    echo -n "❓ Do you want to remove these dangling images? [y/N]: "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_warning "Cleanup cancelled by user"
+        return 0
+    fi
+    
+    # Remove dangling images
+    print_status "Removing dangling images..."
+    if docker rmi $dangling_images 2>/dev/null; then
+        print_success "Dangling images removed successfully!"
+    else
+        print_warning "Some images could not be removed (may be in use)"
+    fi
+    
+    # Show results
+    echo ""
+    print_status "Images after cleanup:"
+    docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
+    
+    # Show space saved
+    print_success "Image cleanup completed! 🚀"
+    echo ""
+    echo "💡 Tip: Run 'docker system df' to see disk usage"
+    echo "💡 For more aggressive cleanup, use: docker system prune -a"
+}
+
+# Function for deep cleanup
+deep_clean() {
+    echo "🔥 Deep Cleaning PathLight User Service..."
+    echo "=========================================="
+    
+    # Stop and remove user service first
+    clean_services
+    echo ""
+    
+    # Ask for confirmation before image cleanup
+    echo -n "❓ Do you want to remove ALL unused Docker images and build cache? [y/N]: "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_warning "Image cleanup cancelled by user"
+        return 0
+    fi
+    
+    # Remove user service images
+    print_status "Removing user service images..."
+    docker rmi pathlight-user-service 2>/dev/null || print_warning "pathlight-user-service image not found"
+    docker rmi services-user-service 2>/dev/null || print_warning "services-user-service image not found"
+    
+    # Clean dangling images
+    cleanup_images
+    
+    # Clean build cache
+    print_status "Cleaning Docker build cache..."
+    docker builder prune -f 2>/dev/null || true
+    
+    print_success "Deep cleanup completed! 🎉"
+    echo ""
+    echo "💡 To rebuild and start service: $0 start"
+}
+
 # Main script logic
 case "${1:-help}" in
     "start")
@@ -289,6 +378,12 @@ case "${1:-help}" in
         ;;
     "clean")
         clean_services
+        ;;
+    "cleanup")
+        cleanup_images
+        ;;
+    "deep-clean")
+        deep_clean
         ;;
     "help"|"--help"|"-h"|"")
         show_usage
