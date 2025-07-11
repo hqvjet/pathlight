@@ -1,4 +1,4 @@
-docker image pruneversion: '3.8'
+version: '3.8'
 
 services:
   auth-service:
