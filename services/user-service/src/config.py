@@ -39,6 +39,8 @@ class UserServiceConfig:
     # Service Configuration
     SERVICE_NAME: str = "pathlight-user-service"
     SERVICE_PORT: int = int(os.getenv("USER_SERVICE_PORT", "8002"))
+    COURSE_SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", "8003"))
+    QUIZ_SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", "8004"))
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
@@ -47,6 +49,12 @@ class UserServiceConfig:
         "DATABASE_URL", 
         "postgresql://postgres:password@localhost:5432/pathlight"
     )
+    
+    # AWS S3 Configuration for Avatar Storage
+    AWS_ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
+    AWS_REGION: str = os.getenv("REGION", "ap-northeast-1")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "pathlight-user")
     
     # JWT Configuration
     JWT_SECRET_KEY: str = os.getenv(

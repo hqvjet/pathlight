@@ -61,6 +61,9 @@ show_usage() {
     echo "  status-all   - Show status of all services"
     echo "  clean-all    - Clean all services and networks"
     echo "  clean-db     - Clean database and volumes"
+    echo "  cleanup      - Clean dangling Docker images (remove <none> images)"
+    echo "  deep-clean   - Clean all services + images + build cache"
+    echo "  nuke         - 💥 NUCLEAR: Remove EVERYTHING (services + DB + images)"
     echo ""
     echo "  start [service]   - Start specific service"
     echo "  stop [service]    - Stop specific service"
@@ -81,6 +84,14 @@ show_usage() {
     echo "  $0 logs auth"
     echo "  $0 status-all"
     echo "  $0 clean-db"
+    echo "  $0 cleanup        # Remove dangling images"
+    echo "  $0 deep-clean     # Full services cleanup"
+    echo "  $0 nuke           # ⚠️  Reset everything from scratch"
+    echo ""
+    echo "⚠️  DANGEROUS COMMANDS:"
+    echo "  • clean-db: Removes database and volumes"
+    echo "  • deep-clean: Removes all services, images, cache"
+    echo "  • nuke: Complete nuclear reset - removes EVERYTHING!"
     echo ""
 }
 
@@ -274,6 +285,189 @@ clean_database() {
     print_warning "All data has been permanently deleted!"
 }
 
+# Function to cleanup dangling images
+cleanup_images() {
+    print_header "🧹 Cleaning up dangling Docker images..."
+    echo "========================================"
+    
+    # Show current images before cleanup
+    print_status "Current Docker images:"
+    docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
+    echo ""
+    
+    # Find dangling images
+    local dangling_images
+    dangling_images=$(docker images -f "dangling=true" -q)
+    
+    if [[ -z "$dangling_images" ]]; then
+        print_success "No dangling images found! 🎉"
+        return 0
+    fi
+    
+    print_status "Found dangling images (tagged as <none>):"
+    docker images -f "dangling=true" --format "table {{.ID}}\t{{.CreatedSince}}\t{{.Size}}"
+    echo ""
+    
+    # Ask for confirmation
+    echo -n "❓ Do you want to remove these dangling images? [y/N]: "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_warning "Cleanup cancelled by user"
+        return 0
+    fi
+    
+    # Remove dangling images
+    print_status "Removing dangling images..."
+    if docker rmi $dangling_images 2>/dev/null; then
+        print_success "Dangling images removed successfully!"
+    else
+        print_warning "Some images could not be removed (may be in use)"
+    fi
+    
+    # Show results
+    echo ""
+    print_status "Images after cleanup:"
+    docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
+    
+    print_success "Image cleanup completed! 🚀"
+    echo ""
+    echo "💡 Tip: Run 'docker system df' to see disk usage"
+}
+
+# Function for deep cleanup of all services
+deep_clean_all() {
+    print_header "🔥 Deep Cleaning ALL PathLight Services..."
+    echo "============================================="
+    
+    # Stop all services first
+    stop_all_services
+    echo ""
+    
+    # Ask for confirmation
+    echo -n "❓ Do you want to remove ALL PathLight images and build cache? [y/N]: "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_warning "Deep clean cancelled by user"
+        return 0
+    fi
+    
+    # Remove all PathLight service containers
+    print_status "Removing all PathLight containers..."
+    docker rm $(docker ps -aq --filter "name=pathlight-") 2>/dev/null || print_warning "No PathLight containers found"
+    
+    # Remove all PathLight images
+    print_status "Removing all PathLight images..."
+    docker rmi $(docker images -q --filter "reference=pathlight-*") 2>/dev/null || print_warning "No PathLight images found"
+    docker rmi $(docker images -q --filter "reference=services-*") 2>/dev/null || print_warning "No services images found"
+    
+    # Clean dangling images
+    print_status "Cleaning dangling images..."
+    docker image prune -f 2>/dev/null || true
+    
+    # Clean build cache
+    print_status "Cleaning Docker build cache..."
+    docker builder prune -af 2>/dev/null || true
+    
+    # Clean unused networks
+    print_status "Cleaning unused networks..."
+    docker network prune -f 2>/dev/null || true
+    
+    print_header "✅ Deep cleanup completed! 🎉"
+    echo ""
+    echo "💡 To start fresh: $0 start-all"
+}
+
+# Function for nuclear option - complete reset
+nuclear_reset() {
+    print_header "💥 NUCLEAR RESET: Complete PathLight Destruction"
+    echo "================================================="
+    echo ""
+    print_error "⚠️  ⚠️  ⚠️  DANGER ZONE  ⚠️  ⚠️  ⚠️"
+    print_error "This will DESTROY EVERYTHING PathLight related:"
+    echo "  • ALL PathLight containers (running and stopped)"
+    echo "  • ALL PathLight Docker images" 
+    echo "  • ALL PathLight networks"
+    echo "  • ALL PathLight volumes (INCLUDING ALL DATA)"
+    echo "  • PostgreSQL database and ALL USER DATA"
+    echo "  • All dangling images and build cache"
+    echo ""
+    print_error "THIS IS IRREVERSIBLE! ALL DATA WILL BE LOST!"
+    print_error "You will need to rebuild everything from scratch!"
+    echo ""
+    echo -n "❓ Type 'NUKE' to confirm complete destruction: "
+    read -r response
+    
+    if [[ "$response" != "NUKE" ]]; then
+        print_warning "Nuclear reset cancelled by user"
+        return 0
+    fi
+    
+    echo ""
+    print_header "🚀 Initiating nuclear reset sequence..."
+    echo "3... 2... 1... 💥"
+    sleep 2
+    
+    # Stop ALL containers (not just PathLight)
+    print_status "Stopping all PathLight containers..."
+    docker stop $(docker ps -q --filter "name=pathlight-") 2>/dev/null || print_warning "No running PathLight containers"
+    
+    # Remove ALL PathLight containers
+    print_status "Removing all PathLight containers..."
+    docker rm $(docker ps -aq --filter "name=pathlight-") 2>/dev/null || print_warning "No PathLight containers found"
+    
+    # Remove ALL PathLight images
+    print_status "Removing all PathLight images..."
+    docker rmi $(docker images -q --filter "reference=pathlight-*") 2>/dev/null || print_warning "No PathLight images found"
+    docker rmi $(docker images -q --filter "reference=services-*") 2>/dev/null || print_warning "No services images found"
+    
+    # Remove ALL PathLight volumes (including database)
+    print_status "Removing all PathLight volumes and data..."
+    docker volume rm $(docker volume ls -q --filter "name=pathlight-") 2>/dev/null || print_warning "No PathLight volumes found"
+    docker volume rm postgres_data 2>/dev/null || print_warning "Volume postgres_data not found"
+    
+    # Remove PathLight networks
+    print_status "Removing PathLight networks..."
+    docker network rm pathlight-network 2>/dev/null || print_warning "Network pathlight-network not found"
+    
+    # Clean ALL dangling images aggressively
+    print_status "Nuclear cleanup of all dangling images..."
+    docker image prune -af 2>/dev/null || true
+    
+    # Clean ALL build cache
+    print_status "Nuclear cleanup of build cache..."
+    docker builder prune -af 2>/dev/null || true
+    
+    # Clean ALL unused volumes
+    print_status "Nuclear cleanup of unused volumes..."
+    docker volume prune -af 2>/dev/null || true
+    
+    # Clean ALL unused networks
+    print_status "Nuclear cleanup of unused networks..."
+    docker network prune -f 2>/dev/null || true
+    
+    print_header "💥 NUCLEAR RESET COMPLETE! 💥"
+    echo ""
+    print_success "🎉 PathLight environment has been completely obliterated!"
+    echo ""
+    echo "📋 What's been destroyed:"
+    echo "  ✅ ALL PathLight containers"
+    echo "  ✅ ALL PathLight images"
+    echo "  ✅ ALL PathLight volumes and data"
+    echo "  ✅ ALL PathLight networks"
+    echo "  ✅ ALL dangling images"
+    echo "  ✅ ALL Docker build cache"
+    echo "  ✅ ALL user accounts and data"
+    echo "  ✅ ALL courses, quizzes, and content"
+    echo ""
+    print_header "🚀 To rebuild from ashes:"
+    echo "  1. Run: $0 start-all"
+    echo "  2. Wait for all services to build and start"
+    echo "  3. Create new user accounts"
+    echo "  4. Start fresh with clean slate!"
+    echo ""
+    echo "💡 Check space saved: docker system df"
+}
+
 # Main script logic
 case "${1:-help}" in
     "start-all")
@@ -295,6 +489,15 @@ case "${1:-help}" in
         ;;
     "clean-db")
         clean_database
+        ;;
+    "cleanup")
+        cleanup_images
+        ;;
+    "deep-clean")
+        deep_clean_all
+        ;;
+    "nuke")
+        nuclear_reset
         ;;
     "start")
         shift
