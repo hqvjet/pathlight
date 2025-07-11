@@ -13,6 +13,9 @@ const config: Config = {
       fontFamily: {
         sans: ['Montserrat'],
       },
+      screens: {
+        'xs': '475px',
+      },
     },
   },
   plugins: [

@@ -85,10 +85,10 @@ export default function ResetPasswordLayout({
 
             {/* Title and Subtitle */}
             <div className="text-center space-y-3">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
                 {title}
               </h1>
-              <p className="text-gray-600 text-lg leading-relaxed">
+              <p className="text-gray-600 text-lg sm:text-xl leading-relaxed">
                 {subtitle}
               </p>
             </div>

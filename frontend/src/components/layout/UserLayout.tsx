@@ -26,7 +26,7 @@ export default function UserLayout({
         onLogout={onLogout} 
         showLogoutButton={showNavLogout}
       />
-      <main className="py-8">
+      <main className="pt-32 py-8">
         {children}
       </main>
     </div>

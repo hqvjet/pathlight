@@ -217,6 +217,13 @@ export const userService = {
   async getUserStats(id: string) {
     return api.get<UserStats>(`/api/v1/admin/users/${id}/stats`);
   },
+
+  /**
+   * Get users by IDs (for leaderboard avatars)
+   */
+  async getUsersByIds(userIds: string[]) {
+    return api.post<Record<string, User>>('/api/v1/user/users-by-ids', userIds);
+  },
 };
 
 export default userService;
