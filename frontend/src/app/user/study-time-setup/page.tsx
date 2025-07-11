@@ -10,13 +10,13 @@ export default function StudyTimeSetupPage() {
   const handleComplete = () => {
     // Mark setup as completed and redirect to dashboard
     storage.set('study_time_setup_completed', 'true');
-    router.push('/dashboard');
+    router.push('/user/dashboard');
   };
 
   const handleSkip = () => {
     // Mark setup as completed (skipped) and go to dashboard
     storage.set('study_time_setup_completed', 'true');
-    router.push('/dashboard');
+    router.push('/user/dashboard');
   };
 
   return (

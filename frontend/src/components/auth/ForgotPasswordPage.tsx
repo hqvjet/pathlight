@@ -66,13 +66,13 @@ export default function ForgotPasswordPage() {
         headerVariant="auth"
       >
         <div className="bg-white rounded-lg p-4 mb-6">
-          <p className="text-blue-800 text-sm">
+          <p className="text-blue-800 text-base">
             <span className="font-semibold">Email đã được gửi đến:</span> {email}
           </p>
         </div>
         
         <div className="space-y-4">
-          <p className="text-gray-600 text-sm text-center">
+          <p className="text-gray-600 text-base text-center">
             Không thấy email? Kiểm tra thư mục spam/junk hoặc thử gửi lại sau vài phút.
           </p>
           
@@ -82,14 +82,14 @@ export default function ForgotPasswordPage() {
                 setSuccess(false);
                 setEmail('');
               }}
-              className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg hover:bg-orange-600 transition-colors font-medium"
+              className="w-full bg-orange-500 text-white py-4 px-4 rounded-lg hover:bg-orange-600 transition-colors font-medium text-base"
             >
               Gửi lại email
             </button>
             
             <Link
               href="/auth/signin"
-              className="w-full block text-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-700"
+              className="w-full block text-center py-4 px-4 border-2 border-orange-500 text-orange-500 rounded-lg hover:bg-orange-500 hover:text-white transition-all duration-200 font-medium text-base shadow-sm hover:shadow-md"
             >
               Quay lại đăng nhập
             </Link>
@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-3">
             Email
           </label>
           <input
@@ -119,34 +119,37 @@ export default function ForgotPasswordPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Nhập địa chỉ email của bạn"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+            className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors text-base"
             required
             disabled={loading}
           />
         </div>
 
         {error && (
-          <div className="bg-white border border-red-200 rounded-lg p-3">
-            <p className="text-red-800 text-sm">{error}</p>
+          <div className="bg-white border border-red-200 rounded-lg p-4">
+            <p className="text-red-800 text-base">{error}</p>
           </div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          className="w-full bg-orange-500 text-white py-4 px-4 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-base"
         >
           {loading ? 'Đang gửi...' : 'Gửi link đặt lại mật khẩu'}
         </button>
       </form>
 
       <div className="text-center pt-4">
-        <p className="text-gray-600 text-sm">
-          Nhớ mật khẩu?{' '}
-          <Link href="/auth/signin" className="text-orange-500 hover:text-orange-600 font-medium">
-            Quay lại đăng nhập
-          </Link>
+        <p className="text-gray-600 text-base mb-4">
+          Nhớ mật khẩu?
         </p>
+        <Link 
+          href="/auth/signin" 
+          className="inline-flex items-center justify-center px-6 py-3 border-2 border-orange-500 text-orange-500 rounded-lg hover:bg-orange-500 hover:text-white transition-all duration-200 font-medium text-base shadow-sm hover:shadow-md"
+        >
+          Quay lại đăng nhập
+        </Link>
       </div>
     </AuthLayout>
   );
