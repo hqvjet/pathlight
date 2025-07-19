@@ -113,7 +113,9 @@ async def signup_user(user_data: SignupRequest, db: Session) -> MessageResponse:
         
         # Create new user
         logger.info(f"Creating new user: {user_data.email}")
-        user = create_user(db, user_data.email, user_data.password, user_data.google_id)
+        # Ensure google_id is None for regular users, not empty string
+        google_id = user_data.google_id if user_data.google_id else None
+        user = create_user(db, user_data.email, user_data.password, google_id)
         
         send_verification_email(user_data.email, getattr(user, 'email_verification_token'), EMAIL_VERIFICATION_EXPIRE_MINUTES)
         logger.info(f"Signup successful for email: {user_data.email}")
@@ -167,24 +169,27 @@ async def signin_user(user_data: SigninRequest, db: Session) -> AuthResponse:
         user = get_user_by_email(db, user_data.email)
         if not user:
             logger.warning(f"Login failed: User not found for email {user_data.email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email hoặc mật khẩu không đúng"
+            return AuthResponse(
+                status=401,
+                message="Email hoặc mật khẩu không đúng",
+                access_token=None
             )
         
         user_password = getattr(user, 'password')
         if not user_password or not verify_password(user_data.password, user_password):
             logger.warning(f"Login failed: Invalid password for email {user_data.email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email hoặc mật khẩu không đúng"
+            return AuthResponse(
+                status=401,
+                message="Email hoặc mật khẩu không đúng",
+                access_token=None
             )
         
         if not getattr(user, 'is_email_verified'):
             logger.warning(f"Login failed: Email not verified for {user_data.email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email chưa được xác thực"
+            return AuthResponse(
+                status=401,
+                message="Email chưa được xác thực",
+                access_token=None
             )
         
         access_token = create_access_token(data={"sub": user.id})
@@ -192,15 +197,14 @@ async def signin_user(user_data: SigninRequest, db: Session) -> AuthResponse:
         
         return AuthResponse(status=200, access_token=access_token)
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Login error for {user_data.email}: {str(e)}")
         import traceback
         logger.error(f"Signin traceback: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Lỗi server. Vui lòng thử lại sau"
+        return AuthResponse(
+            status=500,
+            message="Lỗi server. Vui lòng thử lại sau",
+            access_token=None
         )
 
 async def signout_user(credentials: HTTPAuthorizationCredentials, db: Session) -> MessageResponse:
@@ -309,20 +313,35 @@ async def reset_user_password(token: str, request: ResetPasswordRequest, db: Ses
 async def oauth_signin_user(request: OAuthSigninRequest, db: Session) -> AuthResponse:
     """Handle OAuth signin"""
     try:
+        logger.info(f"OAuth signin attempt for email: {request.email}")
+        
         user = db.query(User).filter(
             (User.email == request.email) | (User.google_id == request.google_id)
         ).first()
         
         if user:
-            setattr(user, 'google_id', request.google_id)
-            setattr(user, 'given_name', request.given_name)
-            setattr(user, 'family_name', request.family_name)
-            setattr(user, 'avatar_url', request.avatar_id)
+            logger.info(f"Found existing user for OAuth signin: {user.email}")
+            
+            if not getattr(user, 'google_id', None):
+                setattr(user, 'google_id', request.google_id)
+            
+            if not getattr(user, 'given_name', None):
+                setattr(user, 'given_name', request.given_name)
+            
+            if not getattr(user, 'family_name', None):
+                setattr(user, 'family_name', request.family_name)
+            
+            current_avatar = getattr(user, 'avatar_url', None)
+            if not current_avatar or (current_avatar and 'googleusercontent.com' in current_avatar):
+                setattr(user, 'avatar_url', request.avatar_id)
+            
             setattr(user, 'is_email_verified', True)
             setattr(user, 'is_active', True)
+            
             if not getattr(user, 'password', None):
                 setattr(user, 'password', hash_password(request.google_id))
         else:
+            logger.info(f"Creating new user for OAuth signin: {request.email}")
             user = User(
                 email=request.email,
                 google_id=request.google_id,
@@ -337,13 +356,20 @@ async def oauth_signin_user(request: OAuthSigninRequest, db: Session) -> AuthRes
         
         db.commit()
         access_token = create_access_token(data={"sub": user.id})
+        logger.info(f"OAuth signin successful for email: {request.email}")
+        
         return AuthResponse(status=200, access_token=access_token)
         
     except Exception as e:
-        logger.error(f"OAuth signin error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Có lỗi xảy ra, xin vui lòng thử lại"
+        logger.error(f"OAuth signin error for {request.email}: {str(e)}")
+        import traceback
+        logger.error(f"OAuth signin traceback: {traceback.format_exc()}")
+        
+        # Return error response instead of raising HTTPException
+        return AuthResponse(
+            status=401,
+            message="Đăng nhập Google thất bại. Vui lòng thử lại.",
+            access_token=None
         )
 
 async def change_user_password(request: ChangePasswordRequest, current_user: User, db: Session) -> MessageResponse:
