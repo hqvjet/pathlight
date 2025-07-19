@@ -3,6 +3,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import Header from '../layout/Header';
+import { Montserrat } from 'next/font/google';
+
+const montserrat = Montserrat({
+  subsets: ['latin', 'vietnamese'],
+  display: 'swap',
+});
 
 interface EmailSentPageProps {
   email?: string;
@@ -12,7 +18,7 @@ interface EmailSentPageProps {
 
 export default function EmailSentPage({ email, onResendEmail, isResending = false }: EmailSentPageProps) {
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className={`min-h-screen bg-white flex flex-col ${montserrat.className}`}>
       {/* Header */}
       <Header 
         variant="auth" 
@@ -38,11 +44,11 @@ export default function EmailSentPage({ email, onResendEmail, isResending = fals
 
           {/* Text Content */}
           <div className="flex-1 text-center lg:text-left">
-            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-6">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
               Đã Gửi Email Thành Công
             </h1>
             
-            <div className="space-y-4 text-gray-600 text-lg">
+            <div className="space-y-4 text-gray-600 text-lg sm:text-xl">
               <p>
                 Chúng tôi vừa gửi cho bạn một email xác nhận{email ? ` tới ${email}` : ''}
               </p>
@@ -79,7 +85,7 @@ export default function EmailSentPage({ email, onResendEmail, isResending = fals
             <div className="mt-8">
               <Link
                 href="/auth/signin"
-                className="inline-flex items-center px-6 py-3 text-white bg-gray-900 hover:bg-gray-800 rounded-lg font-semibold transition-all duration-200 transform hover:scale-[1.02]">
+                className="inline-flex items-center px-6 py-3 text-base text-white bg-gray-900 hover:bg-gray-800 rounded-lg font-semibold transition-all duration-200 transform hover:scale-[1.02]">
                 ← Quay lại đăng nhập
               </Link>
             </div>

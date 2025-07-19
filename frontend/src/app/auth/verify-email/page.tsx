@@ -15,9 +15,12 @@ function VerifyEmailContent() {
     setMounted(true);
   }, []);
 
-  const handleSetupRedirect = () => {
-    router.push('/auth/study-time-setup');
-  };
+  useEffect(() => {
+    // Nếu không có token và đã mounted, redirect về signin
+    if (mounted && !token) {
+      router.push('/auth/signin');
+    }
+  }, [mounted, token, router]);
 
   if (!mounted) {
     return (
@@ -28,11 +31,15 @@ function VerifyEmailContent() {
   }
 
   if (token) {
-    return <EmailVerificationResult onSetupRedirect={handleSetupRedirect} />;
+    return <EmailVerificationResult />;
   }
 
-  router.push('/auth/signin');
-  return null;
+  // Nếu không có token, hiển thị loading trong khi redirect
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F97316]"></div>
+    </div>
+  );
 }
 
 export default function VerifyEmailPage() {
