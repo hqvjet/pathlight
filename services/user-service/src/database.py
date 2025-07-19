@@ -53,10 +53,10 @@ def create_tables():
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created successfully")
+        logger.info("Database tables created successfully")
         
     except Exception as e:
-        logger.error(f"❌ Failed to create database tables: {str(e)}")
+        logger.error(f"Failed to create database tables: {str(e)}")
         raise
 
 
@@ -65,16 +65,16 @@ def drop_tables():
     try:
         from .models import Base
         Base.metadata.drop_all(bind=engine)
-        logger.info("⚠️ All database tables dropped")
+        logger.info("All database tables dropped")
         
     except Exception as e:
-        logger.error(f"❌ Failed to drop database tables: {str(e)}")
+        logger.error(f"Failed to drop database tables: {str(e)}")
         raise
 
 
 def reset_database():
     """Reset database by dropping and recreating tables"""
-    logger.warning("🔄 Resetting database...")
+    logger.warning("Resetting database...")
     drop_tables()
     create_tables()
-    logger.info("✅ Database reset completed")
+    logger.info("Database reset completed")
