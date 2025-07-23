@@ -40,21 +40,21 @@ app.include_router(user_router, prefix="", tags=["User Management"])
 async def startup_event():
     """Initialize the service on startup"""
     try:
-        logger.info("🚀 Starting Pathlight User Service...")
+        logger.info("Starting Pathlight User Service...")
         
         # Test database connection
         with engine.connect() as connection:
-            logger.info("✅ Database connection successful")
+            logger.info("Database connection successful")
         
         # Create tables if they don't exist
         create_tables()
-        logger.info("✅ Database tables created/verified")
+        logger.info("Database tables created/verified")
         
-        logger.info("🎉 User service started successfully!")
-        logger.info(f"📝 API Documentation available at: http://localhost:{config.SERVICE_PORT}/docs")
+        logger.info("User service started successfully!")
+        logger.info(f"API Documentation available at: http://localhost:{config.SERVICE_PORT}/docs")
         
     except Exception as e:
-        logger.error(f"❌ Failed to start service: {str(e)}")
+        logger.error(f"Failed to start service: {str(e)}")
         raise
 
 @app.get("/", tags=["Health"])
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     import uvicorn
     from .config import config
     
-    logger.info("🚀 Starting Pathlight User Service directly...")
+    logger.info("Starting Pathlight User Service directly...")
     uvicorn.run(
         "src.main:app", 
         host="0.0.0.0", 

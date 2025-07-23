@@ -43,3 +43,43 @@ class UsersListResponse(BaseModel):
     status: int
     infos: Optional[list] = None
     message: Optional[str] = None
+
+class TestStatsRequest(BaseModel):
+    """Request schema for testing user stats and experience"""
+    # Experience and level
+    current_exp: Optional[int] = None
+    level: Optional[int] = None
+    require_exp: Optional[int] = None
+    
+    # Course stats (will be used to calculate experience)
+    total_courses: Optional[int] = None
+    completed_courses: Optional[int] = None
+    total_lessons: Optional[int] = None
+    
+    # Quiz stats (will be used to calculate experience)
+    total_quizzes: Optional[int] = None
+    completed_quizzes: Optional[int] = None
+    average_score: Optional[float] = None
+    
+    @validator('level')
+    def validate_level(cls, v):
+        if v is not None and v < 1:
+            raise ValueError('Level must be >= 1')
+        return v
+    
+    @validator('current_exp', 'require_exp')
+    def validate_exp(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Experience must be >= 0')
+        return v
+    
+    @validator('average_score')
+    def validate_average_score(cls, v):
+        if v is not None and (v < 0 or v > 1):
+            raise ValueError('Average score must be between 0 and 1')
+        return v
+
+class TestStatsResponse(BaseModel):
+    status: int
+    message: Optional[str] = None
+    updated_stats: Optional[dict] = None

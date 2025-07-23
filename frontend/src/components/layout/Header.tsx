@@ -3,6 +3,12 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Montserrat } from 'next/font/google';
+
+const montserrat = Montserrat({
+  subsets: ['latin', 'vietnamese'],
+  display: 'swap',
+});
 
 interface HeaderProps {
   variant?: 'default' | 'auth' | 'minimal';
@@ -73,14 +79,17 @@ export default function Header({
     return (
       <header className={`absolute top-0 left-0 right-0 z-10 ${getBackgroundClass()}`}>
         <div className="flex justify-center items-center p-6">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <Image
-              src="/assets/icons/LOGO.svg"
+              src="/assets/icons/logo.png"
               alt="PathLight Logo"
-              width={120}
-              height={40}
-              className="h-8 w-auto"
+              width={48}
+              height={48}
+              className="h-12 w-12"
             />
+            <span className={`text-2xl font-bold text-orange-500 ${montserrat.className}`}>
+              Pathlight
+            </span>
           </Link>
         </div>
       </header>
@@ -91,14 +100,17 @@ export default function Header({
     <header className={`absolute top-0 left-0 right-0 z-10 ${getBackgroundClass()}`}>
       <div className="flex justify-between items-center p-6">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Image
-            src="/assets/icons/LOGO.svg"
+            src="/assets/icons/logo.png"
             alt="PathLight Logo"
-            width={120}
-            height={40}
-            className="h-8 w-auto"
+            width={48}
+            height={48}
+            className="h-12 w-12"
           />
+          <span className={`text-2xl font-bold text-orange-500 ${montserrat.className}`}>
+            Pathlight
+          </span>
         </Link>
 
         {/* Right section - Navigation và Social Icons */}
@@ -106,16 +118,16 @@ export default function Header({
           {/* Navigation Menu for default variant */}
           {variant === 'default' && (
             <nav className="hidden md:flex items-center gap-6">
-              <Link href="/about" className="text-gray-700 hover:text-orange-500 transition-colors">
+              <Link href="/about" className={`text-gray-700 hover:text-orange-500 transition-colors font-medium ${montserrat.className}`}>
                 Về chúng tôi
               </Link>
-              <Link href="/courses" className="text-gray-700 hover:text-orange-500 transition-colors">
+              <Link href="/courses" className={`text-gray-700 hover:text-orange-500 transition-colors font-medium ${montserrat.className}`}>
                 Khóa học
               </Link>
-              <Link href="/contact" className="text-gray-700 hover:text-orange-500 transition-colors">
+              <Link href="/contact" className={`text-gray-700 hover:text-orange-500 transition-colors font-medium ${montserrat.className}`}>
                 Liên hệ
               </Link>
-              <Link href="/auth/signin" className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors">
+              <Link href="/auth/signin" className={`bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors font-medium ${montserrat.className}`}>
                 Đăng nhập
               </Link>
             </nav>

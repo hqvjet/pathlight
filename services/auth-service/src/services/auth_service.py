@@ -60,6 +60,10 @@ def create_user(db: Session, email: str, password: str, google_id: Optional[str]
     expiration_time = datetime.now(timezone.utc) + timedelta(minutes=EMAIL_VERIFICATION_EXPIRE_MINUTES)
     hashed_password = hash_password(password)
     
+    # Ensure google_id is None instead of empty string for regular users
+    if google_id == "":
+        google_id = None
+    
     user = User(
         email=email,
         password=hashed_password,

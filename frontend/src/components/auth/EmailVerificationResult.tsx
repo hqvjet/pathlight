@@ -1,20 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
 import { api, storage } from '@/utils/api';
-import Image from 'next/image';
-import { Montserrat } from 'next/font/google';
-import Header from '../layout/Header';
-
-const montserrat = Montserrat({
-  subsets: ['latin', 'vietnamese'],
-  display: 'swap',
-});
+import { AuthResponse } from '@/utils/types';
+import AuthLayout from '@/components/layout/AuthLayout';
 
 interface EmailVerificationResultProps {
-  onSetupRedirect: () => void;
+  onSetupRedirect?: () => void;
 }
 
 export default function EmailVerificationResult({ onSetupRedirect }: EmailVerificationResultProps) {
@@ -22,9 +16,15 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const isVerifyingRef = useRef(false);
+  const tokenRef = useRef<string | null>(null); 
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    if (!tokenRef.current) {
+      tokenRef.current = searchParams.get('token');
+    }
+    
+    const token = tokenRef.current;
     
     if (!token) {
       setStatus('error');
@@ -32,23 +32,37 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
       return;
     }
 
+    if (isVerifyingRef.current) {
+      return;
+    }
+
+    const verifiedTokens = sessionStorage.getItem('verified_tokens');
+    if (verifiedTokens && verifiedTokens.includes(token)) {
+      setStatus('success');
+      setMessage('Email đã được xác thực thành công!');
+      return;
+    }
+
     const verifyEmail = async () => {
       try {
+        isVerifyingRef.current = true;
         const response = await api.auth.verifyEmail(token);
 
         if (response.status === 200) {
           setStatus('success');
           setMessage('Email đã được xác thực thành công!');
           
-          // Nếu backend trả về token, lưu vào localStorage
-          if (response.data?.access_token) {
-            storage.setToken(response.data.access_token);
+          const verifiedTokens = sessionStorage.getItem('verified_tokens') || '';
+          sessionStorage.setItem('verified_tokens', verifiedTokens + ',' + token);
+          
+          const authData = response.data as AuthResponse;
+          if (authData?.access_token) {
+            storage.setToken(authData.access_token);
           }
           
           showToast.authSuccess('Email đã được xác thực thành công!');
         } else {
           setStatus('error');
-          // Hiển thị thông báo lỗi cụ thể từ backend
           let errorMessage = '';
           if (response.error) {
             errorMessage = response.error;
@@ -73,109 +87,92 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
     };
 
     verifyEmail();
-  }, [searchParams, onSetupRedirect]);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      
-      <Header 
-        variant="auth" 
-        showSocialLinks={true}
-        backgroundColor="transparent"
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white pt-24">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-12 w-full max-w-2xl">
-          
-          {status === 'loading' && (
-            <div className="text-center">
-              <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              </div>
-              
-              <h1 className={`text-3xl font-bold text-gray-800 mb-4 ${montserrat.className}`}>
-                Đang xác thực email
-              </h1>
-              
-              <p className="text-gray-600">
-                Vui lòng đợi trong giây lát...
-              </p>
+    <>
+      {status === 'loading' && (
+        <AuthLayout
+          title="Đang xác thực email"
+          subtitle="Vui lòng đợi trong giây lát..."
+          imageSrc="/assets/images/email_verification.png"
+          imageAlt="Email verification"
+          headerVariant="auth"
+        >
+          <div className="text-center">
+            <div className="flex justify-center mb-6">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
             </div>
-          )}
+            <p className="text-base text-gray-600">
+              Đang kiểm tra token xác thực...
+            </p>
+          </div>
+        </AuthLayout>
+      )}
 
-          {status === 'success' && (
-            <div className="text-center max-w-md mx-auto">
-              {/* Success Illustration */}
-              <div className="mb-8">
-                <Image
-                  src="/assets/images/signup_success.png"
-                  alt="Đăng ký thành công"
-                  width={350}
-                  height={280}
-                  className="mx-auto"
-                  priority
-                />
-              </div>
+      {status === 'success' && (
+        <AuthLayout
+          title="Đăng Ký Thành Công"
+          subtitle="Email của bạn đã được xác thực thành công. Bây giờ bạn có thể đăng nhập để bắt đầu sử dụng hệ thống."
+          imageSrc="/assets/images/signup_success.png"
+          imageAlt="Đăng ký thành công"
+          headerVariant="auth"
+        >
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+              <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-base text-gray-600 mb-6">
+              Tài khoản của bạn đã sẵn sàng để sử dụng
+            </p>
+            <button
+              onClick={() => router.push('/auth/signin')}
+              className="w-full py-4 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-base shadow-sm hover:shadow-md"
+            >
+              Quay Lại Đăng Nhập
+            </button>
+          </div>
+        </AuthLayout>
+      )}
 
-              <h1 className={`text-3xl font-bold text-gray-800 mb-6 ${montserrat.className}`}>
-                Đăng Ký Thành Công
-              </h1>
-              <div className="mb-8">
-                <p className="text-lg text-gray-600 leading-relaxed px-4">
-                  Email của bạn đã được xác thực thành công. Bây giờ bạn có thể đăng nhập để bắt đầu sử dụng hệ thống.
+      {status === 'error' && (
+        <AuthLayout
+          title="Xác Thực Thất Bại"
+          subtitle="Có lỗi xảy ra trong quá trình xác thực email. Vui lòng thử lại hoặc liên hệ hỗ trợ."
+          imageSrc="/assets/images/error_page.png"
+          imageAlt="Xác thực thất bại"
+          headerVariant="auth"
+        >
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+              <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            
+            <div className="bg-white border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-base text-red-700">{message}</p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => window.location.href = '/auth/signin'}
+                className="w-full py-4 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-base shadow-sm hover:shadow-md"
+              >
+                Đăng Nhập
+              </button>
+              
+              <div className="text-center">
+                <p className="text-base text-gray-500">
+                  Cần hỗ trợ? Liên hệ với chúng tôi để được giúp đỡ
                 </p>
               </div>
-              <div className="space-y-4">
-                <button
-                  onClick={() => router.push('/login')}
-                  className="w-full py-4 px-8 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 hover:scale-[1.02]"
-                >
-                  Quay Lại Đăng Nhập
-                </button>
-              </div>
             </div>
-          )}
-
-          {status === 'error' && (
-            <div className="text-center">
-              {/* Error Icon */}
-              <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20">
-                  <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-              </div>
-              
-              <h1 className={`text-3xl font-bold text-gray-800 mb-6 ${montserrat.className}`}>
-                Xác Thực Thất Bại
-              </h1>
-              
-              <div className="bg-white border border-red-200 rounded-xl p-6 mb-8">
-                <p className="text-red-700 text-lg">{message}</p>
-              </div>
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => window.location.href = '/login'}
-                  className="w-full py-4 px-8 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                >
-                  Đăng Nhập
-                </button>
-                
-                <div className="text-center">
-                  <p className="text-gray-500 text-sm">
-                    Cần hỗ trợ? Liên hệ với chúng tôi để được giúp đỡ
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </div>
+        </AuthLayout>
+      )}
+    </>
   );
 }

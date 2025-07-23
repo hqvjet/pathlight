@@ -88,7 +88,7 @@ export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
   return `${base.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
-export const buildQueryParams = (params: Record<string, any>): string => {
+export const buildQueryParams = (params: Record<string, unknown>): string => {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
@@ -98,7 +98,7 @@ export const buildQueryParams = (params: Record<string, any>): string => {
   return searchParams.toString();
 };
 
-export const buildUrlWithParams = (endpoint: string, params?: Record<string, any>, serviceUrl?: string): string => {
+export const buildUrlWithParams = (endpoint: string, params?: Record<string, unknown>, serviceUrl?: string): string => {
   const baseUrl = serviceUrl ? buildApiUrl(endpoint, serviceUrl) : buildApiUrl(endpoint);
   if (params && Object.keys(params).length > 0) {
     const queryString = buildQueryParams(params);
@@ -110,14 +110,14 @@ export const buildUrlWithParams = (endpoint: string, params?: Record<string, any
 // =============================================================================
 // 🚀 API CLIENT
 // =============================================================================
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
   status: number;
 }
 
-export const apiRequest = async <T = any>(
+export const apiRequest = async <T = unknown>(
   endpoint: string, 
   options: RequestInit & { serviceUrl?: string } = {}
 ): Promise<ApiResponse<T>> => {
@@ -125,8 +125,13 @@ export const apiRequest = async <T = any>(
     const { serviceUrl, ...fetchOptions } = options;
     const url = serviceUrl ? buildApiUrl(endpoint, serviceUrl) : buildApiUrl(endpoint);
     
+    // Don't automatically add auth headers if custom headers are provided (for FormData uploads)
+    const headers = fetchOptions.headers 
+      ? fetchOptions.headers 
+      : getAuthHeaders();
+    
     const response = await fetch(url, {
-      headers: getAuthHeaders(),
+      headers,
       ...fetchOptions,
     });
 
@@ -139,6 +144,17 @@ export const apiRequest = async <T = any>(
       data = await response.text();
     }
     
+    // Check if the response body contains a status field (for auth service responses)
+    if (data && typeof data === 'object' && 'status' in data) {
+      return {
+        data: data.status === 200 ? data : undefined,
+        message: data.message || (data.status === 200 ? 'Success' : 'Request failed'),
+        error: data.status === 200 ? undefined : (data.message || `Error ${data.status}`),
+        status: data.status,
+      };
+    }
+    
+    // Fallback to HTTP status for other services
     return {
       data: response.ok ? data : undefined,
       message: data?.message || (response.ok ? 'Success' : 'Request failed'),
@@ -159,12 +175,12 @@ export const apiRequest = async <T = any>(
 export const api = {
   // Authentication
   auth: {
-    signin: (data: any) => apiRequest('/signin', {
+    signin: (data: unknown) => apiRequest('/signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    signup: (data: any) => apiRequest('/signup', {
+    signup: (data: unknown) => apiRequest('/signup', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
@@ -191,22 +207,22 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    resetPassword: (token: string, data: any) => apiRequest(`/reset-password/${token}`, {
+    resetPassword: (token: string, data: unknown) => apiRequest(`/reset-password/${token}`, {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    changePassword: (data: any) => apiRequest('/change-password', {
+    changePassword: (data: unknown) => apiRequest('/change-password', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    oauthSignin: (data: any) => apiRequest('/oauth-signin', {
+    oauthSignin: (data: unknown) => apiRequest('/oauth-signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    adminSignin: (data: any) => apiRequest('/admin/signin', {
+    adminSignin: (data: unknown) => apiRequest('/admin/signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
@@ -227,7 +243,11 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.USER,
     }),
-    updateProfile: (data: any) => apiRequest('/change-info', {
+    getDashboard: () => apiRequest('/dashboard', {
+      method: 'GET',
+      serviceUrl: SERVICE_URLS.USER,
+    }),
+    updateProfile: (data: unknown) => apiRequest('/change-info', {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.USER,
@@ -239,6 +259,7 @@ export const api = {
         method: 'PUT',
         body: formData,
         headers: {
+          // Don't set Content-Type for FormData - let browser set it with boundary
           ...(storage.getToken() && { Authorization: `Bearer ${storage.getToken()}` }),
         },
         serviceUrl: SERVICE_URLS.USER,
@@ -248,11 +269,7 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.USER,
     }),
-    getDashboard: () => apiRequest('/dashboard', { 
-      method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
-    }),
-    setNotifyTime: (data: any) => apiRequest('/notify-time', {
+    setNotifyTime: (data: unknown) => apiRequest('/notify-time', {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.USER,
@@ -265,11 +282,66 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.USER,
     }),
+    getUsersByIds: (userIds: string[]) => apiRequest('/users-by-ids', {
+      method: 'POST',
+      body: JSON.stringify(userIds),
+      serviceUrl: SERVICE_URLS.USER,
+    }),
+    
+    // Test APIs for development
+    test: {
+      addExperience: (amount: number) => apiRequest(`/test/add-experience?exp_amount=${amount}`, {
+        method: 'POST',
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      updateStats: (data: unknown) => apiRequest('/test/update-stats', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      resetStats: () => apiRequest('/test/reset-stats', {
+        method: 'POST',
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      simulateActivity: () => apiRequest('/test/simulate-activity', {
+        method: 'GET',
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      getLevelSystemInfo: () => apiRequest('/test/level-system-info', {
+        method: 'GET',
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+    },
+
+    // Activity data management
+    activity: {
+      get: (year?: number) => apiRequest(
+        year ? `/activity?year=${year}` : '/activity', 
+        {
+          method: 'GET',
+          serviceUrl: SERVICE_URLS.USER,
+        }
+      ),
+      save: (data: { date: string; level: number }) => apiRequest('/activity', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      saveBatch: (data: { [key: string]: number }) => apiRequest('/activity/batch', {
+        method: 'POST',
+        body: JSON.stringify({ activityData: data }),
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+      clear: () => apiRequest('/activity', {
+        method: 'DELETE',
+        serviceUrl: SERVICE_URLS.USER,
+      }),
+    },
   },
   
   // Course management
   course: {
-    getAll: (params?: Record<string, any>) => apiRequest(
+    getAll: (params?: Record<string, unknown>) => apiRequest(
       buildUrlWithParams('/courses', params),
       { 
         method: 'GET',
@@ -280,12 +352,12 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    create: (data: any) => apiRequest('/courses', {
+    create: (data: unknown) => apiRequest('/courses', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    update: (id: string, data: any) => apiRequest(`/courses/${id}`, {
+    update: (id: string, data: unknown) => apiRequest(`/courses/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.COURSE,
@@ -310,7 +382,7 @@ export const api = {
   
   // Quiz management
   quiz: {
-    getAll: (params?: Record<string, any>) => apiRequest(
+    getAll: (params?: Record<string, unknown>) => apiRequest(
       buildUrlWithParams('/quizzes', params),
       { 
         method: 'GET',
@@ -321,12 +393,12 @@ export const api = {
       method: 'GET',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    create: (data: any) => apiRequest('/quizzes', {
+    create: (data: unknown) => apiRequest('/quizzes', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    update: (id: string, data: any) => apiRequest(`/quizzes/${id}`, {
+    update: (id: string, data: unknown) => apiRequest(`/quizzes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.QUIZ,
@@ -335,7 +407,7 @@ export const api = {
       method: 'DELETE',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    submit: (id: string, answers: any) => apiRequest(`/quizzes/${id}/submit`, {
+    submit: (id: string, answers: unknown) => apiRequest(`/quizzes/${id}/submit`, {
       method: 'POST',
       body: JSON.stringify({ answers }),
       serviceUrl: SERVICE_URLS.QUIZ,
