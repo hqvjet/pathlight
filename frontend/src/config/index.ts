@@ -15,6 +15,5 @@ export {
   APP_CONFIG as appConfig,
   FEATURE_FLAGS as featureFlags,
   ANALYTICS_CONFIG as analyticsConfig,
-  validateEnvironment,
   getEnvironmentInfo
 } from './env';
