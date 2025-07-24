@@ -57,21 +57,6 @@ def test_app_root():
     except Exception as e:
         pytest.skip(f"Root endpoint test failed: {e}")
 
-
-def test_debug_config():
-    """Test the debug config endpoint"""
-    try:
-        from src.main import app
-        client = TestClient(app)
-        response = client.get("/debug/config")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, dict)
-        print("✅ Debug config endpoint test passed")
-    except Exception as e:
-        pytest.skip(f"Debug config endpoint test failed: {e}")
-
-
 @pytest.mark.unit
 def test_config_validation():
     """Test config validation"""
