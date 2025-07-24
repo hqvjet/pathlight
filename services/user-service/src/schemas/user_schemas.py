@@ -46,17 +46,14 @@ class UsersListResponse(BaseModel):
 
 class TestStatsRequest(BaseModel):
     """Request schema for testing user stats and experience"""
-    # Experience and level
     current_exp: Optional[int] = None
     level: Optional[int] = None
     require_exp: Optional[int] = None
     
-    # Course stats (will be used to calculate experience)
     total_courses: Optional[int] = None
     completed_courses: Optional[int] = None
     total_lessons: Optional[int] = None
     
-    # Quiz stats (will be used to calculate experience)
     total_quizzes: Optional[int] = None
     completed_quizzes: Optional[int] = None
     average_score: Optional[float] = None

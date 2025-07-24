@@ -1,19 +1,14 @@
-# db/database.py
-
 from sqlalchemy import create_engine, MetaData, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-# Import local config and models
 from .config import get_database_url, get_debug_mode
 from .models import Base
 
-# Database configuration
 DATABASE_URL = get_database_url()
 DEBUG = get_debug_mode()
 
-# Create engine with improved connection settings
 engine = create_engine(
     DATABASE_URL, 
     echo=DEBUG,
@@ -27,13 +22,9 @@ engine = create_engine(
     }
 )
 
-# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Use the Base from models
 metadata = Base.metadata
 
-# FastAPI-compatible dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -41,7 +32,6 @@ def get_db():
     finally:
         db.close()
 
-# Context manager for CLI/scripts
 @contextmanager
 def get_db_context():
     db = SessionLocal()
@@ -51,8 +41,6 @@ def get_db_context():
         db.close()
 
 def create_tables():
-    """Create all tables with retry mechanism"""
-    # Import all models to ensure they're registered
     from .models import User, Admin, TokenBlacklist, Base
     import time
     
@@ -61,11 +49,9 @@ def create_tables():
     
     for attempt in range(max_retries):
         try:
-            # Test connection first
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             
-            # Create tables with explicit transaction
             with engine.begin() as conn:
                 Base.metadata.create_all(bind=conn)
             
@@ -77,7 +63,7 @@ def create_tables():
             if attempt < max_retries - 1:
                 print(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay *= 2
             else:
                 print("Failed to create tables after all retries")
                 raise
@@ -86,7 +72,6 @@ def check_tables_exist():
     """Check if required tables exist in the database"""
     try:
         with engine.connect() as conn:
-            # Check if tables exist using inspector
             inspector = inspect(conn)
             table_names = inspector.get_table_names()
             required_tables = ['users', 'admins', 'token_blacklist']

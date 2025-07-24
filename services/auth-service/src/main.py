@@ -6,7 +6,6 @@ import logging
 import os
 import atexit
 
-# Import local modules
 from .config import config
 from .database import create_tables, SessionLocal, ensure_tables
 from .models import Admin
@@ -14,13 +13,11 @@ from .services.auth_service import hash_password
 from .routes.auth_routes import router as auth_router
 
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Auth Service", version="1.0.0")
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS,
@@ -29,7 +26,6 @@ app.add_middleware(
     allow_headers=config.ALLOWED_HEADERS,
 )
 
-# Background Scheduler for Study Reminders
 scheduler = BackgroundScheduler()
 
 def run_study_reminders():
@@ -52,12 +48,10 @@ scheduler.add_job(
     replace_existing=True
 )
 
-# Start scheduler
 scheduler.start()
 logger.info("Background scheduler started for study reminders")
 atexit.register(lambda: scheduler.shutdown())
 
-# Include routers
 app.include_router(auth_router)
 
 @app.on_event("startup")
@@ -67,14 +61,10 @@ async def startup_event():
         return
     
     try:
-        # Use ensure_tables for more robust table creation
         ensure_tables()
         logger.info("Database setup completed successfully")
-        
-        # Then create admin user in a separate transaction
         db = SessionLocal()
         try:
-            # Create default admin user
             admin = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
             if not admin:
                 admin = Admin(

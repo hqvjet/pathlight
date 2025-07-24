@@ -1,6 +1,5 @@
 """
 Database models for Auth Service
-Self-contained models that don't depend on external libs
 """
 
 from sqlalchemy import Column, String, DateTime, Integer, Boolean, BigInteger, Text
@@ -8,28 +7,16 @@ from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
 
-# Base for auth service models
 Base = declarative_base()
 
-
 class User(Base):
-    """
-    User model for auth service
-    """
     __tablename__ = "users"
-    
-    # Primary identifier
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    
-    # Authentication fields
     email = Column(String, nullable=False, unique=True, index=True)
-    password = Column(String, nullable=True)  # Nullable for OAuth users
+    password = Column(String, nullable=True)
     is_email_verified = Column(Boolean, default=False)
-    
-    # Email verification fields
     email_verification_token = Column(String, nullable=True)
     email_verification_expires_at = Column(DateTime(timezone=True), nullable=True)
-    
     # Password reset fields
     password_reset_token = Column(String, nullable=True)
     
@@ -78,5 +65,4 @@ class TokenBlacklist(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
-# Make all models available for import
 __all__ = ['User', 'Admin', 'TokenBlacklist', 'Base']
