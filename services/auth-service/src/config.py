@@ -39,7 +39,7 @@ load_env_file()
 class AuthConfig:
     """Self-contained configuration for Auth Service"""
     SERVICE_NAME: str = "auth-service"
-    SERVICE_PORT: int = 8001
+    SERVICE_PORT: int = int(os.getenv("AUTH_SERVICE_PORT", 8001))
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
@@ -68,15 +68,15 @@ class AuthConfig:
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
 
-    BASE_URL: str = "http://localhost"
-    AUTH_SERVICE_PORT: int = 8001
-    USER_SERVICE_PORT: int = 8002
-    COURSE_SERVICE_PORT: int = 8003
-    QUIZ_SERVICE_PORT: int = 8004
+    BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
+    AUTH_SERVICE_PORT: int = int(os.getenv("AUTH_SERVICE_PORT", 8001))
+    USER_SERVICE_PORT: int = int(os.getenv("USER_SERVICE_PORT", 8002))
+    COURSE_SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", 8003))
+    QUIZ_SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
 
-    USER_SERVICE_URL: str = f"{BASE_URL}:{USER_SERVICE_PORT}"
-    COURSE_SERVICE_URL: str = f"{BASE_URL}:{COURSE_SERVICE_PORT}"
-    QUIZ_SERVICE_URL: str = f"{BASE_URL}:{QUIZ_SERVICE_PORT}"
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", f"{BASE_URL}:{USER_SERVICE_PORT}")
+    COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", f"{BASE_URL}:{COURSE_SERVICE_PORT}")
+    QUIZ_SERVICE_URL: str = os.getenv("QUIZ_SERVICE_URL", f"{BASE_URL}:{QUIZ_SERVICE_PORT}")
 
     APP_NAME: str = "PathLight"
     ENVIRONMENT: str = "development"

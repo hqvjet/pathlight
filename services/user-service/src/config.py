@@ -13,12 +13,15 @@ except ImportError:
 
 class Config:
     BASE_URL: str = "http://localhost"
-    SERVICE_PORT: int = 8002
-    COURSE_SERVICE_PORT: int = 8003
-    QUIZ_SERVICE_PORT: int = 8004
-    USER_SERVICE_URL: str =f"{BASE_URL}:{SERVICE_PORT}"
-    COURSE_SERVICE_URL: str =f"{BASE_URL}:{COURSE_SERVICE_PORT}"
-    QUIZ_SERVICE_URL: str =f"{BASE_URL}:{QUIZ_SERVICE_PORT}"
+    AUTH_SERVICE_PORT: int = int(os.getenv("AUTH_SERVICE_PORT", 8001))
+    USER_SERVICE_PORT: int = int(os.getenv("USER_SERVICE_PORT", 8002))
+    COURSE_SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", 8003))
+    QUIZ_SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
+    
+    AUTH_SERVICE_URL: str =os.getenv("AUTH_SERVICE_URL", f"{BASE_URL}:{AUTH_SERVICE_PORT}")
+    USER_SERVICE_URL: str =os.getenv("USER_SERVICE_URL", f"{BASE_URL}:{USER_SERVICE_PORT}")
+    COURSE_SERVICE_URL: str =os.getenv("COURSE_SERVICE_URL", f"{BASE_URL}:{COURSE_SERVICE_PORT}")
+    QUIZ_SERVICE_URL: str =os.getenv("QUIZ_SERVICE_URL", f"{BASE_URL}:{QUIZ_SERVICE_PORT}")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     AWS_ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")

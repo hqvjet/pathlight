@@ -33,7 +33,7 @@ load_env()
 class CourseConfig:
     """Configuration for Course Service"""
     SERVICE_NAME: str = "course-service"
-    SERVICE_PORT: int = 8003
+    SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", 8002))
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
