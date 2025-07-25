@@ -68,15 +68,16 @@ class AuthConfig:
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
 
-    BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
+    ENDPOINT: str = os.getenv("ENDPOINT", "http://localhost")
     AUTH_SERVICE_PORT: int = int(os.getenv("AUTH_SERVICE_PORT", 8001))
     USER_SERVICE_PORT: int = int(os.getenv("USER_SERVICE_PORT", 8002))
     COURSE_SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", 8003))
     QUIZ_SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
 
-    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", f"{BASE_URL}:{USER_SERVICE_PORT}")
-    COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", f"{BASE_URL}:{COURSE_SERVICE_PORT}")
-    QUIZ_SERVICE_URL: str = os.getenv("QUIZ_SERVICE_URL", f"{BASE_URL}:{QUIZ_SERVICE_PORT}")
+    AUTH_SERVICE_ENDPOINT: str = os.getenv("AUTH_SERVICE_ENDPOINT", f"{ENDPOINT}:{AUTH_SERVICE_PORT}")
+    USER_SERVICE_ENDPOINT: str = os.getenv("USER_SERVICE_ENDPOINT", f"{ENDPOINT}:{USER_SERVICE_PORT}")
+    COURSE_SERVICE_ENDPOINT: str = os.getenv("COURSE_SERVICE_ENDPOINT", f"{ENDPOINT}:{COURSE_SERVICE_PORT}")
+    QUIZ_SERVICE_ENDPOINT: str = os.getenv("QUIZ_SERVICE_ENDPOINT", f"{ENDPOINT}:{QUIZ_SERVICE_PORT}")
 
     APP_NAME: str = "PathLight"
     ENVIRONMENT: str = "development"

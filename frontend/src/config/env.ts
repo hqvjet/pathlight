@@ -3,12 +3,12 @@
 // =============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000',
   APP_PORT: 3000,
-  AUTH_SERVICE_PORT: 8001,
-  USER_SERVICE_PORT: 8002,
-  COURSE_SERVICE_PORT: 8003,
-  QUIZ_SERVICE_PORT: 8004,
+  AUTH_SERVICE_PORT: process.env.NEXT_PUBLIC_AUTH_SERVICE_PORT || 8001,
+  USER_SERVICE_PORT: process.env.NEXT_PUBLIC_USER_SERVICE_PORT || 8002,
+  COURSE_SERVICE_PORT: process.env.NEXT_PUBLIC_COURSE_SERVICE_PORT || 8003,
+  QUIZ_SERVICE_PORT: process.env.NEXT_PUBLIC_QUIZ_SERVICE_PORT || 8004,
   get APP_URL() {
     return `${this.BASE_URL}:${this.APP_PORT}`;
   },

@@ -38,7 +38,7 @@ class QuizConfig:
     
     # Service
     SERVICE_NAME: str = "quiz-service"
-    SERVICE_PORT: int = 8004
+    SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
