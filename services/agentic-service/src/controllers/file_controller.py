@@ -309,16 +309,26 @@ class FileController:
             if missing_configs:
                 raise OpenSearchConfigurationError(f"Missing OpenSearch configuration: {', '.join(missing_configs)}")
             
+            # Ensure port is an integer
+            port_value = getattr(config, 'OPENSEARCH_PORT', 9200)
+            if isinstance(port_value, str):
+                port_value = int(port_value)
+            
+            # Ensure timeout is an integer
+            timeout_value = getattr(config, 'OPENSEARCH_TIMEOUT', 60)
+            if isinstance(timeout_value, str):
+                timeout_value = int(timeout_value)
+            
             opensearch_client = OpenSearch(
                 hosts=[{
                     'host': config.OPENSEARCH_HOST,
-                    'port': config.OPENSEARCH_PORT
+                    'port': port_value
                 }],
                 http_auth=(config.OPENSEARCH_USER, config.OPENSEARCH_PASSWORD),
                 use_ssl=getattr(config, 'OPENSEARCH_USE_SSL', True),
                 verify_certs=getattr(config, 'OPENSEARCH_VERIFY_CERTS', True),
                 connection_class=None,
-                timeout=getattr(config, 'OPENSEARCH_TIMEOUT', 60),
+                timeout=timeout_value,
                 max_retries=3,
                 retry_on_timeout=True
             )
@@ -353,11 +363,16 @@ class FileController:
         try:
             logger.info(f"Testing OpenSearch connection with {timeout}s timeout...")
             
+            # Ensure port is integer for test client
+            port_value = getattr(config, 'OPENSEARCH_PORT', 9200)
+            if isinstance(port_value, str):
+                port_value = int(port_value)
+            
             # Use a shorter timeout for the connection test
             test_client = OpenSearch(
                 hosts=[{
                     'host': config.OPENSEARCH_HOST,
-                    'port': config.OPENSEARCH_PORT
+                    'port': port_value
                 }],
                 http_auth=(config.OPENSEARCH_USER, config.OPENSEARCH_PASSWORD),
                 use_ssl=getattr(config, 'OPENSEARCH_USE_SSL', True),
