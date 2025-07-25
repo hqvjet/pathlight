@@ -3,7 +3,7 @@
 // =============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost',
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000',
   APP_PORT: 3000,
   AUTH_SERVICE_PORT: 8001,
   USER_SERVICE_PORT: 8002,
