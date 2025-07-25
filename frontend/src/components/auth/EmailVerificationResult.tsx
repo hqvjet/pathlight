@@ -7,11 +7,7 @@ import { api, storage } from '@/utils/api';
 import { AuthResponse } from '@/utils/types';
 import AuthLayout from '@/components/layout/AuthLayout';
 
-interface EmailVerificationResultProps {
-  onSetupRedirect?: () => void;
-}
-
-export default function EmailVerificationResult({ onSetupRedirect }: EmailVerificationResultProps) {
+export default function EmailVerificationResult() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -87,7 +83,7 @@ export default function EmailVerificationResult({ onSetupRedirect }: EmailVerifi
     };
 
     verifyEmail();
-  }, []);
+  }, [searchParams]);
 
   return (
     <>

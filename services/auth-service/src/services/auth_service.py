@@ -9,58 +9,43 @@ from typing import Optional
 from ..config import config
 from ..models import User, Admin, TokenBlacklist
 
-# JWT Configuration
-JWT_SECRET_KEY = config.JWT_SECRET_KEY
-JWT_ALGORITHM = config.JWT_ALGORITHM
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
-JWT_REFRESH_TOKEN_EXPIRE_DAYS = config.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-EMAIL_VERIFICATION_EXPIRE_MINUTES = config.EMAIL_VERIFICATION_EXPIRE_MINUTES
-
 def hash_password(password: str, *, rounds: int = 10) -> str:
-    """Hash a password using bcrypt"""
     salt = bcrypt.gensalt(rounds=rounds)
     return bcrypt.hashpw(password.encode(), salt).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a password against its hash"""
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 def create_access_token(data: dict) -> str:
-    """Create JWT access token"""
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = now + timedelta(minutes=60)
     to_encode.update({
         "exp": int(expire.timestamp()),
         "type": "access",
         "iat": int(now.timestamp())
     })
-    return jose_jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jose_jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
 
 def create_refresh_token(data: dict) -> str:
-    """Create JWT refresh token"""
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = now + timedelta(days=7)
     to_encode.update({
         "exp": int(expire.timestamp()),
         "type": "refresh", 
         "jti": str(uuid.uuid4()),
         "iat": int(now.timestamp())
     })
-    return jose_jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jose_jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
 
 def generate_token() -> str:
-    """Generate a secure random token"""
     return secrets.token_urlsafe(32)
 
 def create_user(db: Session, email: str, password: str, google_id: Optional[str] = None) -> User:
-    """Create a new user"""
     verification_token = generate_token()
-    expiration_time = datetime.now(timezone.utc) + timedelta(minutes=EMAIL_VERIFICATION_EXPIRE_MINUTES)
+    expiration_time = datetime.now(timezone.utc) + timedelta(minutes=10)
     hashed_password = hash_password(password)
-    
-    # Ensure google_id is None instead of empty string for regular users
     if google_id == "":
         google_id = None
     
@@ -78,23 +63,18 @@ def create_user(db: Session, email: str, password: str, google_id: Optional[str]
     return user
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    """Get user by email"""
     return db.query(User).filter(User.email == email).first()
 
 def get_user_by_verification_token(db: Session, token: str) -> Optional[User]:
-    """Get user by verification token"""
     return db.query(User).filter(User.email_verification_token == token).first()
 
 def get_user_by_reset_token(db: Session, token: str) -> Optional[User]:
-    """Get user by password reset token"""
     return db.query(User).filter(User.password_reset_token == token).first()
 
 def get_admin_by_username(db: Session, username: str) -> Optional[Admin]:
-    """Get admin by username"""
     return db.query(Admin).filter(Admin.username == username).first()
 
 def verify_email_token(db: Session, user: User) -> bool:
-    """Verify user's email and clear verification token"""
     setattr(user, 'is_email_verified', True)
     setattr(user, 'email_verification_token', None)
     setattr(user, 'email_verification_expires_at', None)
@@ -102,13 +82,17 @@ def verify_email_token(db: Session, user: User) -> bool:
     return True
 
 def blacklist_token(db: Session, jti: str) -> None:
-    """Add token to blacklist"""
-    from datetime import datetime, timezone, timedelta
-    expire_time = datetime.now(timezone.utc) + timedelta(hours=24)
-    blacklist_entry = TokenBlacklist(token=jti, expires_at=expire_time)
-    db.add(blacklist_entry)
-    db.commit()
+    import logging
+    logger = logging.getLogger(__name__)
+    expire_hours = getattr(config, "TOKEN_BLACKLIST_EXPIRE_HOURS", 24)
+    expire_time = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
+    try:
+        blacklist_entry = TokenBlacklist(token=jti, expires_at=expire_time)
+        db.add(blacklist_entry)
+        db.commit()
+        logger.info(f"Token {jti} blacklisted until {expire_time}")
+    except Exception as e:
+        logger.error(f"Failed to blacklist token {jti}: {str(e)}")
 
 def is_token_blacklisted(db: Session, jti: str) -> bool:
-    """Check if token is blacklisted"""
     return db.query(TokenBlacklist).filter(TokenBlacklist.token == jti).first() is not None

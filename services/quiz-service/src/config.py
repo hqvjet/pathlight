@@ -38,21 +38,22 @@ class QuizConfig:
     
     # Service
     SERVICE_NAME: str = "quiz-service"
-    SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", "8004"))
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    
+    SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
+    DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
+
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/pathlight")
-    
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
     # JWT Configuration
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "pathlight-super-secret-key-2025")
-    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
+    JWT_REFRESH_SECRET_KEY: str = os.getenv("JWT_REFRESH_SECRET_KEY", "")
+    JWT_ALGORITHM: str = "HS256"
+
     # CORS
-    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-    ALLOWED_METHODS: List[str] = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
-    ALLOWED_HEADERS: List[str] = os.getenv("ALLOWED_HEADERS", "*").split(",")
+    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    ALLOWED_HEADERS: List[str] = ["*"]
 
 
 # Create global config instance

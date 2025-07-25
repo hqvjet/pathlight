@@ -1,7 +1,3 @@
-"""
-Study Reminder Email System for PathLight Auth Service
-"""
-
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -15,22 +11,10 @@ import time
 from src.models import User
 from src.config import config
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
-# Email configuration
-SMTP_SERVER = config.SMTP_SERVER
-SMTP_PORT = config.SMTP_PORT
-SMTP_USERNAME = config.SMTP_USERNAME
-SMTP_PASSWORD = config.SMTP_PASSWORD
-FROM_EMAIL = config.FROM_EMAIL
-
-
 def create_study_reminder_email_html(user_name: str = "") -> str:
-    """Create HTML content for study reminder email"""
-    
     display_name = user_name if user_name else "bạn"
-    
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -182,162 +166,150 @@ def create_study_reminder_email_html(user_name: str = "") -> str:
 
 
 def send_study_reminder_email(to_email: str, user_name: str = "") -> bool:
-    """Send study reminder email to user"""
     try:
-        # Create email content
         subject = "🕐 Đến giờ học rồi! - PathLight"
         html_body = create_study_reminder_email_html(user_name)
-        
-        # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = FROM_EMAIL
+        msg['From'] = 'noreply@pathlight.com'
         msg['To'] = to_email
-        
-        # Add HTML part
         html_part = MIMEText(html_body, 'html', 'utf-8')
         msg.attach(html_part)
-        
-        # Send email
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
-            if SMTP_USERNAME and SMTP_PASSWORD:
-                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            if config.SMTP_USERNAME and config.SMTP_PASSWORD:
+                server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
             server.send_message(msg)
-            
-        logger.info(f"Study reminder email sent successfully to {to_email}")
         return True
-        
     except Exception as e:
-        logger.error(f"Failed to send study reminder email to {to_email}: {str(e)}")
         return False
 
 
 def get_users_to_remind(db: Session) -> List[User]:
-    """Get users who should receive reminder emails at current time"""
     try:
-        # Get current time in Vietnam timezone (UTC+7)
         vietnam_time = datetime.now(timezone(timedelta(hours=7)))
         current_time_str = vietnam_time.strftime("%H:%M")
         
-        # Find users who have set remind_time and should be reminded now
         users = db.query(User).filter(
             User.remind_time == current_time_str,
             User.is_email_verified == True,
             User.is_active == True,
             User.remind_time.isnot(None)
         ).all()
-        
-        logger.info(f"Found {len(users)} users to remind at {current_time_str} (Vietnam time)")
         return users
         
     except Exception as e:
         logger.error(f"Error getting users to remind: {str(e)}")
         return []
 
-
-# --- remind_time ---
 def send_reminders_to_users(db: Session):
+    import threading
     vietnam_time = datetime.now(timezone(timedelta(hours=7)))
     now = vietnam_time.strftime("%H:%M")
-    all_users = db.query(User).filter(User.remind_time.isnot(None)).all()
-    for u in all_users:
-        logger.info(f"[REMINDER DEBUG] User: email={getattr(u, 'email', None)}, remind_time={getattr(u, 'remind_time', None)}, is_active={getattr(u, 'is_active', None)}, is_email_verified={getattr(u, 'is_email_verified', None)}")
     users = db.query(User).filter(
         User.remind_time == now,
         User.is_active == True,
         User.is_email_verified == True
     ).all()
-    for user in users:
-        logger.info(f"[REMINDER DEBUG] Sẽ gửi cho: email={getattr(user, 'email', None)}, remind_time={getattr(user, 'remind_time', None)}")
-    count = 0
-    for user in users:
-        user_email = getattr(user, 'email', None)
-        given_name = getattr(user, 'given_name', None)
-        if not given_name:
-            given_name = user_email or "bạn"
-        remind_time = getattr(user, 'remind_time', now)
-        subject = "🕐 Đến giờ học rồi! - PathLight"
-        html_body = create_study_reminder_email_html(str(given_name))
-        send_email(
-            str(user_email),
-            subject,
-            html_body
-        )
-        count += 1
-    return f"Đã gửi nhắc nhở cho {count} user tại {now}"
+    batch_size = 20
+    threads = []
+    results = []
 
+    def send_batch(batch):
+        try:
+            if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+                return
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
+            server.starttls()
+            server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+            for user in batch:
+                user_email = getattr(user, 'email', None)
+                if not user_email or not isinstance(user_email, str):
+                    results.append((user_email, False))
+                    continue
+                given_name = getattr(user, 'given_name', None) or user_email or "bạn"
+                subject = "🕐 Đến giờ học rồi! - PathLight"
+                html_body = create_study_reminder_email_html(str(given_name))
+                try:
+                    msg = MIMEMultipart('alternative')
+                    msg['From'] = "PathLight <noreply@pathlight.com>"
+                    msg['To'] = user_email
+                    msg['Subject'] = subject
+                    msg['Message-ID'] = f"<{secrets.token_urlsafe(16)}@pathlight.com>"
+                    msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
+                    msg['X-Mailer'] = 'PathLight App'
+                    plain_body = html_body.replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
+                    plain_body = plain_body.replace('<strong>', '').replace('</strong>', '')
+                    plain_body = plain_body.replace('<a href="', '').replace('">', ' ').replace('</a>', '')
+                    text_part = MIMEText(plain_body, 'plain', 'utf-8')
+                    html_part = MIMEText(html_body, 'html', 'utf-8')
+                    msg.attach(text_part)
+                    msg.attach(html_part)
+                    refused = server.sendmail('noreply@pathlight.com', [user_email], msg.as_string())
+                    if refused:
+                        logger.error(f"Some recipients were refused.")
+                        results.append((user_email, False))
+                    else:
+                        results.append((user_email, True))
+                except Exception as e:
+                    logger.error(f"Error sending to user: {str(e)}")
+                    results.append((user_email, False))
+            server.quit()
+        except Exception as e:
+            logger.error(f"Batch SMTP error: {str(e)}")
+            for user in batch:
+                user_email = getattr(user, 'email', None)
+                results.append((user_email, False))
+
+    for i in range(0, len(users), batch_size):
+        batch = users[i:i+batch_size]
+        send_batch(batch)
+    success_count = sum(1 for _, ok in results if ok)
+    fail_count = sum(1 for _, ok in results if not ok)
+    return f"Đã gửi nhắc nhở cho {success_count} user thành công, thất bại: {fail_count}"
 
 def send_email(to_email: str, subject: str, body: str):
     """Send email using SMTP with improved reliability"""
     try:
-        logger.info(f"🔍 DEBUG: Attempting to send email to {to_email}")
-        logger.info(f"🔍 DEBUG: SMTP_USERNAME={SMTP_USERNAME}")
-        logger.info(f"🔍 DEBUG: SMTP_PASSWORD={'*' * len(SMTP_PASSWORD) if SMTP_PASSWORD else 'EMPTY'}")
-        logger.info(f"🔍 DEBUG: FROM_EMAIL={FROM_EMAIL}")
-        logger.info(f"🔍 DEBUG: SMTP_SERVER={SMTP_SERVER}:{SMTP_PORT}")
-        
-        if not SMTP_USERNAME or not SMTP_PASSWORD:
-            logger.warning("Email credentials not configured. Skipping email send.")
+        if not config.SMTP_USERNAME or not config.SMTP_PASSWORD:
+            logger.error("Email credentials not configured. Skipping email send.")
             return
-            
-        logger.info(f"📧 Creating email message...")
         msg = MIMEMultipart('alternative')
-        msg['From'] = f"PathLight <{FROM_EMAIL}>"
+        msg['From'] = "PathLight <noreply@pathlight.com>"
         msg['To'] = to_email
         msg['Subject'] = subject
         msg['Message-ID'] = f"<{secrets.token_urlsafe(16)}@pathlight.com>"
         msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
         msg['X-Mailer'] = 'PathLight App'
-        
-        # Add both HTML and plain text versions
         plain_body = body.replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
         plain_body = plain_body.replace('<strong>', '').replace('</strong>', '')
         plain_body = plain_body.replace('<a href="', '').replace('">', ' ').replace('</a>', '')
-        
         text_part = MIMEText(plain_body, 'plain', 'utf-8')
         html_part = MIMEText(body, 'html', 'utf-8')
-        
         msg.attach(text_part)
         msg.attach(html_part)
-        
-        # Try sending with retry mechanism
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                logger.info(f"📡 Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT} (attempt {attempt + 1}/{max_retries})...")
-                server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
-                
-                logger.info(f"🔒 Starting TLS...")
+                server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
                 server.starttls()
-                
-                logger.info(f"🔑 Logging in...")
-                server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                
-                logger.info(f"📤 Sending email...")
-                refused = server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
-                
+                server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+                refused = server.sendmail('noreply@pathlight.com', [to_email], msg.as_string())
                 if refused:
-                    logger.warning(f"⚠️ Some recipients were refused: {refused}")
+                    logger.error(f"Some recipients were refused: {refused}")
                 else:
-                    logger.info(f"✅ Email sent successfully to {to_email}")
-                
+                    logger.info(f"Email sent successfully to {to_email}")
                 server.quit()
-                return  # Success, exit retry loop
-                
+                return
             except smtplib.SMTPException as smtp_error:
-                logger.error(f"❌ SMTP error on attempt {attempt + 1}: {str(smtp_error)}")
-                if attempt == max_retries - 1:
-                    raise
-                time.sleep(2 ** attempt)  # Exponential backoff
-            except Exception as conn_error:
-                logger.error(f"❌ Connection error on attempt {attempt + 1}: {str(conn_error)}")
+                logger.error(f"SMTP error on attempt {attempt + 1}: {str(smtp_error)}")
                 if attempt == max_retries - 1:
                     raise
                 time.sleep(2 ** attempt)
-                
+            except Exception as conn_error:
+                logger.error(f"Connection error on attempt {attempt + 1}: {str(conn_error)}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
     except Exception as e:
-        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
-        import traceback
-        logger.error(f"📋 Full traceback: {traceback.format_exc()}")
-        print(f"Lỗi không gửi email đến {to_email}: {str(e)}")
+        logger.error(f"Failed to send email to {to_email}: {str(e)}")
