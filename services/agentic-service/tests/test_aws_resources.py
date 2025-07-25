@@ -7,8 +7,6 @@ import pytest
 import boto3
 import logging
 from botocore.exceptions import ClientError, NoCredentialsError
-from opensearchpy import OpenSearch
-from opensearchpy.exceptions import ConnectionError as OSConnectionError
 import os
 from dotenv import load_dotenv
 
@@ -145,97 +143,12 @@ class TestAWSResources:
             else:
                 pytest.fail(f"Error accessing ECR repository '{repository_name}': {e}")
     
-    @pytest.mark.opensearch
-    @pytest.mark.integration
-    def test_opensearch_connection(self):
-        """Test OpenSearch cluster connection and accessibility."""
-        host = os.getenv("OPENSEARCH_HOST", "")
-        port = int(os.getenv("OPENSEARCH_PORT", "443"))
-        username = os.getenv("OPENSEARCH_USERNAME", "")
-        password = os.getenv("OPENSEARCH_PASSWORD", "")
-        use_ssl = os.getenv("OPENSEARCH_USE_SSL", "true").lower() == "true"
-        verify_certs = os.getenv("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
-        index_name = os.getenv("OPENSEARCH_INDEX_NAME", "pathlight-vectors")
-        
-        # Check required environment variables
-        if not host:
-            pytest.fail("OPENSEARCH_HOST environment variable is not set")
-        if not username:
-            pytest.fail("OPENSEARCH_USERNAME environment variable is not set")
-        if not password:
-            pytest.fail("OPENSEARCH_PASSWORD environment variable is not set")
-        
-        try:
-            # Parse the host URL properly
-            opensearch_host = host
-            if opensearch_host.startswith('https://'):
-                opensearch_host = opensearch_host[8:]
-            elif opensearch_host.startswith('http://'):
-                opensearch_host = opensearch_host[7:]
-            
-            # Remove trailing slash if present
-            if opensearch_host.endswith('/'):
-                opensearch_host = opensearch_host[:-1]
-            
-            # Create OpenSearch client
-            client = OpenSearch(
-                hosts=[{
-                    'host': opensearch_host,
-                    'port': port
-                }],
-                http_auth=(username, password),
-                use_ssl=use_ssl,
-                verify_certs=verify_certs,
-                timeout=30,
-                max_retries=3
-            )
-            
-            # Test connection
-            info = client.info()
-            logger.info(f"✅ OpenSearch connection successful")
-            logger.info(f"Cluster Name: {info.get('cluster_name', 'Unknown')}")
-            logger.info(f"Version: {info.get('version', {}).get('number', 'Unknown')}")
-            
-            # Test if index exists
-            try:
-                if client.indices.exists(index=index_name):
-                    logger.info(f"✅ OpenSearch index '{index_name}' exists")
-                    
-                    # Get index info
-                    index_info = client.indices.get(index=index_name)
-                    mapping = index_info[index_name].get('mappings', {})
-                    logger.info(f"Index mapping properties: {list(mapping.get('properties', {}).keys())}")
-                else:
-                    logger.warning(f"⚠️  OpenSearch index '{index_name}' does not exist")
-                    
-            except Exception as e:
-                logger.warning(f"Could not check OpenSearch index: {e}")
-            
-            # Test if we can perform a basic search
-            try:
-                search_response = client.search(
-                    index=index_name,
-                    body={"query": {"match_all": {}}, "size": 0}
-                )
-                doc_count = search_response['hits']['total']['value']
-                logger.info(f"✅ OpenSearch search test successful. Document count: {doc_count}")
-            except Exception as e:
-                logger.warning(f"Could not perform OpenSearch search test: {e}")
-                
-        except OSConnectionError as e:
-            pytest.fail(f"Failed to connect to OpenSearch: {e}")
-        except Exception as e:
-            pytest.fail(f"OpenSearch connection test failed: {e}")
-    
     @pytest.mark.smoke
     def test_environment_variables(self):
         """Test that all required environment variables are set."""
         required_vars = [
             "OPENAI_API_KEY",
             "S3_BUCKET_NAME", 
-            "OPENSEARCH_HOST",
-            "OPENSEARCH_USERNAME",
-            "OPENSEARCH_PASSWORD",
             "REGION"
         ]
         
@@ -253,9 +166,6 @@ class TestAWSResources:
         config_info = {
             "REGION": os.getenv("REGION"),
             "S3_BUCKET_NAME": os.getenv("S3_BUCKET_NAME"),
-            "OPENSEARCH_HOST": os.getenv("OPENSEARCH_HOST"),
-            "OPENSEARCH_PORT": os.getenv("OPENSEARCH_PORT"),
-            "OPENSEARCH_INDEX_NAME": os.getenv("OPENSEARCH_INDEX_NAME"),
             "OPENAI_API_KEY_SET": bool(os.getenv("OPENAI_API_KEY")),
             "ACCESS_KEY_ID_SET": bool(os.getenv("ACCESS_KEY_ID")),
             "SECRET_ACCESS_KEY_SET": bool(os.getenv("SECRET_ACCESS_KEY"))
