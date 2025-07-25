@@ -21,9 +21,76 @@ from schemas.vectorize_schemas import ChunkData, DocumentData, MaterialData
 from config import config
 
 
-# Configure logger with more detailed formatting
+# Configure logger with structured formatting for Lambda
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# Ensure we have a proper formatter that handles multi-line logs
+def setup_logger():
+    """Setup logger with proper formatting for different environments."""
+    if not logger.handlers:
+        # Check if we're in Lambda environment
+        is_lambda = bool(os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+        
+        handler = logging.StreamHandler()
+        
+        if is_lambda:
+            # Lambda-friendly format (single line with escaped newlines)
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+        else:
+            # Local development format (multi-line friendly)
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+            )
+        
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.propagate = False
+
+
+# Setup logger on import
+setup_logger()
+
+
+def log_exception(logger_instance: logging.Logger, message: str, exception: Exception) -> None:
+    """Log exception with proper formatting for Lambda environment."""
+    is_lambda = bool(os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+    
+    if is_lambda:
+        # In Lambda, log as single line with escaped newlines
+        tb_str = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        # Replace newlines with \\n for single-line logging
+        tb_str_escaped = tb_str.replace('\n', '\\n').replace('\r', '\\r')
+        logger_instance.error(f"{message}: {str(exception)} | Traceback: {tb_str_escaped}")
+    else:
+        # In local development, use multi-line format
+        logger_instance.error(f"{message}: {str(exception)}")
+        logger_instance.error(f"Traceback:\n{traceback.format_exc()}")
+
+
+def log_structured(logger_instance: logging.Logger, level: str, message: str, **kwargs) -> None:
+    """Log with structured data that's Lambda-friendly."""
+    is_lambda = bool(os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+    
+    if is_lambda:
+        # In Lambda, create a single-line structured log
+        log_data = {
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            **kwargs
+        }
+        
+        # Convert to single line JSON-like string
+        log_str = ' | '.join([f"{k}={v}" for k, v in log_data.items()])
+        getattr(logger_instance, level.lower())(log_str)
+    else:
+        # In local, use regular formatting
+        extra_info = ' | '.join([f"{k}={v}" for k, v in kwargs.items()]) if kwargs else ''
+        full_message = f"{message} | {extra_info}" if extra_info else message
+        getattr(logger_instance, level.lower())(full_message)
 
 
 # Custom Exceptions
@@ -165,7 +232,7 @@ class FileController:
             return client
             
         except Exception as e:
-            logger.error(f"Failed to configure OpenAI client: {e}")
+            log_exception(logger, "Failed to configure OpenAI client", e)
             raise HTTPException(
                 status_code=500,
                 detail="OpenAI configuration error. Please check API key configuration."
@@ -198,7 +265,7 @@ class FileController:
         except S3ConfigurationError:
             raise
         except Exception as e:
-            logger.error(f"Unexpected error initializing S3 client: {e}")
+            log_exception(logger, "Unexpected error initializing S3 client", e)
             raise S3ConfigurationError(f"Failed to initialize S3 client: {str(e)}")
 
     def _test_s3_connection(self, s3_client: boto3.client) -> None:
@@ -207,7 +274,7 @@ class FileController:
             s3_client.list_buckets()
         except ClientError as e:
             error_code = e.response['Error']['Code']
-            logger.error(f"S3 connection test failed with error code {error_code}: {e}")
+            log_exception(logger, f"S3 connection test failed with error code {error_code}", e)
             if error_code in ['InvalidAccessKeyId', 'SignatureDoesNotMatch']:
                 raise HTTPException(
                     status_code=401,
@@ -215,7 +282,7 @@ class FileController:
                 )
             raise
         except BotoCoreError as e:
-            logger.error(f"S3 connection test failed with BotoCore error: {e}")
+            log_exception(logger, "S3 connection test failed with BotoCore error", e)
             raise HTTPException(
                 status_code=500,
                 detail="AWS service configuration error. Please check your AWS settings."
@@ -282,7 +349,7 @@ class FileController:
             return self._test_opensearch_connection(opensearch_client, connection_timeout)
                 
         except OpenSearchConfigurationError as e:
-            logger.error(f"OpenSearch configuration error: {e}")
+            log_exception(logger, "OpenSearch configuration error", e)
             if self.environment == 'lambda':
                 # In Lambda, this is a critical error
                 raise HTTPException(
@@ -294,7 +361,7 @@ class FileController:
                 logger.warning("Continuing without OpenSearch in development environment")
                 return None
         except Exception as e:
-            logger.error(f"Unexpected error initializing Opensearch client: {e}")
+            log_exception(logger, "Unexpected error initializing Opensearch client", e)
             if self.environment == 'lambda':
                 raise HTTPException(
                     status_code=500,
@@ -326,10 +393,10 @@ class FileController:
             return opensearch_client
             
         except OpenSearchException as e:
-            logger.error(f"OpenSearch connection test failed: {e}")
+            log_exception(logger, "OpenSearch connection test failed", e)
             raise OpenSearchConfigurationError(f"Failed to connect to OpenSearch: {str(e)}")
         except (ConnectionError, Timeout) as e:
-            logger.error(f"Network error connecting to OpenSearch (timeout: {timeout}s): {e}")
+            log_exception(logger, f"Network error connecting to OpenSearch (timeout: {timeout}s)", e)
             if self.environment == 'local':
                 raise OpenSearchConfigurationError(
                     f"OpenSearch unreachable in local environment. "
@@ -354,8 +421,9 @@ class FileController:
             logger.warning(f"OpenSearch client not available in {self.environment} environment, skipping indexing")
             if self.environment == 'lambda':
                 # In Lambda, this might be a critical issue
-                logger.error("OpenSearch client not initialized in Lambda environment")
-                raise OpenSearchConfigurationError("OpenSearch client not initialized in production environment")
+                error = OpenSearchConfigurationError("OpenSearch client not initialized in production environment")
+                log_exception(logger, "OpenSearch client not initialized in Lambda environment", error)
+                raise error
             return
         
         try:
@@ -369,7 +437,7 @@ class FileController:
             logger.info(f"Successfully indexed material data in OpenSearch: {response.get('_id', 'Unknown ID')}")
             
         except Exception as e:
-            logger.error(f"Failed to index data to OpenSearch: {e}")
+            log_exception(logger, "Failed to index data to OpenSearch", e)
             if self.environment == 'lambda':
                 # In production, indexing failure might be critical
                 raise HTTPException(
@@ -469,7 +537,7 @@ class FileController:
                 return None, None, {"filename": filename, "error": f"Download error: {error_message}"}
                 
         except Exception as e:
-            logger.error(f"Unexpected error processing file {filename}: {e}")
+            log_exception(logger, f"Unexpected error processing file {filename}", e)
             return None, None, {"filename": filename, "error": f"Unexpected error: {str(e)}"}
 
     def get_files_by_names(self, file_names: List[str]) -> Dict[str, Any]:
@@ -504,11 +572,14 @@ class FileController:
                 file_metadata[filename] = metadata
 
         # Log summary and handle errors
-        logger.info(f"File retrieval completed. Successful: {len(file_streams)}, Failed: {len(failed_files)}")
+        log_structured(logger, 'INFO', "File retrieval completed",
+                      successful_files=len(file_streams),
+                      failed_files=len(failed_files),
+                      total_files=len(file_names),
+                      environment=self.environment)
         
         if failed_files and not file_streams:
-            logger.error("All files failed to retrieve")
-            raise HTTPException(
+            error = HTTPException(
                 status_code=404 if any("not found" in f["error"] for f in failed_files) else 500,
                 detail={
                     "message": "All files failed to retrieve",
@@ -516,6 +587,8 @@ class FileController:
                     "total_failed": len(failed_files)
                 }
             )
+            log_exception(logger, "All files failed to retrieve", error)
+            raise error
 
         return {
             "file_stream": file_streams,
@@ -556,7 +629,7 @@ class FileController:
         try:
             await self._index_to_opensearch(material_data, id)
         except Exception as e:
-            logger.error(f"OpenSearch indexing failed: {e}")
+            log_exception(logger, "OpenSearch indexing failed", e)
             # Only add to warnings, don't fail the entire process unless in Lambda
             if self.environment == 'lambda':
                 # In Lambda/production, re-raise the exception
@@ -590,8 +663,13 @@ class FileController:
                 "embedding_errors": embedding_errors if embedding_errors else None
             }
         
-        logger.info(f"Vectorization process completed successfully for material {id}")
-        logger.info(f"Processing time: {processing_time:.2f}s")
+        # Log completion with structured format
+        log_structured(logger, 'INFO', "Vectorization completed", 
+                      material_id=id, 
+                      total_documents=len(documents),
+                      total_chunks=sum(len(doc.chunks) for doc in documents),
+                      processing_time_seconds=f"{processing_time:.3f}",
+                      environment=self.environment)
         
         return response
 
@@ -626,9 +704,9 @@ class FileController:
             filename = list(file_streams_dict.keys())[i]
             
             if isinstance(result, Exception):
-                error_msg = f"Failed to process file {filename}: {str(result)}"
-                logger.error(error_msg)
-                processing_errors.append({"filename": filename, "error": error_msg})
+                error_msg = f"Failed to process file {filename}"
+                log_exception(logger, error_msg, result)
+                processing_errors.append({"filename": filename, "error": f"{error_msg}: {str(result)}"})
             elif result:
                 content, error = result
                 if error:
@@ -680,7 +758,7 @@ class FileController:
             return structured_content, None
             
         except Exception as e:
-            logger.error(f"Error processing file {filename}: {e}")
+            log_exception(logger, f"Error processing file {filename}", e)
             return None, f"Failed to extract content from {filename}: {str(e)}"
 
     async def _create_document_embeddings(self, file_contents: Dict[str, str]) -> Tuple[List[DocumentData], List[Dict]]:
@@ -712,24 +790,26 @@ class FileController:
                     logger.info(f"Successfully created {len(chunks)} embeddings for {filename}")
                 else:
                     error_msg = f"No valid chunks with embeddings created for {filename}"
-                    logger.error(error_msg)
+                    fake_error = ValidationError(error_msg)
+                    log_exception(logger, error_msg, fake_error)
                     embedding_errors.append({"filename": filename, "error": error_msg})
                     
             except Exception as e:
-                error_msg = f"Failed to process chunks for {filename}: {str(e)}"
-                logger.error(error_msg)
-                embedding_errors.append({"filename": filename, "error": error_msg})
+                error_msg = f"Failed to process chunks for {filename}"
+                log_exception(logger, error_msg, e)
+                embedding_errors.append({"filename": filename, "error": f"{error_msg}: {str(e)}"})
                 continue
 
         if not documents:
-            logger.error("No documents with embeddings were created")
-            raise HTTPException(
+            error = HTTPException(
                 status_code=500,
                 detail={
                     "message": "Failed to create embeddings for any documents",
                     "embedding_errors": embedding_errors
                 }
             )
+            log_exception(logger, "No documents with embeddings were created", error)
+            raise error
         
         return documents, embedding_errors
 
@@ -754,9 +834,9 @@ class FileController:
             chunk_idx, _ = tasks[i]
             
             if isinstance(result, Exception):
-                error_msg = f"Failed to create embedding for chunk {chunk_idx} in {filename}: {str(result)}"
-                logger.error(error_msg)
-                embedding_errors.append({"filename": filename, "chunk_id": chunk_idx, "error": error_msg})
+                error_msg = f"Failed to create embedding for chunk {chunk_idx} in {filename}"
+                log_exception(logger, error_msg, result)
+                embedding_errors.append({"filename": filename, "chunk_id": chunk_idx, "error": f"{error_msg}: {str(result)}"})
             elif result:
                 chunks.append(result)
         
@@ -795,12 +875,12 @@ class FileController:
             
             # Handle API errors  
             elif "api" in str(e).lower() or error_type in ["APIError", "AuthenticationError", "PermissionDeniedError"]:
-                logger.error(f"OpenAI API error for chunk {chunk_idx} of {filename}: {e}")
+                log_exception(logger, f"OpenAI API error for chunk {chunk_idx} of {filename}", e)
                 raise
             
             # Handle other errors
             else:
-                logger.error(f"Unexpected error creating embedding for chunk {chunk_idx} of {filename}: {e}")
+                log_exception(logger, f"Unexpected error creating embedding for chunk {chunk_idx} of {filename}", e)
                 raise
 
     def _prepare_material_data(self, id: str, category: int, documents: List[DocumentData]) -> MaterialData:
@@ -818,7 +898,7 @@ class FileController:
             return material_data
             
         except Exception as e:
-            logger.error(f"Failed to create MaterialData object: {e}")
+            log_exception(logger, "Failed to create MaterialData object", e)
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to prepare data for indexing: {str(e)}"
