@@ -453,7 +453,7 @@ class FileController:
             body=material_data.model_dump(),
             id=id,
             refresh=True,
-            timeout='60s'
+            timeout=60
         )
 
     def _validate_file_retrieval_inputs(self, file_names: List[str]) -> None:
