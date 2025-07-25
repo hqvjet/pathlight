@@ -56,41 +56,20 @@ setup_logger()
 
 
 def log_exception(logger_instance: logging.Logger, message: str, exception: Exception) -> None:
-    """Log exception with proper formatting for Lambda environment."""
-    is_lambda = bool(os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
-    
-    if is_lambda:
-        # In Lambda, log as single line with escaped newlines
-        tb_str = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
-        # Replace newlines with \\n for single-line logging
-        tb_str_escaped = tb_str.replace('\n', '\\n').replace('\r', '\\r')
-        logger_instance.error(f"{message}: {str(exception)} | Traceback: {tb_str_escaped}")
-    else:
-        # In local development, use multi-line format
-        logger_instance.error(f"{message}: {str(exception)}")
-        logger_instance.error(f"Traceback:\n{traceback.format_exc()}")
+    """Simple single-line exception logging for all environments."""
+    # Always use single line format to avoid Lambda log splitting
+    logger_instance.error(f"{message}: {type(exception).__name__}: {str(exception)}")
 
 
 def log_structured(logger_instance: logging.Logger, level: str, message: str, **kwargs) -> None:
-    """Log with structured data that's Lambda-friendly."""
-    is_lambda = bool(os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+    """Simple structured logging for all environments."""
+    # Simple single-line structured log
+    log_parts = [message]
+    for key, value in kwargs.items():
+        log_parts.append(f"{key}={value}")
     
-    if is_lambda:
-        # In Lambda, create a single-line structured log
-        log_data = {
-            'message': message,
-            'timestamp': datetime.now().isoformat(),
-            **kwargs
-        }
-        
-        # Convert to single line JSON-like string
-        log_str = ' | '.join([f"{k}={v}" for k, v in log_data.items()])
-        getattr(logger_instance, level.lower())(log_str)
-    else:
-        # In local, use regular formatting
-        extra_info = ' | '.join([f"{k}={v}" for k, v in kwargs.items()]) if kwargs else ''
-        full_message = f"{message} | {extra_info}" if extra_info else message
-        getattr(logger_instance, level.lower())(full_message)
+    log_line = " | ".join(log_parts)
+    getattr(logger_instance, level.lower())(log_line)
 
 
 # Custom Exceptions
