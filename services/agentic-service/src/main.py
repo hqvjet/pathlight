@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from mangum import Mangum
 
 load_dotenv(override=True)  # Override existing .env variables
+
+# Import config from the clean config package
 from config import config
 
 # Configure logging
@@ -22,13 +24,13 @@ if config_errors:
         raise ValueError(f"Configuration errors: {config_errors}")
     
 
-from routers import file_router
+from routers.file_routes import router as file_router
 
 # Create FastAPI instance
 app = FastAPI(
-    title="Agentic Service",
-    description="Service for file processing, vectorization, and AI-powered document analysis",
-    version="1.0.0",
+    title="Agentic Service - Restructured",
+    description="🚀 Beautifully restructured service for file processing, vectorization, and AI-powered document analysis",
+    version="2.0.0",
     docs_url="/docs" if not config.IS_LAMBDA else None,  # Disable docs in Lambda
     redoc_url="/redoc"
 )
