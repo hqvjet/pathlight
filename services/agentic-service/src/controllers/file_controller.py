@@ -1,18 +1,7 @@
 """
 🎮 File Controller - Reimagined
 
-A clean, focused controller that orchestra        try:
-            return OpenSearchClient(
-                host=config.OPENSEARCH_HOST,
-                port=config.OPENSEARCH_PORT,
-                username=config.OPENSEARCH_USER,
-                password=config.OPENSEARCH_PASSWORD,
-                use_ssl=config.OPENSEARCH_USE_SSL,
-                verify_certs=config.OPENSEARCH_VERIFY_CERTS,
-                timeout=config.OPENSEARCH_TIMEOUT,
-                enabled=config.OPENSEARCH_ENABLED,
-                force_local=config.FORCE_OPENSEARCH_LOCAL
-            ) beautifully.
+A clean, focused controller that orchestrates file operations beautifully.
 No more 900+ line monsters - just elegant coordination.
 """
 
@@ -90,15 +79,15 @@ class FileController:
         """Create and configure OpenSearch client."""
         try:
             return OpenSearchClient(
-                host=app_config.config.OPENSEARCH_HOST,
-                port=app_config.config.OPENSEARCH_PORT,
-                username=app_config.config.OPENSEARCH_USER,
-                password=app_config.config.OPENSEARCH_PASSWORD,
-                use_ssl=app_config.config.OPENSEARCH_USE_SSL,
-                verify_certs=app_config.config.OPENSEARCH_VERIFY_CERTS,
-                timeout=app_config.config.OPENSEARCH_TIMEOUT,
-                enabled=app_config.config.OPENSEARCH_ENABLED,
-                force_local=app_config.config.FORCE_OPENSEARCH_LOCAL
+                host=config.OPENSEARCH_HOST,
+                port=config.OPENSEARCH_PORT,
+                username=config.OPENSEARCH_USER,
+                password=config.OPENSEARCH_PASSWORD,
+                use_ssl=config.OPENSEARCH_USE_SSL,
+                verify_certs=config.OPENSEARCH_VERIFY_CERTS,
+                timeout=config.OPENSEARCH_TIMEOUT,
+                enabled=config.OPENSEARCH_ENABLED,
+                force_local=config.FORCE_OPENSEARCH_LOCAL
             )
         except Exception as e:
             log_exception(logger, "Failed to initialize OpenSearch client", e)
