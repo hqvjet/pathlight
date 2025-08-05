@@ -1,12 +1,12 @@
 name: CICD For Agentic Service
 
 on: 
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'services/agentic-service/**'
+  # push:
+  #   branches:
+  #     - main
+  #     - develop
+  #   paths:
+  #     - 'services/agentic-service/**'
   pull_request:
     branches:
       - main
