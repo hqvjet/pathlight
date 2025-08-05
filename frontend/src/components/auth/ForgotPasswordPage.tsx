@@ -48,8 +48,14 @@ export default function ForgotPasswordPage() {
         }
       }
     } catch (error: unknown) {
-      console.error('Forgot password error:', error);
-      setError('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
+      let errorMsg = 'Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.';
+      if (typeof error === 'string') {
+        errorMsg = error;
+      } else if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      console.error('Forgot password error:', errorMsg);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

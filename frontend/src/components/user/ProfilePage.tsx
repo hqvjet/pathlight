@@ -3,10 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { api, storage, SERVICE_URLS } from '@/utils/api';
-import { getAvatarUrl } from '@/utils/avatar';
+import { api, storage } from '@/utils/api';
 import Avatar from '@/components/common/Avatar';
-import Image from 'next/image';
 import Layout from '@/components/common/Layout';
 
 interface UserProfile {
@@ -14,9 +12,9 @@ interface UserProfile {
   email: string;
   given_name?: string;
   family_name?: string;
-  name?: string; // Combined name
+  name?: string;
   birth_date?: string;
-  dob?: string; // Backend field for date of birth
+  dob?: string;
   sex?: string;
   bio?: string;
   avatar_id?: string;
@@ -33,8 +31,6 @@ interface UserProfile {
   created_at?: string;
 }
 
-const menuItems = [];
-
 export default function ProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -43,7 +39,7 @@ export default function ProfilePage() {
   const [editMode, setEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
-  const [avatarKey, setAvatarKey] = useState(0); // Force re-render avatar after upload
+  const [avatarKey, setAvatarKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     given_name: '',
@@ -55,112 +51,75 @@ export default function ProfilePage() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-      console.log('Loading user profile...'); // Debug log
-      
-      // Try getInfo first, then fall back to getDashboard 
       let response = await api.user.getInfo();
-      console.log('getInfo response:', response); // Debug log
-      
       if (response.status === 401) {
-        console.log('getInfo 401, redirecting to signin'); // Debug log
         storage.removeToken();
         router.push('/auth/signin');
         return;
       }
-      
       if (response.status !== 200) {
-        console.log('getInfo failed, trying getDashboard'); // Debug log
-        // Fallback to dashboard endpoint if getInfo fails
         response = await api.user.getDashboard();
-        console.log('getDashboard response:', response); // Debug log
-        
         if (response.status === 401) {
-          console.log('getDashboard 401, redirecting to signin'); // Debug log
           storage.removeToken();
           router.push('/auth/signin');
           return;
         }
       }
-      
       if (response.status === 200) {
-        // Handle both possible response formats
-        const responseData = response.data as any;
-        console.log('Response data:', responseData); // Debug log
-        
-        const userData = responseData?.info || responseData?.Info || responseData;
-        console.log('User data extracted:', userData); // Debug log
-        console.log('userData.dob:', userData.dob); // Debug log
-        console.log('userData.birth_date:', userData.birth_date); // Debug log
-        
-        if (!userData || (!userData.email && !userData.id)) {
+        const responseData: unknown = response.data;
+        let userData: unknown;
+        if (responseData && typeof responseData === 'object') {
+          if ('info' in responseData) {
+            userData = (responseData as { info: unknown }).info;
+          } else if ('Info' in responseData) {
+            userData = (responseData as { Info: unknown }).Info;
+          } else {
+            userData = responseData;
+          }
+        } else {
+          userData = responseData;
+        }
+        const userObj = userData as UserProfile;
+        if (!userObj || (!userObj.email && !userObj.id)) {
           showToast.authError('Dữ liệu người dùng không hợp lệ');
           return;
         }
-        
-        setUser(userData as UserProfile);
-        
-        // Combine name from given_name and family_name like Dashboard
-        const fullName = [userData.family_name, userData.given_name]
-          .filter(Boolean)
-          .join(' ') || userData.name || userData.email || 'User';
-        
+        setUser(userObj);
         setFormData({
-          given_name: userData.given_name || '',
-          family_name: userData.family_name || '',
+          given_name: userObj.given_name || '',
+          family_name: userObj.family_name || '',
           birth_date: (() => {
-            const dobValue = userData.dob || userData.birth_date || '';
-            console.log('Raw dob value from backend:', dobValue); // Debug log
+            const dobValue = userObj.dob || userObj.birth_date || '';
             if (!dobValue) return '';
             try {
-              // Handle different date formats from backend
               let dateStr = dobValue;
-              
-              // If it's a full datetime string, extract just the date part
               if (dateStr.includes('T') || dateStr.includes(' ')) {
                 dateStr = dateStr.split('T')[0].split(' ')[0];
               }
-              
-              console.log('Extracted date string:', dateStr); // Debug log
-              
-              // Check if it's in dd/mm/yyyy format from backend - keep it as is
               if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
-                console.log('Keeping dd/mm/yyyy format:', dateStr); // Debug log
                 return dateStr;
               }
-              
-              // If it's YYYY-MM-DD format, convert to dd/mm/yyyy
               if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                console.log('Converting yyyy-mm-dd to dd/mm/yyyy'); // Debug log
                 const [year, month, day] = dateStr.split('-').map(Number);
-                const result = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-                console.log('Converted yyyy-mm-dd result:', result); // Debug log
-                return result;
+                return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
               }
-              
-              // If it's still not in the right format, try to parse and convert
               const date = new Date(dobValue);
               if (isNaN(date.getTime())) return '';
-              
-              // Convert to dd/mm/yyyy format using UTC methods to avoid timezone issues
               const day = String(date.getUTCDate()).padStart(2, '0');
               const month = String(date.getUTCMonth() + 1).padStart(2, '0');
               const year = date.getUTCFullYear();
-              const result = `${day}/${month}/${year}`;
-              console.log('Converted date result:', result); // Debug log
-              return result;
-            } catch (error) {
-              console.log('Error parsing birth date:', error);
+              return `${day}/${month}/${year}`;
+            } catch {
               return '';
             }
           })(),
-          sex: userData.sex || '',
-          bio: userData.bio || '',
+          sex: userObj.sex || '',
+          bio: userObj.bio || '',
         });
       } else {
         showToast.authError('Không thể tải thông tin hồ sơ');
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
+    } catch {
       showToast.authError('Không thể tải thông tin hồ sơ');
     } finally {
       setLoading(false);
@@ -184,17 +143,13 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      // Prepare data for backend - map birth_date to dob and format properly
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         family_name: formData.family_name || undefined,
         given_name: formData.given_name || undefined,
         dob: formData.birth_date ? (() => {
-          // Convert dd/mm/yyyy to ISO string for backend without timezone issues
           if (formData.birth_date.includes('/')) {
             const [day, month, year] = formData.birth_date.split('/').map(Number);
             if (day && month && year) {
-              // Tạo ISO string trực tiếp không qua Date object để tránh lỗi timezone
-              // Format: YYYY-MM-DDTHH:mm:ss.sssZ với giờ UTC+7 (12:00 để tránh lùi ngày)
               const paddedMonth = String(month).padStart(2, '0');
               const paddedDay = String(day).padStart(2, '0');
               return `${year}-${paddedMonth}-${paddedDay}T12:00:00.000Z`;
@@ -205,29 +160,25 @@ export default function ProfilePage() {
         sex: formData.sex || undefined,
         bio: formData.bio || undefined,
       };
-
-      // Remove undefined fields
       Object.keys(updateData).forEach(key => {
-        if (updateData[key as keyof typeof updateData] === undefined) {
-          delete updateData[key as keyof typeof updateData];
+        if (updateData[key] === undefined) {
+          delete updateData[key];
         }
       });
-
-      console.log('Updating profile with data:', updateData); // Debug log
       const response = await api.user.updateProfile(updateData);
-      
-      console.log('Update profile response:', response); // Debug log
-      
       if (response.status === 200) {
         showToast.authSuccess('Cập nhật hồ sơ thành công!');
         setEditMode(false);
         await loadUserProfile();
       } else {
-        const errorMsg = (response.data as any)?.message || response.error || 'Cập nhật hồ sơ thất bại';
+        const data: unknown = response.data;
+        let errorMsg = response.error || 'Cập nhật hồ sơ thất bại';
+        if (typeof data === 'object' && data !== null && 'message' in data) {
+          errorMsg = (data as { message?: string }).message || errorMsg;
+        }
         showToast.authError(errorMsg);
       }
-    } catch (error) {
-      console.error('Error updating profile:', error);
+    } catch {
       showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
     } finally {
       setSaving(false);
@@ -238,78 +189,60 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (3MB)
     if (file.size > 3 * 1024 * 1024) {
       showToast.authError('Ảnh không được vượt quá 3MB');
       return;
     }
-
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       showToast.authError('Vui lòng chọn file ảnh');
       return;
     }
-
     setUploading(true);
     setAvatarLoading(true);
     try {
-      console.log('🖼️ Uploading avatar file:', file.name, file.size, file.type); // Debug log
       const response = await api.user.updateAvatar(file);
-      
-      console.log('📤 Upload avatar response:', response); // Debug log
-      
       if (response.status === 200) {
         showToast.authSuccess('Cập nhật ảnh đại diện thành công!');
-        
-        // Update user state immediately with new avatar data from response
-        const responseData = response.data as any;
-        if (responseData?.avatar_url || responseData?.avatar_id) {
+        const responseData: unknown = response.data;
+        const avatarData = responseData as { avatar_url?: string; avatar_id?: string };
+        if (avatarData?.avatar_url || avatarData?.avatar_id) {
           setUser(prevUser => {
             if (!prevUser) return prevUser;
             return {
               ...prevUser,
-              avatar_url: responseData.avatar_url || prevUser.avatar_url,
-              avatar_id: responseData.avatar_id || prevUser.avatar_id
+              avatar_url: avatarData.avatar_url || prevUser.avatar_url,
+              avatar_id: avatarData.avatar_id || prevUser.avatar_id
             };
           });
-          // Force avatar re-render
           setAvatarKey(prev => prev + 1);
         }
-        
-        // Also reload full profile after a short delay to ensure sync
         setTimeout(async () => {
           await loadUserProfile();
-          setAvatarKey(prev => prev + 1); // Force re-render again after reload
+          setAvatarKey(prev => prev + 1);
         }, 500);
       } else {
-        const errorMsg = (response.data as any)?.message || response.error || 'Tải ảnh lên thất bại';
-        console.error('❌ Avatar upload failed:', errorMsg); // Debug log
+        const data: unknown = response.data;
+        let errorMsg = response.error || 'Tải ảnh lên thất bại';
+        if (typeof data === 'object' && data !== null && 'message' in data) {
+          errorMsg = (data as { message?: string }).message || errorMsg;
+        }
         showToast.authError(errorMsg);
       }
-    } catch (error) {
-      console.error('💥 Error uploading avatar:', error);
+    } catch {
       showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
     } finally {
       setUploading(false);
       setAvatarLoading(false);
-      // Clear the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-  const handleLogout = () => {
-    storage.removeToken();
-    router.push('/auth/signin');
-  };
-
   const getProgressPercentage = () => {
     if (!user?.current_exp || !user?.require_exp) return 0;
     return Math.min(100, (user.current_exp / user.require_exp) * 100);
   };
-
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
 
   if (loading) {
     return (
@@ -319,15 +252,12 @@ export default function ProfilePage() {
     );
   }
 
-  // Using Avatar component for consistent avatar handling with error fallback
-
   return (
     <Layout 
       title="Hồ Sơ Của Tôi" 
       user={{
         avatar_url: user?.avatar_url || '',
         name: (() => {
-          // Hiển thị tên thật, nếu không có thì dùng phần trước @ của email
           if (user?.family_name && user?.given_name) {
             return `${user.family_name} ${user.given_name}`;
           } else if (user?.family_name) {
@@ -632,16 +562,13 @@ export default function ProfilePage() {
                       <span className="text-sm font-medium">
                         {user?.created_at ? (() => {
                           try {
-                            // Handle timezone and format properly
                             const date = new Date(user.created_at);
                             if (isNaN(date.getTime())) return 'N/A';
-                            
-                            // Use UTC methods to avoid timezone issues
                             const day = String(date.getUTCDate()).padStart(2, '0');
                             const month = String(date.getUTCMonth() + 1).padStart(2, '0');
                             const year = date.getUTCFullYear();
                             return `${day}/${month}/${year}`;
-                          } catch (error) {
+                          } catch {
                             return 'N/A';
                           }
                         })() : 'N/A'}

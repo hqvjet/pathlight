@@ -19,7 +19,7 @@ interface DashboardProps {
 interface UserProfile {
   id?: string;
   email: string;
-  name: string;  // Required now
+  name: string;
   given_name?: string;
   family_name?: string;
   avatar_url?: string;
@@ -50,7 +50,7 @@ interface LeaderboardUser {
   level: number;
   experience: number;
   avatar_url?: string;
-  id?: string; // Support user ID for S3 avatar lookup
+  id?: string;
   initials: string;
 }
 
@@ -74,55 +74,38 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [activityData, setActivityData] = useState<Record<string, number>>({});
   const router = useRouter();
 
-  // Cache key for localStorage
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
-  const CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes cache
+  const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
-  // Add a failsafe timeout to prevent infinite loading
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (loading) {
-        console.warn('⚠️ Dashboard loading timeout reached, forcing reload...');
         setLoading(false);
         window.location.reload();
       }
-    }, 20000); // 20 second absolute timeout
-
+    }, 20000);
     return () => clearTimeout(timeoutId);
   }, [loading]);
 
-  // Generate activity data for a specific year (using real data, not random)
-  // Optimized generateYearActivityData with memoization
   const generateYearActivityData = useMemo(() => {
     return (year: number) => {
       const activities = [];
-      const startDate = new Date(year, 0, 1); // January 1st of the year
-      const endDate = new Date(year, 11, 31); // December 31st of the year
-      
-      // Find the first Sunday of the year (or before)
+      const startDate = new Date(year, 0, 1);
+      const endDate = new Date(year, 11, 31);
       const firstDay = startDate.getDay();
       const firstSunday = new Date(startDate);
       firstSunday.setDate(startDate.getDate() - firstDay);
-      
-      // Find the last Saturday after year end (or at year end)
       const lastDay = endDate.getDay();
       const lastSaturday = new Date(endDate);
       lastSaturday.setDate(endDate.getDate() + (6 - lastDay));
-      
-      // Calculate total days to generate - ensure we have exactly 53 weeks (371 days)
       const targetDays = 53 * 7;
-      
       for (let i = 0; i < targetDays; i++) {
         const date = new Date(firstSunday);
         date.setDate(firstSunday.getDate() + i);
-        
-        const dateKey = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        const dateKey = date.toISOString().split('T')[0];
         const isCurrentYear = date.getFullYear() === year;
-        
-        // Get activity level from stored data, default to 0
         const activityLevel = activityData[dateKey] || 0;
-        const contributionCount = activityLevel * 3; // Simple calculation
-        
+        const contributionCount = activityLevel * 3;
         activities.push({
           date,
           level: activityLevel,
@@ -131,14 +114,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           dateKey
         });
       }
-      
       return activities;
     };
-  }, [activityData]); // Only recalculate when activityData changes
+  }, [activityData]);
 
-  // Function to handle clicking on activity squares (optimized with useCallback)
   const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
-    // Cycle through levels 0 -> 1 -> 2 -> 3 -> 4 -> 0
     const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
     
     const newActivityData = {
@@ -148,7 +128,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     
     setActivityData(newActivityData);
     
-    // Save to localStorage asynchronously for better performance
     if (typeof window !== 'undefined') {
       if (window.requestIdleCallback) {
         window.requestIdleCallback(() => {
@@ -161,37 +140,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
     }
     
-    // Optional: Save to backend
-    // api.user.activity.save({ date: dateKey, level: newLevel });
   }, [activityData]);
 
-  // Clear activity data (with cache clearing)
   const clearActivityData = () => {
     setActivityData({});
     if (typeof window !== 'undefined') {
       localStorage.removeItem('pathlight_activity_data');
     }
-    // Optional: Clear from backend
-    // api.user.activity.clear();
   };
 
-  // Force refresh functionality (can be used later)
-  // const refreshDashboard = useCallback(async () => {
-  //   try {
-  //     localStorage.removeItem(DASHBOARD_CACHE_KEY);
-  //     setLoading(true);
-  //     window.location.reload();
-  //   } catch (error) {
-  //     console.error('Failed to refresh dashboard:', error);
-  //   }
-  // }, []);
-
-  // Load activity data from backend (optional)
   const loadActivityFromBackend = async () => {
     try {
       const response = await api.user.activity.get(selectedYear);
       if (response.status === 200) {
-        const backendData = (response.data as any)?.activityData || {};
+        const backendData = (response.data as { activityData?: Record<string, number> })?.activityData || {};
         setActivityData(backendData);
         localStorage.setItem('pathlight_activity_data', JSON.stringify(backendData));
         alert('✅ Activity data loaded from server!');
@@ -202,7 +164,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  // Save activity data to backend (optional)
   const saveActivityToBackend = async () => {
     try {
       const response = await api.user.activity.saveBatch(activityData);
@@ -215,9 +176,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  // Load activity data from localStorage on component mount (optimized)
   useEffect(() => {
-    // Use requestIdleCallback for non-critical localStorage loading
     const loadActivityData = () => {
       try {
         const saved = localStorage.getItem('pathlight_activity_data');
@@ -229,7 +188,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
     };
 
-    // Ensure we're in browser environment
     if (typeof window !== 'undefined') {
       if (window.requestIdleCallback) {
         window.requestIdleCallback(loadActivityData);
@@ -239,7 +197,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   }, []);
 
-  // Save activity data to localStorage whenever it changes (debounced)
   useEffect(() => {
     if (typeof window !== 'undefined' && Object.keys(activityData).length > 0) {
       const timeoutId = setTimeout(() => {
@@ -248,7 +205,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         } catch (error) {
           console.error('Failed to save activity data:', error);
         }
-      }, 500); // Debounce saves
+      }, 500);
 
       return () => clearTimeout(timeoutId);
     }
@@ -257,77 +214,54 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        console.log('🚀 Dashboard fetchProfile started');
         const token = storage.getToken();
         if (!token) {
-          console.log('❌ No token found, redirecting to login');
           setLoading(false);
           onLogout();
           return;
         }
-
-        console.log('🔑 Token found, checking cache...');
-        // Try to load from cache first
         try {
           const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
           if (cached) {
             const { data, timestamp } = JSON.parse(cached);
             if (Date.now() - timestamp < CACHE_EXPIRY_MS) {
-              console.log('📱 Loading dashboard from cache');
               setUser(data.user);
               setDashboardData(data.dashboardData);
               setLoading(false);
-              return; // Use cached data
+              return;
             } else {
-              console.log('⏰ Cache expired, removing...');
               localStorage.removeItem(DASHBOARD_CACHE_KEY);
             }
           }
         } catch (cacheError) {
-          console.warn('Cache read error:', cacheError);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Cache read error:', cacheError);
+          }
         }
-        
-        // Add timeout to the API call for better UX
-        console.log('🌐 Making API call...');
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Request timeout')), 8000); // 8 seconds timeout
+          setTimeout(() => reject(new Error('Request timeout')), 8000);
         });
-        
-        console.log('🌐 Fetching fresh dashboard data...');
         const response = await Promise.race([
           api.user.getDashboard(),
           timeoutPromise
-        ]) as any;
-        
-        console.log('📡 API response received:', response.status);
-        
+        ]) as { status: number; data?: unknown; message?: string; error?: string };
         if (response.status === 401) {
-          console.log('🔐 Unauthorized, logging out');
           setLoading(false);
           onLogout();
           return;
         }
-        
         if (response.status !== 200) {
           throw new Error(`API returned status ${response.status}`);
         }
-        
-        console.log('✅ Processing dashboard data...');
         const data = response.data as DashboardData | { info?: UserProfile } | UserProfile;
         const userInfo = (data && typeof data === 'object' && 'info' in data) ? data.info : data as UserProfile;
-        
-        // Store the full dashboard data
         const dashboardInfo: DashboardData = {
           info: userInfo as UserProfile & { user_top_rank?: LeaderboardUser[] }
         };
         setDashboardData(dashboardInfo);
-      
-        
-        // Combine name from given_name and family_name (optimized)
         const fullName = [userInfo.family_name, userInfo.given_name]
           .filter(Boolean)
           .join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
-        
         const profileData: UserProfile = {
           id: userInfo.id || '',
           email: userInfo.email || '',
@@ -347,12 +281,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           rank: userInfo.rank || 1,
           user_num: userInfo.user_num || 1,
         };
-        
-        console.log('👤 Setting user data...');
         setUser(profileData);
         setLoading(false);
-
-        // Cache the result for future use
         try {
           const cacheData = {
             user: profileData,
@@ -360,72 +290,45 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             timestamp: Date.now()
           };
           localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(cacheData));
-          console.log('💾 Dashboard data cached successfully');
         } catch (cacheError) {
-          console.warn('Cache write error:', cacheError);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Cache write error:', cacheError);
+          }
         }
-        
-        console.log('🎉 Dashboard loading completed successfully');
-        
-        // Navigate to study-time-setup in background if needed
         if (!userInfo.remind_time) {
           setTimeout(() => router.replace('/user/study-time-setup'), 100);
         }
       } catch (error) {
-        console.error('💥 Dashboard fetch error:', error);
         setLoading(false);
-        
-        // Show error message instead of immediate logout for better UX
         if (error instanceof Error && error.message === 'Request timeout') {
-          console.warn('⏱️ Dashboard loading timed out, showing retry option...');
-          // Show timeout error but don't auto-retry to prevent infinite loops
           alert('⏱️ Trang web tải chậm. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
         } else {
-          console.error('🚨 Unexpected error, logging out:', error);
           onLogout();
         }
       }
     };
     fetchProfile();
-    // eslint-disable-next-line
-  }, []);
+  }, [CACHE_EXPIRY_MS, onLogout, router]);
 
-  // Remove duplicate localStorage loading (already handled above)
-  // This was causing double loading and potential conflicts
-
-  // Logout handler (currently unused but may be needed later)
-  // const handleLogout = () => {
-  //   try {
-  //     localStorage.removeItem(DASHBOARD_CACHE_KEY);
-  //     localStorage.removeItem('pathlight_activity_data');
-  //   } catch (error) {
-  //     console.warn('Failed to clear cache on logout:', error);
-  //   }
-  //   storage.removeToken();
-  //   onLogout();
-  // };
-
-  // Helper function to handle test API calls (optimized)
-  const handleTestAPI = useCallback(async (apiCall: () => Promise<any>) => {
+  const handleTestAPI = useCallback(async (apiCall: () => Promise<unknown>) => {
     try {
       console.log('🧪 Making test API call...');
       const response = await apiCall();
       
       console.log('📤 API Response:', response);
       
-      if (response.status === 200) {
-        alert(`✅ ${response.message || 'Success!'}`);
-        // Force refresh by clearing cache and reloading
+      const res = response as { status: number; message?: string; error?: string };
+      if (res.status === 200) {
+        alert(`✅ ${res.message || 'Success!'}`);
         localStorage.removeItem(DASHBOARD_CACHE_KEY);
         setTimeout(() => window.location.reload(), 500);
       } else {
-        console.error('❌ API Error:', response);
-        alert(`❌ Error ${response.status}: ${response.message || response.error || 'Unknown error occurred'}`);
+        console.error('❌ API Error:', res);
+        alert(`❌ Error ${res.status}: ${res.message || res.error || 'Unknown error occurred'}`);
       }
     } catch (error) {
       console.error('🚨 Test API error:', error);
       
-      // More detailed error information
       let errorMessage = '❌ Network error occurred';
       if (error instanceof Error) {
         errorMessage = `❌ ${error.message}`;
@@ -435,15 +338,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   }, []);
 
-  // Helper function to view level system information
   const handleViewLevelInfo = async () => {
     try {
       const response = await api.user.test.getLevelSystemInfo();
       
       if (response.status === 200) {
-        const data = response.data as any; // Type assertion for level system data
-        const levels = data.level_system.levels.slice(0, 10); // Show first 10 levels
-        const info = levels.map((l: { level: number; required_exp: number; exp_to_next: number }) => 
+        const data = response.data as { level_system: { levels: { level: number; required_exp: number; exp_to_next: number }[]; max_predefined_level: number } };
+        const levels = data.level_system.levels.slice(0, 10);
+        const info = levels.map((l) => 
           `Level ${l.level}: ${l.required_exp} exp (${l.exp_to_next} to next)`
         ).join('\n');
         
@@ -457,16 +359,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  // Memoize layout user props to prevent unnecessary re-renders
   const layoutUser = useMemo(() => {
     if (!user) return { avatar_url: '', name: '', email: '' };
     return {
       avatar_url: user.avatar_url || '',
       name: user.name,
       email: user.email,
-      avatarKey: Date.now() // Add timestamp to force avatar refresh
+      avatarKey: Date.now()
     };
-  }, [user?.avatar_url, user?.name, user?.email]);
+  }, [user]);
 
   if (loading) {
     return (
@@ -476,12 +377,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           <div className="text-lg text-gray-600 mb-2">Đang tải thông tin...</div>
           <div className="text-sm text-gray-400">Vui lòng đợi trong giây lát</div>
           
-          {/* Progress bar */}
           <div className="mt-4 w-64 bg-gray-200 rounded-full h-2 mx-auto">
             <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
           </div>
-          
-          {/* Quick actions while loading */}
+
           <div className="mt-6 space-y-2">
             <button 
               onClick={() => {
@@ -507,7 +406,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     );
   }
 
-  // Early return if no user data to prevent rendering issues
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -1136,7 +1034,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </div>
 
           {/* Development Testing Panel */}
-          {process.env.NODE_ENV === 'development' && (
+          {'development' === 'development' && (
             <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">🧪 Level System Testing (Dev Only)</h3>
               
