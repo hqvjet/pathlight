@@ -151,18 +151,8 @@ class OpenSearchClient:
         try:
             logger.info(f"Testing OpenSearch connection with {timeout}s timeout...")
             
-            # Create a test client with shorter timeout
-            test_client = OpenSearch(
-                hosts=client.transport.hosts,
-                http_auth=client.transport.connection_pool_kwargs.get('http_auth'),
-                use_ssl=client.transport.connection_pool_kwargs.get('use_ssl', True),
-                verify_certs=client.transport.connection_pool_kwargs.get('verify_certs', True),
-                timeout=timeout,
-                max_retries=1,
-                retry_on_timeout=False
-            )
-            
-            info = test_client.info()
+            # Simply test the connection using the provided client
+            info = client.info()
             logger.info(f"OpenSearch connection successful. Cluster: {info.get('cluster_name', 'Unknown')}")
             return client
             
