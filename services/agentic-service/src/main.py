@@ -68,7 +68,7 @@ async def debug_config():
     return {
         "IS_LAMBDA": config.IS_LAMBDA,
         "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
-        "MAX_FILE_SIZE_MB": config.MAX_FILE_SIZE_MB,
+        "MAX_FILE_SIZE_BYTES": config.MAX_FILE_SIZE_BYTES,
         "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
         "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
         "LOG_LEVEL": config.LOG_LEVEL,
@@ -79,7 +79,7 @@ async def debug_config():
         "OPENSEARCH_USE_SSL": config.OPENSEARCH_USE_SSL,
         "OPENSEARCH_VERIFY_CERTS": config.OPENSEARCH_VERIFY_CERTS,
         "S3_BUCKET_NAME": config.S3_BUCKET_NAME,
-        "AWS_REGION": config.REGION
+        "REGION": config.REGION
     }
 
 @app.get("/debug/opensearch")
