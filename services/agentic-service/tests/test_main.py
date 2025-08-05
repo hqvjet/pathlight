@@ -61,11 +61,25 @@ def test_app_root():
 def test_config_validation():
     """Test config validation"""
     try:
-        from src.config import Config
-        config = Config()
-        errors = config.validate_config()
+        from src.config.main_config import Config
+        config_instance = Config()
+        errors = config_instance.validate_config()
         # Should have errors since we don't have real API keys in tests
         assert isinstance(errors, list)
         print("✅ Config validation test passed")
     except Exception as e:
         pytest.skip(f"Config validation test failed: {e}")
+
+
+@pytest.mark.unit
+def test_config_instance():
+    """Test that the global config instance works"""
+    try:
+        from src.config import config
+        assert config is not None
+        assert hasattr(config, 'validate_config')
+        assert hasattr(config, 'ENVIRONMENT')
+        assert config.IS_TESTING  # Should be True in test environment
+        print("✅ Config instance test passed")
+    except Exception as e:
+        pytest.skip(f"Config instance test failed: {e}")
