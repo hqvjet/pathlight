@@ -62,19 +62,19 @@ app.add_middleware(
     allow_headers=config.ALLOWED_HEADERS,
 )
 
-app.include_router(auth_router, prefix="/api")
+app.include_router(auth_router, prefix="/auth")
 
 @app.get("/")
 async def root():
     return {"message": "Auth Service is running"}
 
-@app.get("/api")
-async def api_root():
-    return {"message": "Auth Service API is running"}
-
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "auth-service"}
+
+@app.get("/auth/test")
+async def test_auth_route():
+    return {"message": "Auth route is working", "path": "/auth/test"}
 
 @app.get("/debug/config")
 async def debug_config():
@@ -87,52 +87,40 @@ async def debug_config():
         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
     }
 
-@app.get("/debug/routes")
-async def debug_routes():
-    """Debug endpoint to check available routes"""
-    routes = []
-    for route in app.routes:
-        if hasattr(route, 'path') and hasattr(route, 'methods'):
-            routes.append({
-                "path": route.path,
-                "methods": list(route.methods) if route.methods else []
-            })
-    return {"routes": routes}
-
 mangum_handler = Mangum(app, lifespan="off")
 
-# 3. Đây là phần quan trọng: Tạo handler tùy chỉnh của riêng bạn
-# Hàm này sẽ được Lambda gọi trực tiếp
 def handler(event, context):
     """
-    Hàm này đóng vai trò trung gian:
-    - Nhận event và context từ Lambda.
-    - In ra toàn bộ event để bạn debug.
-    - Chuyển event và context cho Mangum xử lý như bình thường.
+    Custom Lambda handler for debugging and processing API Gateway events
     """
+    # Log the complete event for debugging
+    logger.info("Lambda Event:")
+    logger.info(json.dumps(event))
     
-    # Enhanced logging for debugging
-    logger.info("=== LAMBDA EVENT DEBUG ===")
-    logger.info(f"Request method: {event.get('httpMethod', 'UNKNOWN')}")
-    logger.info(f"Request path: {event.get('path', 'UNKNOWN')}")
-    logger.info(f"Request resource: {event.get('resource', 'UNKNOWN')}")
-    logger.info(f"Path parameters: {event.get('pathParameters', {})}")
-    logger.info(f"Query parameters: {event.get('queryStringParameters', {})}")
+    # Log important path information
+    if "pathParameters" in event:
+        logger.info(f"Path Parameters: {event['pathParameters']}")
+    if "path" in event:
+        logger.info(f"Request Path: {event['path']}")
+    if "httpMethod" in event:
+        logger.info(f"HTTP Method: {event['httpMethod']}")
     
-    # Dùng json.dumps để in ra định dạng JSON đẹp, dễ đọc trong CloudWatch
-    print("Full event:", json.dumps(event))
-    
-    # Sau khi in xong, gọi handler gốc của Mangum để ứng dụng hoạt động
     try:
+        # Process the request through Mangum
         response = mangum_handler(event, context)
-        logger.info(f"Response status: {response.get('statusCode', 'UNKNOWN')}")
+        logger.info(f"Response Status: {response.get('statusCode', 'Unknown')}")
         return response
     except Exception as e:
-        logger.error(f"Error in handler: {str(e)}")
+        logger.error(f"Error in Lambda handler: {str(e)}")
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": str(e)}),
-            "headers": {"Content-Type": "application/json"}
+            "body": json.dumps({"error": "Internal server error", "detail": str(e)}),
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
         }
 
 if __name__ == "__main__":
