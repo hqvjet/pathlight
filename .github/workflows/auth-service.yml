@@ -1,12 +1,6 @@
 name: CICD For Auth Service
 
 on: 
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'services/auth-service/**'
   pull_request:
     branches:
       - main
@@ -19,20 +13,99 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Dependencies
-        run: echo "Installing dependencies..."
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Build Docker Image
+        run: |
+          docker build -t pathlight/authentication_service services/auth-service
+          docker save pathlight/authentication_service -o auth-service.tar
+          echo "Docker image 'pathlight/authentication_service' built successfully."
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-authentication-service
+          path: auth-service.tar
+
   # Run Tests
   test:
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Checkout Code
-        run: echo "hi"
+        uses: actions/checkout@v4
 
+      - name: Install Dependencies
+        run: pip install -r services/auth-service/requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Load Environment Variables
+        run: |
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/auth-service/.env
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/auth-service/.env
+          echo "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" >> services/auth-service/.env
+          echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> services/auth-service/.env
+          echo "AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}" >> services/auth-service/.env
+
+      - name: Run Tests
+        run: |
+          cd services/auth-service
+          echo "🧪 Running unit tests..."
+          pytest -v
+    
   # Push Image to ECR and Deploy to Lambda
   deploy:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - name: Hello World
-        run: echo "Hello, World! This is the deploy job."
+      - name: Use Artifact from Build
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-authentication-service
+
+      - name: Load Docker Image Artifact
+        run: |
+          docker load -i auth-service.tar
+          echo "Docker image 'pathlight/authentication_service' loaded successfully."
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Push Authentication Service Image into AWS ECR
+        run: |
+          aws ecr get-login-password --region ap-northeast-1| docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/authentication_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
+          echo "✅ Docker image 'pathlight/authentication_service' pushed to ECR successfully."
+          sleep 10 # Wait for ECR to process the image
+
+      - name: Update Lambda Function Code from ECR
+        run: |
+          aws lambda update-function-code --function-name pathlight-authentication-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
+          echo "✅ Lambda function code updated successfully."
+
+      - name: Update Lambda Environment Variables (Non-AWS secrets only)
+        run: |
+          sleep 20 # Wait for the Lambda function to be updated
+          aws lambda update-function-configuration --function-name pathlight-authentication-service --environment \
+          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}, SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}, AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}}"
+          echo "✅ Lambda environment variables updated successfully."
+
+      - name: Notify Deployment Success
+        run: echo "Deployment of Authentication Service completed successfully."
