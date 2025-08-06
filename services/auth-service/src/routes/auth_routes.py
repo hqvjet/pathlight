@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..schemas.auth_schemas import *
-from ..controllers.auth_controller import *
+from database import get_db
+from schemas.auth_schemas import *
+from controllers.auth_controller import *
 
 router = APIRouter(prefix="", tags=["Authentication"])
 

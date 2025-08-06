@@ -46,10 +46,8 @@ class AuthConfig:
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
-    JWT_REFRESH_SECRET_KEY: str = os.getenv("JWT_REFRESH_SECRET_KEY", "")
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     ALLOWED_ORIGINS: List[str] = ["*"]
     ALLOWED_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -63,21 +61,10 @@ class AuthConfig:
 
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 10
 
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "https://pathlight.io.vn"
 
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
-
-    ENDPOINT: str = os.getenv("ENDPOINT", "http://localhost")
-    AUTH_SERVICE_PORT: int = int(os.getenv("AUTH_SERVICE_PORT", 8001))
-    USER_SERVICE_PORT: int = int(os.getenv("USER_SERVICE_PORT", 8002))
-    COURSE_SERVICE_PORT: int = int(os.getenv("COURSE_SERVICE_PORT", 8003))
-    QUIZ_SERVICE_PORT: int = int(os.getenv("QUIZ_SERVICE_PORT", 8004))
-
-    AUTH_SERVICE_ENDPOINT: str = os.getenv("AUTH_SERVICE_ENDPOINT", f"{ENDPOINT}:{AUTH_SERVICE_PORT}")
-    USER_SERVICE_ENDPOINT: str = os.getenv("USER_SERVICE_ENDPOINT", f"{ENDPOINT}:{USER_SERVICE_PORT}")
-    COURSE_SERVICE_ENDPOINT: str = os.getenv("COURSE_SERVICE_ENDPOINT", f"{ENDPOINT}:{COURSE_SERVICE_PORT}")
-    QUIZ_SERVICE_ENDPOINT: str = os.getenv("QUIZ_SERVICE_ENDPOINT", f"{ENDPOINT}:{QUIZ_SERVICE_PORT}")
 
     APP_NAME: str = "PathLight"
     ENVIRONMENT: str = "development"
@@ -93,10 +80,8 @@ def get_debug_mode():
 def get_jwt_config():
     return {
         "secret_key": config.JWT_SECRET_KEY,
-        "refresh_secret_key": config.JWT_REFRESH_SECRET_KEY,
         "algorithm": config.JWT_ALGORITHM,
-        "access_token_expire_minutes": config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
-        "refresh_token_expire_days": config.JWT_REFRESH_TOKEN_EXPIRE_DAYS
+        "access_token_expire_minutes": config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     }
 
 def get_service_port():
