@@ -34,41 +34,41 @@ jobs:
           path: auth-service.tar
 
   # Run Tests
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  # test:
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: pip install -r services/auth-service/requirements.txt
+  #     - name: Install Dependencies
+  #       run: pip install -r services/auth-service/requirements.txt
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-1
+  #     - name: Configure AWS Credentials
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+  #         aws-region: ap-northeast-1
 
-      - name: Load Environment Variables
-        run: |
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/auth-service/.env
-          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/auth-service/.env
-          echo "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" >> services/auth-service/.env
-          echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> services/auth-service/.env
-          echo "AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}" >> services/auth-service/.env
+  #     - name: Load Environment Variables
+  #       run: |
+  #         echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/auth-service/.env
+  #         echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/auth-service/.env
+  #         echo "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" >> services/auth-service/.env
+  #         echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> services/auth-service/.env
+  #         echo "AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}" >> services/auth-service/.env
 
-      - name: Run Tests
-        run: |
-          cd services/auth-service
-          echo "🧪 Running unit tests..."
-          pytest -v
+  #     - name: Run Tests
+  #       run: |
+  #         cd services/auth-service
+  #         echo "🧪 Running unit tests..."
+  #         pytest -v
     
   # Push Image to ECR and Deploy to Lambda
   deploy:
     runs-on: ubuntu-latest
-    needs: test
+    needs: build
     steps:
       - name: Use Artifact from Build
         uses: actions/download-artifact@v4

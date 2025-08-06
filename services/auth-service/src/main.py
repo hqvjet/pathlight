@@ -1,112 +1,109 @@
-# from fastapi import FastAPI
-# from fastapi.middleware.cors import CORSMiddleware
-# import logging
-# import os
-# from contextlib import asynccontextmanager
-# from mangum import Mangum
-# import json
-
-# from config import config
-# from database import create_tables, SessionLocal, ensure_tables
-# from models import Admin
-# from services.auth_service import hash_password
-# from routes.auth_routes import router as auth_router
-
-
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # Startup
-#     logger.info("Auth Service starting up")
-    
-#     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
-#         logger.info("Running on AWS Lambda - skipping database setup")
-#     else:
-#         try:
-#             ensure_tables()
-#             logger.info("Database setup completed successfully")
-#             db = SessionLocal()
-#             try:
-#                 admin = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
-#                 if not admin:
-#                     admin = Admin(
-#                         username=config.ADMIN_USERNAME,
-#                         password=hash_password(config.ADMIN_PASSWORD)
-#                     )
-#                     db.add(admin)
-#                     db.commit()
-#                     logger.info("Default admin user created")
-#             except Exception as e:
-#                 logger.error(f"Error creating admin user: {e}")
-#                 db.rollback()
-#             finally:
-#                 db.close()
-#         except Exception as e:
-#             logger.error(f"Error during startup: {e}")
-#             raise
-    
-#     yield
-    
-#     # Shutdown
-#     logger.info("Auth Service shutting down")
-
-# app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, root_path="/auth")
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=config.ALLOWED_ORIGINS,
-#     allow_credentials=True,
-#     allow_methods=config.ALLOWED_METHODS,
-#     allow_headers=config.ALLOWED_HEADERS,
-# )
-
-# app.include_router(auth_router)
-
-# @app.get("/")
-# async def root():
-#     return {"message": "Auth Service is running"}
-
-# @app.get("/health")
-# async def health():
-#     return {"status": "healthy", "service": "auth-service"}
-
-# @app.get("/debug/config")
-# async def debug_config():
-#     """Debug endpoint to check configuration"""
-#     return {
-#         "FRONTEND_URL": config.FRONTEND_URL,
-#         "DATABASE_URL": config.DATABASE_URL[:50] + "..." if config.DATABASE_URL else None,
-#         "JWT_SECRET_KEY": config.JWT_SECRET_KEY[:10] + "..." if config.JWT_SECRET_KEY else None,
-#         "SMTP_USERNAME": config.SMTP_USERNAME,
-#         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
-#     }
-
-# handler = Mangum(app, lifespan="off")
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     port = int(os.getenv("SERVICE_PORT", "8001"))
-#     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
-
-
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import logging
+import os
+from contextlib import asynccontextmanager
 from mangum import Mangum
+import json
 
-# root_path="/auth" là chính xác dựa trên log bạn đã gửi
-app = FastAPI(root_path="/auth")
+from config import config
+from database import create_tables, SessionLocal, ensure_tables
+from models import Admin
+from services.auth_service import hash_password
+from routes.auth_routes import router as auth_router
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Auth Service starting up")
+    
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        logger.info("Running on AWS Lambda - skipping database setup")
+    else:
+        try:
+            ensure_tables()
+            logger.info("Database setup completed successfully")
+            db = SessionLocal()
+            try:
+                admin = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
+                if not admin:
+                    admin = Admin(
+                        username=config.ADMIN_USERNAME,
+                        password=hash_password(config.ADMIN_PASSWORD)
+                    )
+                    db.add(admin)
+                    db.commit()
+                    logger.info("Default admin user created")
+            except Exception as e:
+                logger.error(f"Error creating admin user: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error during startup: {e}")
+            raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Auth Service shutting down")
+
+app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, root_path="/auth")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=config.ALLOWED_METHODS,
+    allow_headers=config.ALLOWED_HEADERS,
+)
+
+app.include_router(auth_router)
 
 @app.get("/")
-def root():
-    # Route này sẽ có thể truy cập tại /api/auth/
-    return {"message": "DEBUG APP IS RUNNING!"}
+async def root():
+    return {"message": "Auth Service is running"}
 
-# Chúng ta cố tình ghi đè route /docs của FastAPI
-# Mục đích: nếu bạn thấy thông báo này, chúng ta biết chắc chắn 100%
-# code mới đã chạy và `root_path` hoạt động chính xác.
-@app.get("/docs")
-def debug_docs():
-    return {"message": "BINGO! Debug /docs route is working!"}
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "auth-service"}
 
-handler = Mangum(app)
+@app.get("/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration"""
+    return {
+        "FRONTEND_URL": config.FRONTEND_URL,
+        "DATABASE_URL": config.DATABASE_URL[:50] + "..." if config.DATABASE_URL else None,
+        "JWT_SECRET_KEY": config.JWT_SECRET_KEY[:10] + "..." if config.JWT_SECRET_KEY else None,
+        "SMTP_USERNAME": config.SMTP_USERNAME,
+        "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
+    }
+
+mangum_handler = Mangum(app, lifespan="off")
+
+# 3. Đây là phần quan trọng: Tạo handler tùy chỉnh của riêng bạn
+# Hàm này sẽ được Lambda gọi trực tiếp
+def handler(event, context):
+    """
+    Hàm này đóng vai trò trung gian:
+    - Nhận event và context từ Lambda.
+    - In ra toàn bộ event để bạn debug.
+    - Chuyển event và context cho Mangum xử lý như bình thường.
+    """
+    
+    print("--- RAW LAMBDA EVENT RECEIVED ---")
+    # Dùng json.dumps để in ra định dạng JSON đẹp, dễ đọc trong CloudWatch
+    print(json.dumps(event, indent=2))
+    print("--- END OF RAW EVENT ---")
+    
+    # Sau khi in xong, gọi handler gốc của Mangum để ứng dụng hoạt động
+    return mangum_handler(event, context)
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("SERVICE_PORT", "8001"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
