@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from contextlib import asynccontextmanager
+from mangum import Mangum
 
 from config import config
 from database import create_tables, SessionLocal, ensure_tables
@@ -80,6 +81,8 @@ async def debug_config():
         "SMTP_USERNAME": config.SMTP_USERNAME,
         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
     }
+
+handler = Mangum(app, lifespan="off")
 
 if __name__ == "__main__":
     import uvicorn
