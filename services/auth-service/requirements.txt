@@ -20,9 +20,6 @@ PyJWT==2.8.0
 # Email
 email-validator==2.1.0
 
-# Scheduler
-apscheduler==3.10.4
-
 # Environment
 python-dotenv==1.0.0
 

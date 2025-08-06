@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -16,33 +14,10 @@ from routes.auth_routes import router as auth_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-scheduler = BackgroundScheduler()
-
-def run_study_reminders():
-    try:
-        db = SessionLocal()
-        
-        from .services.email_reminders import send_reminders_to_users
-
-        result = send_reminders_to_users(db)
-        logger.info(f"[REMINDER DEBUG] Kết quả gửi nhắc nhở: {result}")
-        db.close()
-    except Exception as e:
-        logger.error(f"[REMINDER DEBUG] Lỗi khi gửi nhắc nhở: {str(e)}")
-
-scheduler.add_job(
-    func=run_study_reminders,
-    trigger=CronTrigger(minute="*"),
-    id='study_reminders',
-    name='Send study reminder emails',
-    replace_existing=True
-)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    scheduler.start()
-    logger.info("Background scheduler started for study reminders")
+    logger.info("Auth Service starting up")
     
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         logger.info("Running on AWS Lambda - skipping database setup")
@@ -73,8 +48,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    scheduler.shutdown()
-    logger.info("Background scheduler shut down")
+    logger.info("Auth Service shutting down")
 
 app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan)
 
