@@ -51,7 +51,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Auth Service shutting down")
 
-app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Auth Service", 
+    version="1.0.0", 
+    lifespan=lifespan,
+    root_path="/api" if os.getenv("AWS_LAMBDA_FUNCTION_NAME") else ""
+)
 
 app.add_middleware(
     CORSMiddleware,
