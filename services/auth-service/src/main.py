@@ -83,16 +83,7 @@ async def debug_config():
         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
     }
 
-# handler = Mangum(app, lifespan="off")
-def handler(event, context):
-    # IN RA TOÀN BỘ EVENT ĐỂ DEBUG
-    print(json.dumps(event))
-
-    # Gọi đến handler của Mangum
-    asgi_handler = Mangum(app)
-    response = asgi_handler(event, context)
-
-    return response
+handler = Mangum(app, lifespan="off")
 
 if __name__ == "__main__":
     import uvicorn
