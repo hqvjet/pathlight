@@ -95,10 +95,8 @@ def handler(event, context):
     - Chuyển event và context cho Mangum xử lý như bình thường.
     """
     
-    print("--- RAW LAMBDA EVENT RECEIVED ---")
     # Dùng json.dumps để in ra định dạng JSON đẹp, dễ đọc trong CloudWatch
-    print(json.dumps(event, indent=2))
-    print("--- END OF RAW EVENT ---")
+    print(json.dumps(event))
     
     # Sau khi in xong, gọi handler gốc của Mangum để ứng dụng hoạt động
     return mangum_handler(event, context)
