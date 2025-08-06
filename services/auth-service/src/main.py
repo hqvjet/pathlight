@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from contextlib import asynccontextmanager
+from mangum import Mangum
+import json
 
 from config import config
 from database import create_tables, SessionLocal, ensure_tables
@@ -60,7 +62,7 @@ app.add_middleware(
     allow_headers=config.ALLOWED_HEADERS,
 )
 
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/auth")
 
 @app.get("/")
 async def root():
@@ -69,6 +71,10 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "auth-service"}
+
+@app.get("/auth/test")
+async def test_auth_route():
+    return {"message": "Auth route is working", "path": "/auth/test"}
 
 @app.get("/debug/config")
 async def debug_config():
@@ -80,6 +86,44 @@ async def debug_config():
         "SMTP_USERNAME": config.SMTP_USERNAME,
         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
     }
+
+mangum_handler = Mangum(app, lifespan="off")
+
+def handler(event, context):
+    """
+    Custom Lambda handler for debugging and processing API Gateway events
+    """
+    # Log the complete event for debugging
+    logger.info("Lambda Event:")
+    logger.info(json.dumps(event))
+    
+    # Check if path contains "docs" and modify the path
+    if "path" in event and "docs" in event["path"]:
+        logger.info(f"Docs path detected: {event['path']} -> /docs")
+        event["path"] = "/docs"
+    
+    # Check if path contains "redoc" and modify the path
+    if "path" in event and "redoc" in event["path"]:
+        logger.info(f"Redoc path detected: {event['path']} -> /redoc")
+        event["path"] = "/redoc"
+    
+    try:
+        # Process the request through Mangum
+        response = mangum_handler(event, context)
+        logger.info(f"Response Status: {response.get('statusCode', 'Unknown')}")
+        return response
+    except Exception as e:
+        logger.error(f"Error in Lambda handler: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal server error", "detail": str(e)}),
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        }
 
 if __name__ == "__main__":
     import uvicorn
