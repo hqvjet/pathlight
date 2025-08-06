@@ -6,11 +6,11 @@ from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from ..config import config
+from config import config
 
 logger = logging.getLogger(__name__)
 
-from ..config import config
+from config import config
 
 def send_email(to_email: str, subject: str, body: str):
     """Send email using SMTP with improved reliability"""
@@ -60,7 +60,7 @@ def send_email(to_email: str, subject: str, body: str):
 
 def send_verification_email(email: str, token: str, expire_minutes: int):
     """Send email verification email"""
-    frontend_base = config.FRONTEND_BASE_URL
+    frontend_base = config.FRONTEND_URL
     verification_link = f"{frontend_base}/auth/verify-email?token={token}"
     
     email_body = f"""
@@ -84,7 +84,7 @@ def send_verification_email(email: str, token: str, expire_minutes: int):
 
 def send_password_reset_email(email: str, token: str):
     """Send password reset email"""
-    frontend_base = config.FRONTEND_BASE_URL
+    frontend_base = config.FRONTEND_URL
     reset_link = f"{frontend_base}/auth/reset-password/{token}"
     
     email_body = f"""

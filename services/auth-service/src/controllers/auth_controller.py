@@ -2,26 +2,27 @@ import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt as jose_jwt
+import jwt
+from jwt import InvalidTokenError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from ..config import config
-from ..database import get_db
-from ..models import User, TokenBlacklist
-from ..schemas.auth_schemas import *
-from ..services.auth_service import *
-from ..services.email_service import send_verification_email, send_password_reset_email
+from config import config
+from database import get_db
+from models import User, TokenBlacklist
+from schemas.auth_schemas import *
+from services.auth_service import *
+from services.email_service import send_verification_email, send_password_reset_email
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
-from ..config import config
+from config import config
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """Get current authenticated user"""
     try:
         token = credentials.credentials
-        payload = jose_jwt.decode(token, config.JWT_SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=["HS256"])
         jti = payload.get("jti")
         if jti and is_token_blacklisted(db, jti):
             logger.error(f"Token is blacklisted: {jti}")
@@ -47,7 +48,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive")
         logger.info(f"Authentication successful for user: {user.email}")
         return user
-    except JWTError as e:
+    except InvalidTokenError as e:
         logger.error(f"JWT Error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token expired or invalid: {str(e)}")
     except HTTPException:
@@ -178,7 +179,7 @@ async def signout_user(credentials: HTTPAuthorizationCredentials, db: Session) -
     """Handle user logout"""
     token = credentials.credentials
     try:
-        payload = jose_jwt.decode(token, config.JWT_SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=["HS256"])
         jti = payload.get("jti")
         if jti:
             blacklist_token(db, jti)

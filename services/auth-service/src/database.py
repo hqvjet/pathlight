@@ -3,8 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-from .config import get_database_url, get_debug_mode
-from .models import Base
+from config import get_database_url, get_debug_mode
+from models import Base
 
 DATABASE_URL = get_database_url()
 DEBUG = get_debug_mode()

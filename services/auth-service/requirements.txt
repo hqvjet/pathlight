@@ -15,7 +15,6 @@ alembic==1.13.1
 
 # Authentication & Security
 bcrypt==4.1.2
-python-jose[cryptography]==3.3.0
 PyJWT==2.8.0
 
 # Email

@@ -2,12 +2,12 @@ import bcrypt
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from jose import jwt as jose_jwt
+import jwt
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from ..config import config
-from ..models import User, Admin, TokenBlacklist
+from config import config
+from models import User, Admin, TokenBlacklist
 
 def hash_password(password: str, *, rounds: int = 10) -> str:
     salt = bcrypt.gensalt(rounds=rounds)
@@ -25,19 +25,7 @@ def create_access_token(data: dict) -> str:
         "type": "access",
         "iat": int(now.timestamp())
     })
-    return jose_jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
-
-def create_refresh_token(data: dict) -> str:
-    to_encode = data.copy()
-    now = datetime.now(timezone.utc)
-    expire = now + timedelta(days=7)
-    to_encode.update({
-        "exp": int(expire.timestamp()),
-        "type": "refresh", 
-        "jti": str(uuid.uuid4()),
-        "iat": int(now.timestamp())
-    })
-    return jose_jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
+    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
