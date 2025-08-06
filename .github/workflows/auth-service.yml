@@ -89,15 +89,15 @@ jobs:
 
       - name: Push Authentication Service Image into AWS ECR
         run: |
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/x7g9y6r7
-          docker tag pathlight/authentication_service:latest public.ecr.aws/x7g9y6r7/pathlight/authentication_service:latest
-          docker push public.ecr.aws/x7g9y6r7/pathlight/authentication_service:latest
+          aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/authentication_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
           echo "✅ Docker image 'pathlight/authentication_service' pushed to ECR successfully."
           sleep 10 # Wait for ECR to process the image
 
       - name: Update Lambda Function Code from ECR
         run: |
-          aws lambda update-function-code --function-name pathlight-authentication-service --image-uri public.ecr.aws/x7g9y6r7/pathlight/authentication_service:latest
+          aws lambda update-function-code --function-name pathlight-authentication-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/authentication_service:latest
           echo "✅ Lambda function code updated successfully."
 
       - name: Update Lambda Environment Variables (Non-AWS secrets only)
