@@ -61,7 +61,7 @@ class AuthConfig:
 
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 10
 
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "https://pathlight.io.vn"
 
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
