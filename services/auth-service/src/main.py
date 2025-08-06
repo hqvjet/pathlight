@@ -97,13 +97,15 @@ def handler(event, context):
     logger.info("Lambda Event:")
     logger.info(json.dumps(event))
     
-    # Log important path information
-    if "pathParameters" in event:
-        logger.info(f"Path Parameters: {event['pathParameters']}")
-    if "path" in event:
-        logger.info(f"Request Path: {event['path']}")
-    if "httpMethod" in event:
-        logger.info(f"HTTP Method: {event['httpMethod']}")
+    # Check if path contains "docs" and modify the path
+    if "path" in event and "docs" in event["path"]:
+        logger.info(f"Docs path detected: {event['path']} -> /docs")
+        event["path"] = "/docs"
+    
+    # Check if path contains "redoc" and modify the path
+    if "path" in event and "redoc" in event["path"]:
+        logger.info(f"Redoc path detected: {event['path']} -> /redoc")
+        event["path"] = "/redoc"
     
     try:
         # Process the request through Mangum
