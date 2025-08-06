@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Auth Service shutting down")
 
-app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, root_path="/api")
+app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, root_path="/auth")
 
 app.add_middleware(
     CORSMiddleware,
