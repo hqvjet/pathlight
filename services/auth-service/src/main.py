@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Auth Service shutting down")
 
-app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, root_path="/auth")
+app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,11 +62,15 @@ app.add_middleware(
     allow_headers=config.ALLOWED_HEADERS,
 )
 
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
 
 @app.get("/")
 async def root():
     return {"message": "Auth Service is running"}
+
+@app.get("/api")
+async def api_root():
+    return {"message": "Auth Service API is running"}
 
 @app.get("/health")
 async def health():
@@ -83,6 +87,18 @@ async def debug_config():
         "EMAIL_VERIFICATION_EXPIRE_MINUTES": config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
     }
 
+@app.get("/debug/routes")
+async def debug_routes():
+    """Debug endpoint to check available routes"""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods) if route.methods else []
+            })
+    return {"routes": routes}
+
 mangum_handler = Mangum(app, lifespan="off")
 
 # 3. Đây là phần quan trọng: Tạo handler tùy chỉnh của riêng bạn
@@ -95,11 +111,29 @@ def handler(event, context):
     - Chuyển event và context cho Mangum xử lý như bình thường.
     """
     
+    # Enhanced logging for debugging
+    logger.info("=== LAMBDA EVENT DEBUG ===")
+    logger.info(f"Request method: {event.get('httpMethod', 'UNKNOWN')}")
+    logger.info(f"Request path: {event.get('path', 'UNKNOWN')}")
+    logger.info(f"Request resource: {event.get('resource', 'UNKNOWN')}")
+    logger.info(f"Path parameters: {event.get('pathParameters', {})}")
+    logger.info(f"Query parameters: {event.get('queryStringParameters', {})}")
+    
     # Dùng json.dumps để in ra định dạng JSON đẹp, dễ đọc trong CloudWatch
-    print(json.dumps(event))
+    print("Full event:", json.dumps(event))
     
     # Sau khi in xong, gọi handler gốc của Mangum để ứng dụng hoạt động
-    return mangum_handler(event, context)
+    try:
+        response = mangum_handler(event, context)
+        logger.info(f"Response status: {response.get('statusCode', 'UNKNOWN')}")
+        return response
+    except Exception as e:
+        logger.error(f"Error in handler: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)}),
+            "headers": {"Content-Type": "application/json"}
+        }
 
 if __name__ == "__main__":
     import uvicorn

@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.auth_schemas import *
 from controllers.auth_controller import *
+from models import User
 
-router = APIRouter(prefix="", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # 1.1. Đăng ký
 @router.post("/signup", response_model=MessageResponse)
