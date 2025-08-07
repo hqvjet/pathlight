@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '@/utils/api';
+import { api } from '@/lib/api-client';
 import AuthLayout from '@/components/layout/AuthLayout';
 
 export default function ForgotPasswordPage() {
@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      const response = await api.auth.forgotPassword(email);
+      const response = await api.post('/forget-password', { email });
 
       if (response.status === 200) {
         setSuccess(true);
