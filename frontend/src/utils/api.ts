@@ -6,10 +6,10 @@ import { API_CONFIG } from '../config/env';
 export const API_BASE = API_CONFIG.BASE_URL;
 
 export const SERVICE_URLS = {
-  AUTH: API_CONFIG.AUTH_SERVICE_URL,
-  USER: API_CONFIG.USER_SERVICE_URL,
-  COURSE: API_CONFIG.COURSE_SERVICE_URL,
-  QUIZ: API_CONFIG.QUIZ_SERVICE_URL,
+  AUTH: API_CONFIG.BASE_URL,
+  USER: API_CONFIG.BASE_URL,
+  COURSE: API_CONFIG.BASE_URL,
+  QUIZ: API_CONFIG.BASE_URL,
 } as const;
 
 // =============================================================================
@@ -432,7 +432,7 @@ export const api = {
 // =============================================================================
 // Keep old exports for backward compatibility
 export const endpoints = {
-  // Auth endpoints
+  // Auth endpoints (will automatically get /auth prefix)
   signin: '/signin',
   signup: '/signup',
   signout: '/signout',
@@ -445,7 +445,7 @@ export const endpoints = {
   oauthSignin: '/oauth-signin',
   adminSignin: '/admin/signin',
   
-  // User endpoints
+  // User endpoints (no prefix needed)
   profile: '/profile',
   me: '/me',
   info: '/info',
@@ -456,11 +456,11 @@ export const endpoints = {
   activity: '/activity',
   allUsers: '/all',
   
-  // Course endpoints
+  // Course endpoints (no prefix needed)
   courses: '/courses',
   courseDetail: (id: string) => `/courses/${id}`,
   
-  // Quiz endpoints
+  // Quiz endpoints (no prefix needed)
   quizzes: '/quizzes',
   quizDetail: (id: string) => `/quizzes/${id}`,
   submitQuiz: (id: string) => `/quizzes/${id}/submit`,

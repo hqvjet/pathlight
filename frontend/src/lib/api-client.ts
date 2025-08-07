@@ -115,7 +115,7 @@ class TokenManager {
       throw new Error('No refresh token available');
     }
 
-    const response = await fetch(`${API_CONFIG.AUTH_SERVICE_URL}/api/v1/auth/refresh`, {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -156,12 +156,19 @@ class ServiceRouter {
   }
 
   /**
-   * Route endpoint to appropriate service URL
+   * Route endpoints to appropriate API paths
    */
-  getServiceUrl(endpoint: string): string {
+  getServiceUrl(): string {
+    return API_CONFIG.BASE_URL;
+  }
+
+  /**
+   * Add appropriate prefix to endpoints based on their type
+   */
+  buildEndpointWithPrefix(endpoint: string): string {
     const cleanEndpoint = endpoint.toLowerCase();
     
-    // Auth service endpoints
+    // Auth endpoints should have /auth prefix
     if (cleanEndpoint.includes('/signin') || 
         cleanEndpoint.includes('/signup') || 
         cleanEndpoint.includes('/login') || 
@@ -171,39 +178,25 @@ class ServiceRouter {
         cleanEndpoint.includes('/verify') ||
         cleanEndpoint.includes('/forgot-password') ||
         cleanEndpoint.includes('/reset-password') ||
-        cleanEndpoint.includes('/oauth')) {
-      return API_CONFIG.AUTH_SERVICE_URL;
+        cleanEndpoint.includes('/change-password') ||
+        cleanEndpoint.includes('/oauth') ||
+        cleanEndpoint.includes('/resend-verification') ||
+        cleanEndpoint.includes('/forget-password') ||
+        cleanEndpoint.includes('/validate-reset-token') ||
+        cleanEndpoint.startsWith('/auth/')) {
+      
+      // If endpoint already starts with /auth, don't add it again
+      if (endpoint.startsWith('/auth/')) {
+        return endpoint;
+      }
+      
+      // Add /auth prefix, ensuring no double slashes
+      const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      return `/auth${cleanPath}`;
     }
     
-    // User service endpoints
-    if (cleanEndpoint.includes('/profile') ||
-        cleanEndpoint.includes('/me') ||
-        cleanEndpoint.includes('/dashboard') ||
-        cleanEndpoint.includes('/activity') ||
-        cleanEndpoint.includes('/avatar') ||
-        cleanEndpoint.includes('/notify-time') ||
-        cleanEndpoint.includes('/change-info') ||
-        cleanEndpoint.includes('/all')) {
-      return API_CONFIG.USER_SERVICE_URL;
-    }
-    
-    // Course service endpoints
-    if (cleanEndpoint.includes('/course') || 
-        cleanEndpoint.includes('/lesson') ||
-        cleanEndpoint.includes('/curriculum')) {
-      return API_CONFIG.COURSE_SERVICE_URL;
-    }
-    
-    // Quiz service endpoints
-    if (cleanEndpoint.includes('/quiz') || 
-        cleanEndpoint.includes('/question') ||
-        cleanEndpoint.includes('/exam') ||
-        cleanEndpoint.includes('/test')) {
-      return API_CONFIG.QUIZ_SERVICE_URL;
-    }
-    
-    // Default to auth service for unmatched endpoints
-    return API_CONFIG.AUTH_SERVICE_URL;
+    // For non-auth endpoints, return as is
+    return endpoint;
   }
 }
 
@@ -233,10 +226,14 @@ export class ApiClient {
   }
 
   private buildUrl(endpoint: string, baseURL?: string): string {
-    // Use provided baseURL, or route to appropriate service, or fallback to default
-    const base = baseURL || this.serviceRouter.getServiceUrl(endpoint) || this.baseURL;
+    // Use provided baseURL or get service URL
+    const base = baseURL || this.serviceRouter.getServiceUrl() || this.baseURL;
     const cleanBase = base.replace(/\/$/, '');
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    
+    // Build endpoint with appropriate prefix
+    const endpointWithPrefix = this.serviceRouter.buildEndpointWithPrefix(endpoint);
+    const cleanEndpoint = endpointWithPrefix.startsWith('/') ? endpointWithPrefix : `/${endpointWithPrefix}`;
+    
     return `${cleanBase}${cleanEndpoint}`;
   }
 
@@ -536,6 +533,7 @@ export const apiClient = new ApiClient();
 // =============================================================================
 
 export const api = {
+  // Generic HTTP methods
   get: <T>(endpoint: string, config?: ApiRequestConfig) => 
     apiClient.get<T>(endpoint, config),
   
@@ -556,6 +554,62 @@ export const api = {
 
   uploadFiles: <T>(endpoint: string, files: File[], config?: ApiRequestConfig) => 
     apiClient.uploadMultipleFiles<T>(endpoint, files, config),
+
+  // Structured API methods for better developer experience
+  auth: {
+    signin: (data: unknown) => apiClient.post('/signin', data),
+    signup: (data: unknown) => apiClient.post('/signup', data),
+    signout: () => apiClient.post('/signout'),
+    verifyEmail: (token: string) => apiClient.get(`/verify-email?token=${token}`),
+    resendVerification: (email: string) => apiClient.post('/resend-verification', { email }),
+    forgotPassword: (email: string) => apiClient.post('/forget-password', { email }),
+    validateResetToken: (token: string) => apiClient.get(`/validate-reset-token/${token}`),
+    resetPassword: (token: string, data: unknown) => apiClient.post(`/reset-password/${token}`, data),
+    changePassword: (data: unknown) => apiClient.post('/change-password', data),
+    oauthSignin: (data: unknown) => apiClient.post('/oauth-signin', data),
+    refresh: (refreshToken: string) => apiClient.post('/refresh', { refresh_token: refreshToken }),
+  },
+
+  user: {
+    getProfile: () => apiClient.get('/profile'),
+    getMe: () => apiClient.get('/me'),
+    getDashboard: () => apiClient.get('/dashboard'),
+    updateProfile: (data: unknown) => apiClient.put('/change-info', data),
+    updateAvatar: (file: File) => apiClient.uploadFile('/avatar', file),
+    getAvatar: (userId: string) => apiClient.get(`/avatar/?user_id=${userId}`),
+    setNotifyTime: (data: unknown) => apiClient.put('/notify-time', data),
+    saveActivity: () => apiClient.post('/activity'),
+    getAllUsers: () => apiClient.get('/all'),
+    getActivity: (year?: number) => apiClient.get(year ? `/activity?year=${year}` : '/activity'),
+  },
+
+  course: {
+    getAll: (params?: Record<string, unknown>) => {
+      const queryString = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+      return apiClient.get(`/courses${queryString}`);
+    },
+    getById: (id: string) => apiClient.get(`/courses/${id}`),
+    create: (data: unknown) => apiClient.post('/courses', data),
+    update: (id: string, data: unknown) => apiClient.put(`/courses/${id}`, data),
+    delete: (id: string) => apiClient.delete(`/courses/${id}`),
+    enroll: (id: string) => apiClient.post(`/courses/${id}/enroll`),
+    unenroll: (id: string) => apiClient.delete(`/courses/${id}/unenroll`),
+    getEnrollments: () => apiClient.get('/courses/enrollments'),
+  },
+
+  quiz: {
+    getAll: (params?: Record<string, unknown>) => {
+      const queryString = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+      return apiClient.get(`/quizzes${queryString}`);
+    },
+    getById: (id: string) => apiClient.get(`/quizzes/${id}`),
+    create: (data: unknown) => apiClient.post('/quizzes', data),
+    update: (id: string, data: unknown) => apiClient.put(`/quizzes/${id}`, data),
+    delete: (id: string) => apiClient.delete(`/quizzes/${id}`),
+    submit: (id: string, answers: unknown) => apiClient.post(`/quizzes/${id}/submit`, { answers }),
+    getResult: (id: string) => apiClient.get(`/quizzes/${id}/result`),
+    getHistory: () => apiClient.get('/quizzes/history'),
+  },
 };
 
 export default api;

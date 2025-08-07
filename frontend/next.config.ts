@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
+      { protocol: 'https', hostname: 'xmicux090i.execute-api.ap-northeast-1.amazonaws.com', pathname: '/**' },
       { protocol: 'http', hostname: 'localhost', port: '8002', pathname: '/**' },
       { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '', pathname: '/**' },
@@ -48,10 +49,10 @@ const nextConfig: NextConfig = {
 
   async rewrites() {
     return [
-      // Legacy API routes (fallback to base URL)
+      // API routes proxy to backend
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001'}/api/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api'}/:path*`,
       },
     ]
   },

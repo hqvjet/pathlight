@@ -3,26 +3,21 @@
 // =============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000',
-  APP_PORT: 3000,
-  AUTH_SERVICE_PORT: process.env.NEXT_PUBLIC_AUTH_SERVICE_PORT || 8001,
-  USER_SERVICE_PORT: process.env.NEXT_PUBLIC_USER_SERVICE_PORT || 8002,
-  COURSE_SERVICE_PORT: process.env.NEXT_PUBLIC_COURSE_SERVICE_PORT || 8003,
-  QUIZ_SERVICE_PORT: process.env.NEXT_PUBLIC_QUIZ_SERVICE_PORT || 8004,
-  get APP_URL() {
-    return `${this.BASE_URL}:${this.APP_PORT}`;
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api',
+  get API_URL() {
+    return this.BASE_URL;
   },
   get AUTH_SERVICE_URL() {
-    return `${this.BASE_URL}:${this.AUTH_SERVICE_PORT}`;
+    return this.BASE_URL;
   },
   get USER_SERVICE_URL() {
-    return `${this.BASE_URL}:${this.USER_SERVICE_PORT}`;
+    return this.BASE_URL;
   },
   get COURSE_SERVICE_URL() {
-    return `${this.BASE_URL}:${this.COURSE_SERVICE_PORT}`;
+    return this.BASE_URL;
   },
   get QUIZ_SERVICE_URL() {
-    return `${this.BASE_URL}:${this.QUIZ_SERVICE_PORT}`;
+    return this.BASE_URL;
   },
 } as const;
 
@@ -40,11 +35,11 @@ export const AUTH_CONFIG = {
 // 🛠️ APPLICATION CONFIGURATION
 // =============================================================================
 export const APP_CONFIG = {
-  NAME: 'PathLight',
-  VERSION: '1.0.0',
-  ENVIRONMENT: 'development',
-  IS_DEVELOPMENT: true,
-  IS_PRODUCTION: false,
+  NAME: process.env.NEXT_PUBLIC_APP_NAME || 'PathLight',
+  VERSION: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+  ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT || 'production',
+  IS_DEVELOPMENT: process.env.NEXT_PUBLIC_ENVIRONMENT === 'development',
+  IS_PRODUCTION: process.env.NEXT_PUBLIC_ENVIRONMENT !== 'development',
 } as const;
 
 // =============================================================================
@@ -67,26 +62,14 @@ export const ANALYTICS_CONFIG = {
 } as const;
 
 // =============================================================================
-// 🛡️ VALIDATION & DEBUGGING
-// =============================================================================
-// No validation needed, all config is hardcoded except GOOGLE_CLIENT_ID
-
-// =============================================================================
 // 🔍 ENVIRONMENT INFO (Debug)
 // =============================================================================
 
 export const getEnvironmentInfo = () => ({
-  NODE_ENV: 'development',
+  NODE_ENV: process.env.NODE_ENV || 'production',
   NEXT_PUBLIC_ENVIRONMENT: APP_CONFIG.ENVIRONMENT,
   API_BASE_URL: API_CONFIG.BASE_URL,
-  APP_URL: API_CONFIG.APP_URL,
-  AUTH_SERVICE_URL: API_CONFIG.AUTH_SERVICE_URL,
-  USER_SERVICE_URL: API_CONFIG.USER_SERVICE_URL,
-  COURSE_SERVICE_URL: API_CONFIG.COURSE_SERVICE_URL,
-  QUIZ_SERVICE_URL: API_CONFIG.QUIZ_SERVICE_URL,
   HAS_GOOGLE_CLIENT_ID: !!AUTH_CONFIG.GOOGLE_CLIENT_ID,
   FEATURE_FLAGS,
 });
-
-// Auto-validate in development
 

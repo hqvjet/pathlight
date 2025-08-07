@@ -23,7 +23,7 @@ export const getAvatarUrl = (user: AvatarUser): string => {
 
   // AWS S3 custom uploaded avatar
   if (user?.id) {
-    const s3Url = `${API_CONFIG.USER_SERVICE_URL}/avatar/?user_id=${user.id}`;
+    const s3Url = `${API_CONFIG.BASE_URL}/avatar/?user_id=${user.id}`;
     const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
     return `${s3Url}${cacheParam}`;
   }
