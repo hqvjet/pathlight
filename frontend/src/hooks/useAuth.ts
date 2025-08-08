@@ -22,17 +22,21 @@ export const useAuth = () => {
 
     checkAuth();
 
-    // Lắng nghe storage changes
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'token' || e.key === 'remember_me') {
+    // Check auth status periodically (cookies don't trigger storage events)
+    const interval = setInterval(checkAuth, 60000); // Check every minute
+
+    // Also check when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
         checkAuth();
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 

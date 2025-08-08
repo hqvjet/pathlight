@@ -34,17 +34,18 @@ export function middleware(request: NextRequest) {
   }
 
   // =============================================================================
-  // 🔒 AUTHENTICATION CHECKS
+  // 🔒 AUTHENTICATION CHECKS (ENHANCED COOKIE SUPPORT)
   // =============================================================================
   
-  // Get auth token from request
-  const token = request.cookies.get('token')?.value || 
-                request.headers.get('authorization')?.replace('Bearer ', '');
+  // Get auth token from cookies (prioritize persistent, then session)
+  const authToken = request.cookies.get('auth_token')?.value || 
+                   request.cookies.get('session_token')?.value ||
+                   request.headers.get('authorization')?.replace('Bearer ', '');
 
   // Protected routes that require authentication
   const protectedRoutes = [
-    '/dashboard',
-    '/profile',
+    '/user/dashboard',
+    '/user/profile',
     '/courses',
     '/quizzes',
     '/admin',
@@ -52,9 +53,9 @@ export function middleware(request: NextRequest) {
 
   // Public routes that should redirect authenticated users
   const publicRoutes = [
-    '/signin',
-    '/signup',
-    '/forgot-password',
+    '/auth/signin',
+    '/auth/signup',
+    '/auth/forgot-password',
   ];
 
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -66,15 +67,15 @@ export function middleware(request: NextRequest) {
   );
 
   // Redirect unauthenticated users from protected routes
-  if (isProtectedRoute && !token) {
-    url.pathname = '/signin';
+  if (isProtectedRoute && !authToken) {
+    url.pathname = '/auth/signin';
     url.searchParams.set('redirect', pathname);
     return NextResponse.redirect(url);
   }
 
   // Redirect authenticated users from public auth routes
-  if (isPublicRoute && token) {
-    url.pathname = '/dashboard';
+  if (isPublicRoute && authToken) {
+    url.pathname = '/user/dashboard';
     return NextResponse.redirect(url);
   }
 
@@ -123,15 +124,16 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|public|assets).*)',
     
     // Specifically match API routes and auth redirects
-    '/reset-password/:token*',
-    '/verify-email/:token*',
+    '/auth/reset-password/:token*',
+    '/auth/verify-email/:token*',
     
     // Match protected and public routes
-    '/dashboard/:path*',
-    '/profile/:path*',
+    '/user/dashboard/:path*',
+    '/user/profile/:path*',
     '/courses/:path*',
     '/quizzes/:path*',
     '/admin/:path*',
+    '/auth/:path*',
     '/:path*',
   ],
 };

@@ -3,6 +3,7 @@ import { Montserrat } from 'next/font/google';
 import "./globals.css";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import CookieWarning from '@/components/common/CookieWarning';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -25,6 +26,7 @@ export default function RootLayout({
       <body
         className={`${montserrat.variable} font-sans antialiased`}
       >
+        <CookieWarning />
         {children}
         <ToastContainer
           position="top-right"

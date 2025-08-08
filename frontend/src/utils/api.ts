@@ -1,4 +1,5 @@
 import { API_CONFIG } from '../config/env';
+import { cookieStorage } from './cookies';
 
 // =============================================================================
 // 🌐 API CONFIGURATION
@@ -13,62 +14,63 @@ export const SERVICE_URLS = {
 } as const;
 
 // =============================================================================
-// 💾 STORAGE UTILITIES
+// 💾 STORAGE UTILITIES (NOW USING SECURE COOKIES)
 // =============================================================================
 export const storage = {
-  // Token management
+  // Token management - now using secure cookies
   getToken: (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('token') || sessionStorage.getItem('token');
+    return cookieStorage.getToken();
   },
   
   setToken: (token: string, remember: boolean = false): void => {
-    if (typeof window === 'undefined') return;
-    
-    if (remember) {
-      localStorage.setItem('token', token);
-      localStorage.setItem('remember_me', 'true');
-      sessionStorage.removeItem('token');
-    } else {
-      sessionStorage.setItem('token', token);
-      localStorage.removeItem('token');
-      localStorage.removeItem('remember_me');
-    }
+    cookieStorage.setToken(token, remember);
   },
   
   removeToken: (): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    localStorage.removeItem('remember_me');
+    cookieStorage.removeToken();
   },
   
   isRemembered: (): boolean => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('remember_me') === 'true';
+    return cookieStorage.isRemembered();
   },
   
-  // Email verification
-  getPendingEmail: (): string | null => 
-    typeof window !== 'undefined' ? localStorage.getItem('pending_email') : null,
+  // Email verification - using cookies with expiry
+  getPendingEmail: (): string | null => {
+    return cookieStorage.getPendingEmail();
+  },
+  
   setPendingEmail: (email: string): void => {
-    if (typeof window !== 'undefined') localStorage.setItem('pending_email', email);
-  },
-  removePendingEmail: (): void => {
-    if (typeof window !== 'undefined') localStorage.removeItem('pending_email');
+    cookieStorage.setPendingEmail(email);
   },
   
-  // Generic storage
-  get: (key: string): string | null => 
-    typeof window !== 'undefined' ? localStorage.getItem(key) : null,
+  removePendingEmail: (): void => {
+    cookieStorage.removePendingEmail();
+  },
+  
+  // Generic storage - using cookies
+  get: (key: string): string | null => {
+    return cookieStorage.get(key);
+  },
+  
   set: (key: string, value: string): void => {
-    if (typeof window !== 'undefined') localStorage.setItem(key, value);
+    cookieStorage.set(key, value);
   },
+  
   remove: (key: string): void => {
-    if (typeof window !== 'undefined') localStorage.removeItem(key);
+    cookieStorage.remove(key);
   },
+  
   clear: (): void => {
-    if (typeof window !== 'undefined') localStorage.clear();
+    cookieStorage.clear();
+  },
+  
+  // Additional cookie-specific utilities
+  isCookieEnabled: (): boolean => {
+    return cookieStorage.isCookieEnabled();
+  },
+  
+  isTokenExpiringSoon: (): boolean => {
+    return cookieStorage.isTokenExpiringSoon();
   },
 };
 
