@@ -13,26 +13,21 @@ export const authUtils = {
     return !!storage.getToken();
   },
 
+  // Check if token is about to expire and needs refresh
+  shouldRefreshToken: (): boolean => {
+    return storage.isTokenExpiringSoon?.() || false;
+  },
+
+  // Enhanced session management for cookies
   handleSessionExpiry: (): void => {
-    // Chỉ xóa session token, không xóa persistent token
+    // Only remove token if it's a session token (not remembered)
     if (typeof window !== 'undefined' && !storage.isRemembered()) {
-      sessionStorage.removeItem('token');
+      storage.removeToken();
     }
   },
 
-  handleBeforeUnload: (): void => {
-    if (!storage.isRemembered()) {
-      storage.removeToken();
-    }
-  }
+  // Check if cookies are supported
+  checkCookieSupport: (): boolean => {
+    return storage.isCookieEnabled?.() || false;
+  },
 };
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', authUtils.handleBeforeUnload);
-  
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && !storage.isRemembered()) {
-      sessionStorage.removeItem('token');
-    }
-  });
-}
