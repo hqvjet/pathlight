@@ -168,6 +168,11 @@ class ServiceRouter {
   buildEndpointWithPrefix(endpoint: string): string {
     const cleanEndpoint = endpoint.toLowerCase();
     
+    // User endpoints should go through /api/users prefix
+    if (cleanEndpoint.startsWith('/api/users/')) {
+      return endpoint; // Already has the correct prefix
+    }
+    
     // Auth endpoints should have /auth prefix
     if (cleanEndpoint.includes('/signin') || 
         cleanEndpoint.includes('/signup') || 
@@ -571,16 +576,17 @@ export const api = {
   },
 
   user: {
-    getProfile: () => apiClient.get('/profile'),
-    getMe: () => apiClient.get('/me'),
-    getDashboard: () => apiClient.get('/dashboard'),
-    updateProfile: (data: unknown) => apiClient.put('/change-info', data),
-    updateAvatar: (file: File) => apiClient.uploadFile('/avatar', file),
-    getAvatar: (userId: string) => apiClient.get(`/avatar/?user_id=${userId}`),
-    setNotifyTime: (data: unknown) => apiClient.put('/notify-time', data),
-    saveActivity: () => apiClient.post('/activity'),
-    getAllUsers: () => apiClient.get('/all'),
-    getActivity: (year?: number) => apiClient.get(year ? `/activity?year=${year}` : '/activity'),
+    getProfile: () => apiClient.get('/api/users/profile'),
+    getMe: () => apiClient.get('/api/users/me'),
+    getDashboard: () => apiClient.get('/api/users/dashboard'),
+    updateProfile: (data: unknown) => apiClient.put('/api/users/profile', data),
+    updateAvatar: (file: File) => apiClient.uploadFile('/api/users/avatar', file),
+    getAvatar: (userId: string) => apiClient.get(`/api/users/avatar?user_id=${userId}`),
+    setNotifyTime: (data: unknown) => apiClient.put('/api/users/notify-time', data),
+    saveActivity: () => apiClient.post('/api/users/activity'),
+    getAllUsers: () => apiClient.get('/api/users'),
+    getActivity: (year?: number) => apiClient.get(year ? `/api/users/activity?year=${year}` : '/api/users/activity'),
+    getUsersByIds: (userIds: string[]) => apiClient.post('/api/users/users-by-ids', userIds),
   },
 
   course: {

@@ -77,83 +77,79 @@ export const userService = {
    * Get current user profile
    */
   async getProfile() {
-    return api.get<User>('/api/v1/user/profile');
+    return api.get<User>('/api/users/profile');
   },
 
   /**
-   * Update user profile
+   * Get user information (with optional id parameter)
+   */
+  async getUserInfo(id?: string) {
+    const endpoint = id ? `/api/users/info?id=${id}` : '/api/users/info';
+    return api.get<User>(endpoint);
+  },
+
+  /**
+   * Update user profile (change-info endpoint)
    */
   async updateProfile(data: UpdateProfileRequest) {
-    return api.put<User>('/api/v1/user/profile', data);
+    return api.put<User>('/api/users/profile', data);
   },
 
   /**
-   * Update user preferences
+   * Get current user basic info
    */
-  async updatePreferences(data: UpdatePreferencesRequest) {
-    return api.put<UserPreferences>('/api/v1/user/preferences', data);
+  async getMe() {
+    return api.get('/api/users/me');
   },
 
   /**
-   * Get user preferences
+   * Get user dashboard data
    */
-  async getPreferences() {
-    return api.get<UserPreferences>('/api/v1/user/preferences');
+  async getDashboard() {
+    return api.get('/api/users/dashboard');
   },
 
   /**
    * Upload user avatar
    */
   async uploadAvatar(file: File) {
-    return api.uploadFile<{ avatar_url: string }>('/api/v1/user/avatar', file);
+    return api.uploadFile<{ message: string; avatar_url?: string }>('/api/users/avatar', file);
   },
 
   /**
-   * Delete user avatar
+   * Get user avatar by user ID
    */
-  async deleteAvatar() {
-    return api.delete('/api/v1/user/avatar');
+  async getAvatar(userId: string) {
+    return api.get(`/api/users/avatar?user_id=${userId}`);
   },
 
   /**
-   * Get user statistics
+   * Set notification time for daily reminders
    */
-  async getStats() {
-    return api.get<UserStats>('/api/v1/user/stats');
+  async setNotifyTime(data: { remind_time: string }) {
+    return api.put('/api/users/notify-time', data);
   },
 
   /**
-   * Get user activity history
+   * Save user activity milestone
    */
-  async getActivityHistory(page: number = 1, per_page: number = 20) {
-    return api.get<{
-      activities: Array<{
-        id: string;
-        type: string;
-        description: string;
-        created_at: string;
-        metadata?: unknown;
-      }>;
-      total: number;
-      page: number;
-      per_page: number;
-    }>(`/api/v1/user/activity?page=${page}&per_page=${per_page}`);
+  async saveActivity() {
+    return api.post('/api/users/activity');
   },
 
   /**
-   * Delete user account
+   * Get user activity data
    */
-  async deleteAccount(password: string) {
-    return api.delete('/api/v1/user/account', {
-      body: JSON.stringify({ password }),
-    });
+  async getActivity(year?: number) {
+    const endpoint = year ? `/api/users/activity?year=${year}` : '/api/users/activity';
+    return api.get(endpoint);
   },
 
   /**
-   * Export user data
+   * Get users by IDs (for leaderboard avatars, etc.)
    */
-  async exportData() {
-    return api.get<{ download_url: string }>('/api/v1/user/export');
+  async getUsersByIds(userIds: string[]) {
+    return api.post<Record<string, User>>('/api/users/users-by-ids', userIds);
   },
 
   // =============================================================================
@@ -173,56 +169,49 @@ export const userService = {
       params.append('search', search);
     }
 
-    return api.get<UserListResponse>(`/api/v1/admin/users?${params.toString()}`);
+    return api.get<UserListResponse>(`/api/users?${params.toString()}`);
   },
 
   /**
    * Get user by ID (admin only)
    */
   async getUserById(id: string) {
-    return api.get<User>(`/api/v1/admin/users/${id}`);
+    return api.get<User>(`/api/users/${id}`);
   },
 
   /**
    * Update user (admin only)
    */
   async updateUser(id: string, data: Partial<User>) {
-    return api.put<User>(`/api/v1/admin/users/${id}`, data);
+    return api.put<User>(`/api/users/${id}`, data);
   },
 
   /**
    * Delete user (admin only)
    */
   async deleteUser(id: string) {
-    return api.delete(`/api/v1/admin/users/${id}`);
+    return api.delete(`/api/users/${id}`);
   },
 
   /**
    * Ban/unban user (admin only)
    */
   async toggleUserBan(id: string, banned: boolean) {
-    return api.post(`/api/v1/admin/users/${id}/ban`, { banned });
+    return api.post(`/api/users/${id}/ban`, { banned });
   },
 
   /**
    * Reset user password (admin only)
    */
   async resetUserPassword(id: string) {
-    return api.post<{ temporary_password: string }>(`/api/v1/admin/users/${id}/reset-password`);
+    return api.post<{ temporary_password: string }>(`/api/users/${id}/reset-password`);
   },
 
   /**
    * Get user statistics (admin only)
    */
   async getUserStats(id: string) {
-    return api.get<UserStats>(`/api/v1/admin/users/${id}/stats`);
-  },
-
-  /**
-   * Get users by IDs (for leaderboard avatars)
-   */
-  async getUsersByIds(userIds: string[]) {
-    return api.post<Record<string, User>>('/api/v1/user/users-by-ids', userIds);
+    return api.get<UserStats>(`/api/users/${id}/stats`);
   },
 };
 
