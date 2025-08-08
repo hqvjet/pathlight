@@ -6,7 +6,7 @@ on:
       - main
       - develop
     paths:
-      - 'services/auth-service/**'
+      - 'services/user-service/**'
 
 jobs:
   # Build Docker Image
