@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 
-from ..database import get_db
-from ..schemas.user_schemas import *
-from ..controllers.user_controller import *
-from ..services.user_service_auth import get_current_user, get_current_admin_user
+from database import get_db
+from schemas.user_schemas import *
+from controllers.user_controller import *
+from services.user_service_auth import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 

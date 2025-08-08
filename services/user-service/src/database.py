@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
 
-from .config import get_database_url, get_debug_mode
+from config import get_database_url, get_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def get_db():
 
 def create_tables():
     try:
-        from .models import Base
+        from models import Base
         
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")

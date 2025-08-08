@@ -23,6 +23,9 @@ aiofiles==23.2.1
 boto3==1.34.0
 botocore==1.34.0
 
+# AWS Lambda adapter
+mangum==0.17.0
+
 # Environment and configuration
 python-dotenv==1.0.0
 email-validator==2.1.0

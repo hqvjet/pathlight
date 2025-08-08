@@ -4,9 +4,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt as jose_jwt
 
-from ..config import config
-from ..database import get_db
-from ..models import User
+from config import config
+from database import get_db
+from models import User
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
