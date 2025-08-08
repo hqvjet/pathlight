@@ -61,7 +61,7 @@ class AuthConfig:
 
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 10
 
-    FRONTEND_URL: str = "https://pathlight.io.vn"
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://www.pathlight.io.vn")
 
     ADMIN_USERNAME: str = ""
     ADMIN_PASSWORD: str = ""
