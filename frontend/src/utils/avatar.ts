@@ -7,25 +7,25 @@ export interface AvatarUser {
 }
 
 export const getAvatarUrl = (user: AvatarUser): string => {
-  // Google OAuth avatar (most reliable)
+  // Google OAuth avatar absolute URL
   if (user?.avatar_url && user.avatar_url.startsWith('http')) {
     const separator = user.avatar_url.includes('?') ? '&' : '?';
     const cacheParam = `_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
     return `${user.avatar_url}${separator}${cacheParam}`;
   }
 
-  // Google OAuth avatar (legacy support)
-  if (user?.avatar_id && user.avatar_id.startsWith('http')) {
-    const separator = user.avatar_id.includes('?') ? '&' : '?';
-    const cacheParam = `_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
-    return `${user.avatar_id}${separator}${cacheParam}`;
+  // Prefer stored avatar id served by our proxy
+  if (user?.avatar_id) {
+    const url = `/api/users/avatar?avatar_id=${encodeURIComponent(user.avatar_id)}`;
+    const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
+    return `${url}${cacheParam}`;
   }
 
-  // AWS S3 custom uploaded avatar
+  // Fallback to user id-based avatar fetch via proxy
   if (user?.id) {
-    const s3Url = `${API_CONFIG.BASE_URL}/avatar/?user_id=${user.id}`;
+    const url = `/api/users/avatar?user_id=${encodeURIComponent(user.id)}`;
     const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
-    return `${s3Url}${cacheParam}`;
+    return `${url}${cacheParam}`;
   }
   
   // Default avatar

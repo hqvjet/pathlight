@@ -86,6 +86,10 @@ export const getAuthHeaders = (): Record<string, string> => {
 };
 
 export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
+  // If targeting Next.js internal API routes, return relative path to current origin
+  if (endpoint.startsWith('/api/')) {
+    return endpoint;
+  }
   const base = baseUrl || API_BASE;
   return `${base.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
@@ -233,110 +237,110 @@ export const api = {
   
   // User management
   user: {
-    getProfile: () => apiRequest('/profile', { 
+    getProfile: () => apiRequest('/api/users/profile', { 
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    getMe: () => apiRequest('/me', { 
+    getMe: () => apiRequest('/api/users/me', { 
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    getInfo: (id?: string) => apiRequest(id ? `/info?id=${id}` : '/info', {
+    getInfo: (id?: string) => apiRequest(id ? `/api/users/info?id=${id}` : '/api/users/info', {
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    getDashboard: () => apiRequest('/dashboard', {
+    getDashboard: () => apiRequest('/api/users/dashboard', {
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    updateProfile: (data: unknown) => apiRequest('/change-info', {
+    updateProfile: (data: unknown) => apiRequest('/api/users/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
     updateAvatar: (file: File) => {
       const formData = new FormData();
       formData.append('avatar_file', file);
-      return apiRequest('/avatar', {
+      return apiRequest('/api/users/avatar', {
         method: 'PUT',
         body: formData,
         headers: {
-          // Don't set Content-Type for FormData - let browser set it with boundary
+          // Let browser set Content-Type for FormData
           ...(storage.getToken() && { Authorization: `Bearer ${storage.getToken()}` }),
         },
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       });
     },
-    getAvatar: (avatarId: string) => apiRequest(`/avatar/?avatar_id=${avatarId}`, {
+    getAvatar: (userId: string) => apiRequest(`/api/users/avatar?user_id=${userId}`, {
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    setNotifyTime: (data: unknown) => apiRequest('/notify-time', {
+    setNotifyTime: (data: unknown) => apiRequest('/api/users/notify-time', {
       method: 'PUT',
       body: JSON.stringify(data),
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    saveActivity: () => apiRequest('/activity', { 
+    saveActivity: () => apiRequest('/api/users/activity', { 
       method: 'POST',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    getAllUsers: () => apiRequest('/all', {
+    getAllUsers: () => apiRequest('/api/users', {
       method: 'GET',
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
-    getUsersByIds: (userIds: string[]) => apiRequest('/users-by-ids', {
+    getUsersByIds: (userIds: string[]) => apiRequest('/api/users/users-by-ids', {
       method: 'POST',
       body: JSON.stringify(userIds),
-      serviceUrl: SERVICE_URLS.USER,
+      serviceUrl: undefined,
     }),
     
     // Test APIs for development
     test: {
-      addExperience: (amount: number) => apiRequest(`/test/add-experience?exp_amount=${amount}`, {
+      addExperience: (amount: number) => apiRequest(`/api/users/test/add-experience?exp_amount=${amount}`, {
         method: 'POST',
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      updateStats: (data: unknown) => apiRequest('/test/update-stats', {
+      updateStats: (data: unknown) => apiRequest('/api/users/test/update-stats', {
         method: 'PUT',
         body: JSON.stringify(data),
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      resetStats: () => apiRequest('/test/reset-stats', {
+      resetStats: () => apiRequest('/api/users/test/reset-stats', {
         method: 'POST',
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      simulateActivity: () => apiRequest('/test/simulate-activity', {
+      simulateActivity: () => apiRequest('/api/users/test/simulate-activity', {
         method: 'GET',
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      getLevelSystemInfo: () => apiRequest('/test/level-system-info', {
+      getLevelSystemInfo: () => apiRequest('/api/users/test/level-system-info', {
         method: 'GET',
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
     },
 
     // Activity data management
     activity: {
       get: (year?: number) => apiRequest(
-        year ? `/activity?year=${year}` : '/activity', 
+        year ? `/api/users/activity?year=${year}` : '/api/users/activity', 
         {
           method: 'GET',
-          serviceUrl: SERVICE_URLS.USER,
+          serviceUrl: undefined,
         }
       ),
-      save: (data: { date: string; level: number }) => apiRequest('/activity', {
+      save: (data: { date: string; level: number }) => apiRequest('/api/users/activity', {
         method: 'POST',
         body: JSON.stringify(data),
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      saveBatch: (data: { [key: string]: number }) => apiRequest('/activity/batch', {
+      saveBatch: (data: { [key: string]: number }) => apiRequest('/api/users/activity', {
         method: 'POST',
         body: JSON.stringify({ activityData: data }),
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
-      clear: () => apiRequest('/activity', {
+      clear: () => apiRequest('/api/users/activity', {
         method: 'DELETE',
-        serviceUrl: SERVICE_URLS.USER,
+        serviceUrl: undefined,
       }),
     },
   },
@@ -447,16 +451,16 @@ export const endpoints = {
   oauthSignin: '/oauth-signin',
   adminSignin: '/admin/signin',
   
-  // User endpoints (no prefix needed)
-  profile: '/profile',
-  me: '/me',
-  info: '/info',
-  changeInfo: '/change-info',
-  avatar: '/avatar',
-  notifyTime: '/notify-time',
-  dashboard: '/dashboard',
-  activity: '/activity',
-  allUsers: '/all',
+  // User endpoints via Next.js API proxies
+  profile: '/api/users/profile',
+  me: '/api/users/me',
+  info: '/api/users/info',
+  changeInfo: '/api/users/profile',
+  avatar: '/api/users/avatar',
+  notifyTime: '/api/users/notify-time',
+  dashboard: '/api/users/dashboard',
+  activity: '/api/users/activity',
+  allUsers: '/api/users',
   
   // Course endpoints (no prefix needed)
   courses: '/courses',
