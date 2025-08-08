@@ -104,7 +104,7 @@ jobs:
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-authentication-service --environment \
-          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}, SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}, AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}}"
+          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}, SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}, AUTH_SERVICE_PORT=${{ secrets.AUTH_SERVICE_PORT }}, FRONTEND_URL=${{ secrets.FRONTEND_URL }}}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
