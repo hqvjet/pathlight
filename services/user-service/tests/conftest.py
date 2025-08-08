@@ -1,118 +1,55 @@
+"""
+Test configuration and fixtures for user service tests
+"""
+
 import pytest
-import asyncio
-import logging
-import warnings
-import httpx
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import os
-import tempfile
+from unittest.mock import Mock
 
-# Configure logging to suppress warnings
-logging.getLogger().setLevel(logging.ERROR)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-
-# Set test environment
-os.environ["TESTING"] = "true"
-os.environ["DATABASE_URL"] = "sqlite:///./test.db"
-os.environ["JWT_SECRET_KEY"] = "test-secret-key"
-os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "30"
-
-# Import models first to ensure Base is available
-from src.models import User, Base
-from src.database import get_db
-from src.main import app
-
-# Create test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="function")
-def db():
-    """Create test database tables and provide session"""
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        # Clean up tables
-        Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture(scope="function")
-def client(db):
-    """Create test client with proper setup"""
-    # Skip TestClient for now due to version issues
-    # We'll use httpx directly in async tests
-    return None
-
-
-@pytest.fixture(scope="function")
-async def async_client(db):
-    """Create async test client"""
-    async with httpx.AsyncClient(base_url="http://test") as ac:
-        yield ac
-
+# Mock environment variables for testing
+@pytest.fixture(scope="session", autouse=True)
+def mock_env_vars():
+    """Mock environment variables for testing"""
+    os.environ.update({
+        "DATABASE_URL": "sqlite:///./test.db",
+        "JWT_SECRET_KEY": "test_secret_key_for_jwt_testing_12345",
+        "USER_SERVICE_PORT": "8004",
+        "ACCESS_KEY_ID": "test_access_key",
+        "SECRET_ACCESS_KEY": "test_secret_key",
+        "S3_USER_BUCKET_NAME": "test-bucket",
+        "FRONTEND_URL": "http://localhost:3000"
+    })
 
 @pytest.fixture
-def test_user_data():
-    """Test user data"""
-    return {
-        "email": "test@example.com",
-        "given_name": "Test",
-        "family_name": "User",
-        "google_id": "test_google_123"
-    }
-
-
-@pytest.fixture
-def create_test_user(db, test_user_data):
-    """Create a test user in database"""
-    user = User(
-        email=test_user_data["email"],
-        given_name=test_user_data["given_name"],
-        family_name=test_user_data["family_name"],
-        google_id=test_user_data["google_id"],
-        is_email_verified=True,
-        is_active=True
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+def mock_user():
+    """Mock user object for testing"""
+    user = Mock()
+    user.id = "test-user-id-123"
+    user.email = "test@example.com"
+    user.family_name = "Test"
+    user.given_name = "User"
+    user.level = 1
+    user.current_exp = 0
+    user.require_exp = 100
+    user.is_active = True
+    user.is_email_verified = True
+    user.sex = "Male"
+    user.bio = "Test bio"
+    user.remind_time = "18:30"
+    user.dob = None
+    user.created_at = "2024-01-01T00:00:00Z"
     return user
 
-
 @pytest.fixture
-def auth_headers():
-    """Mock authentication headers"""
-    return {"Authorization": "Bearer test-token"}
+def sample_user_data():
+    """Sample user data for testing"""
+    return {
+        'id': 'user-123',
+        'name': 'Test User',
+        'exp': 500,
+        'level': 3,
+        'completed_courses': 2,
+        'completed_quizzes': 5,
+        'average_score': 0.85,
+        'daily_streak': 7
+    }

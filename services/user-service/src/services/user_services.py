@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional
-from ..models import User
-from ..config import config
+from models import User
+from config import config
 
 def create_user(db: Session, email: str, password: str, **kwargs) -> User:
     user = User(email=email, password=password, **kwargs)

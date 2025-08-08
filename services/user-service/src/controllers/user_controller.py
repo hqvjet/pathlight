@@ -15,9 +15,9 @@ import requests
 from jose import jwt
 from datetime import datetime, timedelta
 
-from ..models import User
-from ..schemas.user_schemas import *
-from ..config import config
+from models import User
+from schemas.user_schemas import *
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ async def get_user_avatar(avatar_id: str):
         s3_client = get_s3_client()
         if not s3_client:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="S3 client not available")
-        bucket_name = config.S3_BUCKET_NAME
+        bucket_name = config.S3_USER_BUCKET_NAME
         if not bucket_name:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="S3 bucket not configured")
         avatar_key = f"avatars/{avatar_id}"
@@ -168,7 +168,7 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
         s3_client = get_s3_client()
         if not s3_client:
             return MessageResponse(status=500, message="Không thể kết nối đến dịch vụ lưu trữ")
-        bucket_name = config.S3_BUCKET_NAME
+        bucket_name = config.S3_USER_BUCKET_NAME
         if not bucket_name:
             return MessageResponse(status=500, message="Cấu hình lưu trữ không đầy đủ")
         avatar_id = str(current_user.id)
