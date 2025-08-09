@@ -76,8 +76,10 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
           callback: handleCredentialResponse,
           auto_select: false,
           cancel_on_tap_outside: true,
+          use_fedcm_for_prompt: true, // Enable FedCM per Chrome migration
+          context: 'signup',
         });
-        console.log('✅ Google Sign-In initialized');
+        console.log('✅ Google Sign-In initialized (FedCM enabled)');
       } else {
         console.error('❌ Google Sign-In API not loaded');
       }
@@ -160,7 +162,18 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
     window.google.accounts.id.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
       console.log('📋 Notification:', notification);
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        console.log('ℹ️ One Tap not available');
+        console.log('ℹ️ One Tap not available, falling back to button');
+        // Try to render a fallback button if container exists
+        const container = document.getElementById('google-signin-btn');
+        if (container && window.google) {
+          window.google.accounts.id.renderButton(container, {
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'rectangular',
+          });
+        }
         onError?.();
       }
     });

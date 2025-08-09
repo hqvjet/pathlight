@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react';
 import { storage } from '@/utils/api';
 import { authUtils } from '@/utils/auth';
 
+function tokenExpired(token: string | null) {
+  if (!token) return true;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false; // opaque token
+  try { const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))); if (!payload.exp) return false; return payload.exp * 1000 <= Date.now(); } catch { return true; }
+}
+
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isRemembered, setIsRemembered] = useState(false);
@@ -13,6 +20,13 @@ export const useAuth = () => {
     // Kiểm tra authentication status khi component mount
     const checkAuth = () => {
       const token = storage.getToken();
+      if (tokenExpired(token)) {
+        storage.removeToken();
+        setIsAuthenticated(false);
+        setIsRemembered(false);
+        setLoading(false);
+        return;
+      }
       const remembered = storage.isRemembered();
       
       setIsAuthenticated(!!token);

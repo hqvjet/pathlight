@@ -5,7 +5,7 @@ export const authUtils = {
     storage.removeToken();
     
     if (typeof window !== 'undefined') {
-      window.location.href = '/signin';
+      window.location.replace('/auth/signin');
     }
   },
 
