@@ -18,9 +18,14 @@ export const metadata: Metadata = {
   },
   description: 'Nền tảng AI dẫn lối tự học cá nhân hóa',
   icons: {
-    icon: '/assets/icons/logo.png',
-    shortcut: '/assets/icons/logo.png',
-    apple: '/assets/icons/logo.png'
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/assets/icons/logo.png?v=1', type: 'image/png' }
+    ],
+    apple: [
+      { url: '/assets/icons/logo.png?v=1' }
+    ],
+    shortcut: ['/favicon.ico']
   },
   openGraph: {
     title: 'PathLight',
