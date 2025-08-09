@@ -5,27 +5,43 @@ import { useRouter } from 'next/navigation';
 import Dashboard from '@/components/user/Dashboard';
 import { storage } from '@/utils/api';
 
+function isJwtValid(token: string | null) {
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return true; // non-JWT opaque token treat as valid
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+    );
+    if (!payload.exp) return true;
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export default function DashboardPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const token = storage.getToken();
-    if (token) {
-      setIsLoggedIn(true);
+    if (!isJwtValid(token)) {
+      // Clear possibly expired tokens
+      storage.removeToken();
+      const redirectParam = encodeURIComponent('/user/dashboard');
+      router.replace(`/auth/signin?redirect=${redirectParam}`);
     } else {
-      router.push('/auth/signin');
+      setAuthChecked(true);
     }
-    setLoading(false);
   }, [router]);
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    router.push('/');
+    storage.removeToken();
+    router.replace('/auth/signin');
   };
 
-  if (loading) {
+  if (!authChecked) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -34,10 +50,6 @@ export default function DashboardPage() {
         </div>
       </div>
     );
-  }
-
-  if (!isLoggedIn) {
-    return null;
   }
 
   return <Dashboard onLogout={handleLogout} />;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -29,8 +29,19 @@ export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    try {
+      const token = storage.getToken();
+      if (token) {
+        router.replace('/user/dashboard');
+      }
+    } catch {
+      // ignore
+    }
+  }, [router]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault(); // prevent default form submit
     setLoading(true);
 
     // Validate passwords match

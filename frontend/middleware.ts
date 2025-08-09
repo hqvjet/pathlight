@@ -9,6 +9,8 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const url = request.nextUrl.clone();
 
+  if (pathname === '/signin') { url.pathname = '/auth/signin'; return NextResponse.redirect(url); }
+
   // =============================================================================
   // 🔄 API REDIRECTS
   // =============================================================================
@@ -38,46 +40,56 @@ export function middleware(request: NextRequest) {
   // =============================================================================
   
   // Get auth token from cookies (prioritize persistent, then session)
-  const authToken = request.cookies.get('auth_token')?.value || 
+  let authToken = request.cookies.get('auth_token')?.value || 
                    request.cookies.get('session_token')?.value ||
                    request.headers.get('authorization')?.replace('Bearer ', '');
 
+  // Helper: check JWT expiry (gracefully handles non-JWT tokens)
+  const isTokenExpired = (token?: string | null): boolean => {
+    if (!token || token.split('.').length !== 3) return false;
+    try {
+      const base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+      const json = JSON.parse(atob(base64));
+      if (!json.exp) return false;
+      return json.exp * 1000 < Date.now();
+    } catch { return false; }
+  };
+
+  const tokenExpired = isTokenExpired(authToken);
+
+  // If token expired, prepare to clear it and treat as unauthenticated
+  let clearExpiredCookiesResponse: NextResponse | null = null;
+  if (authToken && tokenExpired) {
+    authToken = null; // treat as unauthenticated below
+    clearExpiredCookiesResponse = NextResponse.next();
+    clearExpiredCookiesResponse.cookies.set('auth_token','',{maxAge:0,path:'/'});
+    clearExpiredCookiesResponse.cookies.set('session_token','',{maxAge:0,path:'/'});
+    clearExpiredCookiesResponse.cookies.set('remember_me','',{maxAge:0,path:'/'});
+  }
+
   // Protected routes that require authentication
-  const protectedRoutes = [
-    '/user/dashboard',
-    '/user/profile',
-    '/courses',
-    '/quizzes',
-    '/admin',
-  ];
+  const protectedRoutes = [ '/user/dashboard', '/user/profile', '/courses', '/quizzes', '/admin' ];
+  const publicRoutes = [ '/auth/signin', '/auth/signup', '/auth/forgot-password' ];
 
-  // Public routes that should redirect authenticated users
-  const publicRoutes = [
-    '/auth/signin',
-    '/auth/signup',
-    '/auth/forgot-password',
-  ];
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
 
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname.startsWith(route)
-  );
-  
-  const isPublicRoute = publicRoutes.some(route => 
-    pathname.startsWith(route)
-  );
-
-  // Redirect unauthenticated users from protected routes
+  // Redirect unauthenticated (or expired) users from protected routes
   if (isProtectedRoute && !authToken) {
     url.pathname = '/auth/signin';
     url.searchParams.set('redirect', pathname);
+    if (clearExpiredCookiesResponse) return NextResponse.redirect(url); // cookies already cleared
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users from public auth routes
+  // Redirect authenticated (non-expired) users away from public auth routes
   if (isPublicRoute && authToken) {
     url.pathname = '/user/dashboard';
     return NextResponse.redirect(url);
   }
+
+  // Continue with (possible) cookie clearing if token expired but route is public (e.g. /auth/signin)
+  if (clearExpiredCookiesResponse) return clearExpiredCookiesResponse;
 
   // =============================================================================
   // 🌐 CORS HEADERS (for API routes)
@@ -85,12 +97,9 @@ export function middleware(request: NextRequest) {
   
   if (pathname.startsWith('/')) {
     const response = NextResponse.next();
-    
-    // Add CORS headers for API routes
     response.headers.set('Access-Control-Allow-Origin', '*');
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
     return response;
   }
 

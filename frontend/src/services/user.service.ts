@@ -77,7 +77,7 @@ export const userService = {
    * Get current user profile
    */
   async getProfile() {
-    return api.get<User>('/api/users/profile');
+    return api.get('/api/users/profile');
   },
 
   /**
@@ -85,14 +85,14 @@ export const userService = {
    */
   async getUserInfo(id?: string) {
     const endpoint = id ? `/api/users/info?id=${id}` : '/api/users/info';
-    return api.get<User>(endpoint);
+    return api.get(endpoint);
   },
 
   /**
    * Update user profile (change-info endpoint)
    */
   async updateProfile(data: UpdateProfileRequest) {
-    return api.put<User>('/api/users/profile', data);
+    return api.put('/api/users/profile', data);
   },
 
   /**
@@ -113,7 +113,7 @@ export const userService = {
    * Upload user avatar
    */
   async uploadAvatar(file: File) {
-    return api.uploadFile<{ message: string; avatar_url?: string }>('/api/users/avatar', file);
+    return api.uploadFile('/api/users/avatar', file);
   },
 
   /**
@@ -149,7 +149,7 @@ export const userService = {
    * Get users by IDs (for leaderboard avatars, etc.)
    */
   async getUsersByIds(userIds: string[]) {
-    return api.post<Record<string, User>>('/api/users/users-by-ids', userIds);
+    return api.post('/api/users/users-by-ids', userIds);
   },
 
   // =============================================================================
@@ -169,21 +169,21 @@ export const userService = {
       params.append('search', search);
     }
 
-    return api.get<UserListResponse>(`/api/users?${params.toString()}`);
+    return api.get(`/api/users?${params.toString()}`);
   },
 
   /**
    * Get user by ID (admin only)
    */
   async getUserById(id: string) {
-    return api.get<User>(`/api/users/${id}`);
+    return api.get(`/api/users/${id}`);
   },
 
   /**
    * Update user (admin only)
    */
   async updateUser(id: string, data: Partial<User>) {
-    return api.put<User>(`/api/users/${id}`, data);
+    return api.put(`/api/users/${id}`, data);
   },
 
   /**
@@ -204,14 +204,14 @@ export const userService = {
    * Reset user password (admin only)
    */
   async resetUserPassword(id: string) {
-    return api.post<{ temporary_password: string }>(`/api/users/${id}/reset-password`);
+    return api.post(`/api/users/${id}/reset-password`);
   },
 
   /**
    * Get user statistics (admin only)
    */
   async getUserStats(id: string) {
-    return api.get<UserStats>(`/api/users/${id}/stats`);
+    return api.get(`/api/users/${id}/stats`);
   },
 };
 
