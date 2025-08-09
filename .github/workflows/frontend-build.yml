@@ -1,0 +1,75 @@
+name: Frontend Build
+
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-build.yml'
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'frontend/**'
+
+concurrency:
+  group: frontend-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18.x, 20.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint
+        run: npm run lint -- --no-cache
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_APP_NAME: Pathlight
+          NEXT_PUBLIC_APP_VERSION: 0.1.0
+          NEXT_PUBLIC_ENVIRONMENT: ci
+          NEXT_PUBLIC_API_BASE_URL: https://example.com/api
+        run: npm run build
+
+      - name: Upload build artifacts (optional)
+        if: success() && matrix.node == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/.next
+          if-no-files-found: ignore
+
+  # Simple status summary job (optional)
+  summary:
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report result
+        run: |
+          echo "Build matrix result: ${{ needs.build.result }}"
