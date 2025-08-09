@@ -1,18 +1,9 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { api, storage } from '@/utils/api';
-import Avatar from '@/components/common/Avatar';
-import { useRouter } from 'next/navigation';
-import {
-  BookOpenIcon,
-  ClipboardListIcon,
-  UserCircleIcon,
-  DocumentTextIcon,
-} from '@/components/icons';
+import { useState, useMemo } from 'react';
+import { useActivity, useDashboard } from './dashboard/hooks';
 import Layout from '@/components/common/Layout';
 import { UserProfile } from './dashboard/types';
-import { useDashboard, useActivity } from './dashboard/hooks';
 import { StatsGrid } from './dashboard/StatsGrid';
 import { ProfileCard } from './dashboard/ProfileCard';
 import { ActivityHeatmap } from './dashboard/ActivityHeatmap';
@@ -25,7 +16,7 @@ interface DashboardProps {
 export default function Dashboard({ onLogout }: DashboardProps) {
   const { user, dashboardData, loading } = useDashboard(onLogout);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const { activityData, handleActivityClick, generateYearActivityData } = useActivity(selectedYear);
+  const { handleActivityClick, generateYearActivityData } = useActivity();
 
   const layoutUser = useMemo(() => {
     if (!user) return { avatar_url: '', name: '', email: '' } as UserProfile;

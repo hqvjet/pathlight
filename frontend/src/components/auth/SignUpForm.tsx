@@ -35,13 +35,13 @@ export default function SignUpForm() {
       if (token) {
         router.replace('/user/dashboard');
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault(); // prevent default form submit
     setLoading(true);
 
     // Validate passwords match

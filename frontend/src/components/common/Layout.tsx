@@ -83,7 +83,6 @@ export default function Layout({ children, title, user }: LayoutProps) {
   };
 
   const sidebarExpandedDesktop = !isMobile && sidebarOpen;
-  const sidebarCollapsedDesktop = !isMobile && !sidebarOpen;
   const mainOffsetClasses = isMobile ? '' : sidebarExpandedDesktop ? 'lg:ml-64' : 'lg:ml-16';
 
   return (

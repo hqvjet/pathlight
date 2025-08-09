@@ -3,7 +3,7 @@ import { api } from '@/lib/api-client';
 import { storage } from '@/utils/api';
 import { showToast } from '@/utils/toast';
 import { AuthResponse } from '@/utils/types';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 
 function jwtExpired(token: string | null) {
@@ -15,12 +15,10 @@ function jwtExpired(token: string | null) {
 
 export function useSignIn() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const redirectTarget = searchParams.get('redirect') || '/user/dashboard';
+  const [redirectTarget, setRedirectTarget] = useState<string>('/user/dashboard');
 
   useEffect(() => { setRememberMe(storage.isRemembered()); }, []);
   useEffect(() => {
@@ -33,6 +31,13 @@ export function useSignIn() {
       }
     } catch {}
   }, [router, redirectTarget]);
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const redirect = url.searchParams.get('redirect');
+      if (redirect) setRedirectTarget(redirect);
+    } catch {}
+  }, []);
 
   const finalizeLogin = () => {
     showToast.authSuccess('Đăng nhập thành công!');

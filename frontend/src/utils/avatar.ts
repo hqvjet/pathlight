@@ -1,5 +1,3 @@
-import { API_CONFIG } from '@/config';
-
 export interface AvatarUser {
   id?: string;
   avatar_url?: string;

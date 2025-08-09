@@ -21,10 +21,11 @@ export function useProfileData() {
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
       if (response.status !== 200) { response = await api.user.getDashboard(); if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
       if (response.status === 200) {
-        const responseData: any = response.data;
-        let userData: any = responseData;
+        const responseData = response.data as unknown;
+        let userData: unknown = responseData;
         if (responseData && typeof responseData === 'object') {
-          if ('info' in responseData) userData = responseData.info; else if ('Info' in responseData) userData = responseData.Info;
+          if ('info' in responseData) userData = (responseData as { info: UserProfile }).info;
+          else if ('Info' in responseData) userData = (responseData as { Info: UserProfile }).Info;
         }
         const userObj = userData as UserProfile;
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
@@ -55,7 +56,7 @@ export function useProfileData() {
       const response = await api.user.updateProfile(updateData);
       if (response.status === 200) { showToast.authSuccess('Cập nhật hồ sơ thành công!'); setEditMode(false); await loadUserProfile(); }
       else {
-        const data: any = response.data;
+        const data = response.data as { message?: string } | undefined;
         let errorMsg = response.error || 'Cập nhật hồ sơ thất bại';
         if (data?.message) errorMsg = data.message;
         showToast.authError(errorMsg);
@@ -72,14 +73,14 @@ export function useProfileData() {
       const response = await api.user.updateAvatar(file);
       if (response.status === 200) {
         showToast.authSuccess('Cập nhật ảnh đại diện thành công!');
-        const avatarData: any = response.data;
-        if (avatarData?.avatar_url || avatarData?.avatar_id) {
+        const avatarData = response.data as { avatar_url?: string; avatar_id?: string } | undefined;
+        if (avatarData && (avatarData.avatar_url || avatarData.avatar_id)) {
           setUser(prev => prev ? { ...prev, avatar_url: avatarData.avatar_url || prev.avatar_url, avatar_id: avatarData.avatar_id || prev.avatar_id } : prev);
           setAvatarKey(k => k + 1);
         }
         setTimeout(async () => { await loadUserProfile(); setAvatarKey(k => k + 1); }, 500);
       } else {
-        const data: any = response.data; let errorMsg = response.error || 'Tải ảnh lên thất bại'; if (data?.message) errorMsg = data.message; showToast.authError(errorMsg);
+        const data = response.data as { message?: string } | undefined; let errorMsg = response.error || 'Tải ảnh lên thất bại'; if (data?.message) errorMsg = data.message; showToast.authError(errorMsg);
       }
     } catch { showToast.authError('Lỗi kết nối. Vui lòng thử lại.'); }
     finally { setUploading(false); setAvatarLoading(false); }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Dashboard from '@/components/user/Dashboard';
 import { storage } from '@/utils/api';
 
@@ -23,7 +23,6 @@ function isJwtValid(token: string | null) {
 export default function DashboardPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     const token = storage.getToken();
@@ -35,7 +34,7 @@ export default function DashboardPage() {
     } else {
       setAuthChecked(true);
     }
-  }, [router, searchParams]);
+  }, [router]);
 
   const handleLogout = () => {
     storage.removeToken();

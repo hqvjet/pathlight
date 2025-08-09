@@ -136,7 +136,8 @@ export class ApiClient {
   }
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     let data: unknown; try { const text = await response.text(); data = text ? JSON.parse(text) : null; } catch { data = null; }
-    const apiResponse: ApiResponse<T> = { data: response.ok ? (data as T) : undefined, message: (data as any)?.message || (data as any)?.detail, error: response.ok ? undefined : ((data as any)?.error || (data as any)?.detail || response.statusText), status: response.status, success: response.ok };
+    const body = data as { message?: string; detail?: string; error?: string } | null;
+    const apiResponse: ApiResponse<T> = { data: response.ok ? (data as T) : undefined, message: body?.message || body?.detail, error: response.ok ? undefined : (body?.error || body?.detail || response.statusText), status: response.status, success: response.ok };
     if (!response.ok) throw this.createApiError(apiResponse);
     return apiResponse;
   }
@@ -157,26 +158,26 @@ export class ApiClient {
         }
       }
       return this.handleResponse<T>(response);
-    } catch (error: any) {
+    } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof ApiErrorClass) throw error;
       if (error instanceof DOMException && error.name === 'AbortError') throw new Error(ERROR_CONSTANTS.MESSAGES.TIMEOUT_ERROR);
       throw new Error(ERROR_CONSTANTS.MESSAGES.NETWORK_ERROR);
     }
-  }
+   }
   private async executeWithRetry<T>(url: string, config: ApiRequestConfig): Promise<ApiResponse<T>> {
     const retry = config.retry || { attempts: API_CONSTANTS.RETRY_ATTEMPTS, delay: API_CONSTANTS.RETRY_DELAY };
-    let lastError: Error | null = null;
+     let lastError: Error | null = null;
     for (let attempt = 0; attempt < retry.attempts; attempt++) {
-      try { return await this.executeRequest<T>(url, config); } catch (error: any) {
-        lastError = error;
+      try { return await this.executeRequest<T>(url, config); } catch (error) {
+        lastError = error as Error;
         if (error instanceof ApiErrorClass) {
           const noRetryStatuses = [400,401,403,404]; if (noRetryStatuses.includes(error.status)) throw error; }
-        if (attempt < retry.attempts - 1) await this.sleep(retry.delay * (attempt + 1));
-      }
-    }
-    throw lastError as Error;
-  }
+         if (attempt < retry.attempts - 1) await this.sleep(retry.delay * (attempt + 1));
+       }
+     }
+     throw lastError as Error;
+   }
   get<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'GET' }); }
   post<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'POST', body: data ? JSON.stringify(data) : undefined }); }
   put<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'PUT', body: data ? JSON.stringify(data) : undefined }); }
@@ -185,13 +186,20 @@ export class ApiClient {
   async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
     const formData = new FormData(); formData.append('file', file);
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth }); delete (headers as any)['Content-Type'];
+    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
+    // Remove content-type for multipart so browser sets boundary
+    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
+      delete (headers as Record<string, unknown>)['Content-Type'];
+    }
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
     const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file));
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth }); delete (headers as any)['Content-Type'];
+    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
+    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
+      delete (headers as Record<string, unknown>)['Content-Type'];
+    }
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
 }

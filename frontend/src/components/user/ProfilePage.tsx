@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useProfileData } from './profile/hooks';
 import Layout from '@/components/common/Layout';
 import { ProfileAvatar } from './profile/ProfileAvatar';
@@ -10,7 +9,6 @@ import { ProfileFormData } from './profile/types';
 // Simple date picker using native input[type=date] overlay triggered by icon button
 
 export default function ProfilePage() {
-  const router = useRouter();
   const { loading, saving, user, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar } = useProfileData();
   const [showNativeDate, setShowNativeDate] = useState(false);
   const [nativeDateValue, setNativeDateValue] = useState('');

@@ -83,14 +83,14 @@ export const authService = {
    * Sign in with email and password
    */
   async signIn(data: SignInRequest) {
-    return api.post<AuthResponse>(endpoints.signin, data);
+    return api.post(endpoints.signin, data);
   },
 
   /**
    * Sign up with email and password
    */
   async signUp(data: SignUpRequest) {
-    return api.post<AuthResponse>(endpoints.signup, data);
+    return api.post(endpoints.signup, data);
   },
 
   /**
@@ -104,7 +104,7 @@ export const authService = {
    * Google OAuth sign in
    */
   async googleSignIn(data: GoogleAuthRequest) {
-    return api.post<AuthResponse>(endpoints.oauthSignin, data);
+    return api.post(endpoints.oauthSignin, data);
   },
 
   /**
@@ -146,14 +146,14 @@ export const authService = {
    * Admin sign in
    */
   async adminSignIn(data: SignInRequest) {
-    return api.post<AuthResponse>(endpoints.adminSignin, data);
+    return api.post(endpoints.adminSignin, data);
   },
 
   /**
    * Refresh access token
    */
   async refreshToken(refreshToken: string) {
-    return api.post<{ access_token: string; refresh_token?: string }>(
+    return api.post(
       '/api/v1/auth/refresh',
       { refresh_token: refreshToken },
       { skipAuth: true }
@@ -164,7 +164,7 @@ export const authService = {
    * Get current user profile
    */
   async getCurrentUser() {
-    return api.get<AuthResponse['user']>('/api/v1/auth/me');
+    return api.get('/api/v1/auth/me');
   },
 
   /**
