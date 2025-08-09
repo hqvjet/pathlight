@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18.x, 20.x]
+        node: [22.x]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,19 +57,9 @@ jobs:
         run: npm run build
 
       - name: Upload build artifacts (optional)
-        if: success() && matrix.node == '20.x'
+        if: success() && matrix.node == '22.x'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
           path: frontend/.next
           if-no-files-found: ignore
-
-  # Simple status summary job (optional)
-  summary:
-    if: always()
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Report result
-        run: |
-          echo "Build matrix result: ${{ needs.build.result }}"
