@@ -22,6 +22,8 @@ const nextConfig: NextConfig = {
   // 🖼️  Image optimisation
   // ---------------------------------------------------------------------------
   images: {
+  // Disable built-in Image Optimization to ensure direct loading (no /_next/image)
+  unoptimized: true,
     formats: ['image/avif', 'image/webp'],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
