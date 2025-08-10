@@ -41,7 +41,7 @@ def get_db_context():
         db.close()
 
 def create_tables():
-    from .models import User, Admin, TokenBlacklist, Base
+    from models import User, Admin, TokenBlacklist, Base
     import time
     
     max_retries = 5

@@ -173,21 +173,56 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             return MessageResponse(status=500, message="Cấu hình lưu trữ không đầy đủ")
         avatar_id = str(current_user.id)
         try:
+            # Log image processing details for debugging
+            logger.info(f"Processing avatar for user {current_user.email}: content_type={avatar_file.content_type}, size={len(contents)} bytes")
+            
+            # Validate image format more strictly
+            if len(contents) < 100:  # Too small to be a valid image
+                logger.warning(f"Avatar file too small: {len(contents)} bytes")
+                return MessageResponse(status=400, message="File ảnh không hợp lệ hoặc bị hỏng")
+            
+            # Try to open and validate the image
             image = Image.open(io.BytesIO(contents))
+            logger.info(f"Original image: mode={image.mode}, size={image.size}, format={image.format}")
+            
+            # Verify the image
+            image.verify()
+            
+            # Reopen the image for processing (verify() consumes the image)
+            image = Image.open(io.BytesIO(contents))
+            
+            # Convert image mode if necessary
             if image.mode in ('RGBA', 'LA', 'P'):
+                logger.info(f"Converting image from {image.mode} to RGB")
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
                     image = image.convert('RGBA')
                 background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
                 image = background
+            elif image.mode != 'RGB':
+                logger.info(f"Converting image from {image.mode} to RGB")
+                image = image.convert('RGB')
+            
+            # Resize image
+            original_size = image.size
             image = image.resize((400, 400), Image.Resampling.LANCZOS)
+            logger.info(f"Resized image from {original_size} to {image.size}")
+            
+            # Save to buffer
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='JPEG', optimize=True, quality=85)
             img_buffer.seek(0)
-        except Exception:
-            return MessageResponse(status=400, message="Không thể xử lý ảnh. Vui lòng thử ảnh khác")
+            
+            logger.info(f"Successfully processed avatar: final size={img_buffer.getbuffer().nbytes} bytes")
+            
+        except Exception as e:
+            logger.error(f"Error processing avatar image for user {current_user.email}: {str(e)}")
+            logger.error(f"Image details: content_type={avatar_file.content_type}, filename={avatar_file.filename}, size={len(contents)}")
+            return MessageResponse(status=400, message="Không thể xử lý ảnh. Vui lòng thử ảnh khác hoặc kiểm tra định dạng file")
         try:
             s3_key = f"avatars/{avatar_id}"
+            logger.info(f"Uploading avatar to S3: bucket={bucket_name}, key={s3_key}, size={img_buffer.getbuffer().nbytes}")
+            
             s3_client.upload_fileobj(
                 img_buffer,
                 bucket_name,
@@ -203,14 +238,20 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
                     }
                 }
             )
-        except Exception:
+            logger.info(f"Successfully uploaded avatar to S3 for user {current_user.email}")
+            
+        except Exception as e:
+            logger.error(f"Error uploading avatar to S3 for user {current_user.email}: {str(e)}")
             return MessageResponse(status=500, message="Lỗi khi tải ảnh lên. Vui lòng thử lại")
+        # Update user record
         current_user.avatar_url = avatar_id
         db.commit()
-        logger.info(f"Avatar updated: {current_user.email}")
+        logger.info(f"Avatar updated successfully for user: {current_user.email}")
         return MessageResponse(status=200, message="Bạn đã cập nhật Avatar thành công")
-    except Exception:
+        
+    except Exception as e:
         db.rollback()
+        logger.error(f"Unexpected error in update_user_avatar for user {getattr(current_user, 'email', 'unknown') if 'current_user' in locals() else 'unknown'}: {str(e)}")
         return MessageResponse(status=500, message="Có lỗi xảy ra khi tải ảnh lên, xin vui lòng thử lại")
 
 async def get_user_info(user_id: Optional[str], current_user: User, db: Session) -> UserInfoResponse:
@@ -234,7 +275,8 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={target_user.id}"
+                # Return S3 direct URL instead of service endpoint
+                avatar_url = f"https://pathlight-user.s3.ap-northeast-1.amazonaws.com/avatars/{target_user.id}"
         
         user_info = {
             "id": getattr(target_user, 'id', None),
@@ -281,7 +323,8 @@ async def get_all_users(db: Session) -> UsersListResponse:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+                    # Return S3 direct URL instead of service endpoint
+                    avatar_url = f"https://pathlight-user.s3.ap-northeast-1.amazonaws.com/avatars/{user.id}"
                 
             user_data = {
                 "user_id": getattr(user, 'id', None),
@@ -337,7 +380,8 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={current_user.id}"
+                # Return S3 direct URL instead of service endpoint
+                avatar_url = f"https://pathlight-user.s3.ap-northeast-1.amazonaws.com/avatars/{current_user.id}"
         course_stats = await get_course_stats(current_user.email)
         quiz_stats = await get_quiz_stats(current_user.email)
         rank_data = await calculate_user_rank(current_user, db)
@@ -487,20 +531,28 @@ async def get_leaderboard_data(db: Session) -> list:
         leaderboard = []
         for i, user in enumerate(top_users):
             avatar_url = None
-            if user.avatar_url:
-                if user.avatar_url.startswith('http'):
-                    avatar_url = user.avatar_url
+            avatar_id = getattr(user, 'avatar_url', None)
+            if avatar_id:
+                if avatar_id.startswith('http'):
+                    avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+                    # Return S3 direct URL instead of service endpoint
+                    avatar_url = f"https://pathlight-user.s3.ap-northeast-1.amazonaws.com/avatars/{user.id}"
+            
+            user_family_name = getattr(user, 'family_name', '') or ''
+            user_given_name = getattr(user, 'given_name', '') or ''
+            user_email = getattr(user, 'email', '')
+            user_level = getattr(user, 'level', None) or 1
+            user_exp = getattr(user, 'current_exp', None) or 0
             
             leaderboard.append({
                 "rank": i + 1,
                 "id": str(user.id),
-                "name": f"{user.family_name or ''} {user.given_name or ''}".strip() or user.email.split('@')[0],
-                "level": user.level or 1,
-                "experience": user.current_exp or 0,
+                "name": f"{user_family_name} {user_given_name}".strip() or user_email.split('@')[0],
+                "level": user_level,
+                "experience": user_exp,
                 "avatar_url": avatar_url,
-                "initials": "".join([name[0].upper() for name in [user.family_name or '', user.given_name or ''] if name])[:2] or user.email[0].upper()
+                "initials": "".join([name[0].upper() for name in [user_family_name, user_given_name] if name])[:2] or user_email[0].upper()
             })
         
         return leaderboard
@@ -519,14 +571,20 @@ async def get_users_by_ids(user_ids: list[str], db: Session) -> dict:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+                    # Return S3 direct URL instead of service endpoint
+                    avatar_url = f"https://pathlight-user.s3.ap-northeast-1.amazonaws.com/avatars/{user.id}"
+            
+            user_family_name = getattr(user, 'family_name', '') or ''
+            user_given_name = getattr(user, 'given_name', '') or ''
+            user_email = getattr(user, 'email', '')
+            user_level = getattr(user, 'level', None) or 1
             
             user_data[str(user.id)] = {
                 "id": str(user.id),
-                "name": f"{user.family_name or ''} {user.given_name or ''}".strip() or user.email.split('@')[0],
+                "name": f"{user_family_name} {user_given_name}".strip() or user_email.split('@')[0],
                 "avatar_url": avatar_url,
-                "level": user.level or 1,
-                "initials": "".join([name[0].upper() for name in [user.family_name or '', user.given_name or ''] if name])[:2] or user.email[0].upper()
+                "level": user_level,
+                "initials": "".join([name[0].upper() for name in [user_family_name, user_given_name] if name])[:2] or user_email[0].upper()
             }
         
         return user_data

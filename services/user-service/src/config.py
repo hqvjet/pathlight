@@ -29,8 +29,13 @@ class Config:
     # AWS S3 configuration (optional)
     AWS_ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
-    AWS_REGION: str = "ap-northeast-1"
-    S3_USER_BUCKET_NAME: str = os.getenv("S3_USER_BUCKET_NAME", "")
+    AWS_REGION: str = os.getenv("REGION", "ap-northeast-1")
+    S3_USER_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
+
+    # Service URLs for inter-service communication
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com")
+    COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", "https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com")
+    QUIZ_SERVICE_URL: str = os.getenv("QUIZ_SERVICE_URL", "https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com")
 
     # File upload configuration
     UPLOAD_DIR: str = "./uploads"
@@ -38,7 +43,7 @@ class Config:
     ALLOWED_FILE_TYPES: List[str] = ["jpg", "jpeg", "png", "gif"]
 
     # Frontend configuration
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api")
 
 config = Config()
 
