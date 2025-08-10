@@ -173,6 +173,14 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             return MessageResponse(status=500, message="Cấu hình lưu trữ không đầy đủ")
         avatar_id = str(current_user.id)
         try:
+            logger.info(f"Processing avatar for user {current_user.email}: content_type={avatar_file.content_type}, size={len(contents)} bytes")
+
+            if len(contents) < 100:
+                logger.warning(f"Avatar file too small: {len(contents)} bytes")
+                return MessageResponse(status=400, message="File ảnh không hợp lệ hoặc bị hỏng")
+
+            image = Image.open(io.BytesIO(contents))
+            image.verify()
             image = Image.open(io.BytesIO(contents))
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
@@ -180,6 +188,9 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
                     image = image.convert('RGBA')
                 background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
                 image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+
             image = image.resize((400, 400), Image.Resampling.LANCZOS)
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='JPEG', optimize=True, quality=85)
@@ -234,8 +245,8 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={target_user.id}"
-        
+                avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={target_user.id}"
+
         user_info = {
             "id": getattr(target_user, 'id', None),
             "email": getattr(target_user, 'email', None),
@@ -281,8 +292,8 @@ async def get_all_users(db: Session) -> UsersListResponse:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
-                
+                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
+
             user_data = {
                 "user_id": getattr(user, 'id', None),
                 "family_name": getattr(user, 'family_name', None),
@@ -337,7 +348,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={current_user.id}"
+                avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={current_user.id}"
         course_stats = await get_course_stats(current_user.email)
         quiz_stats = await get_quiz_stats(current_user.email)
         rank_data = await calculate_user_rank(current_user, db)
@@ -491,7 +502,7 @@ async def get_leaderboard_data(db: Session) -> list:
                 if user.avatar_url.startswith('http'):
                     avatar_url = user.avatar_url
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
             
             leaderboard.append({
                 "rank": i + 1,
@@ -519,7 +530,7 @@ async def get_users_by_ids(user_ids: list[str], db: Session) -> dict:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
             
             user_data[str(user.id)] = {
                 "id": str(user.id),
