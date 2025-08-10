@@ -65,7 +65,9 @@ export default function Avatar({
       height={size}
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
-      priority={size > 64}
+  priority={size > 64}
+  // Load directly from S3 without Next.js optimization proxy to avoid 400s
+  unoptimized
     />
   );
 }
