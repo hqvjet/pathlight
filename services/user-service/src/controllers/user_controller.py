@@ -192,7 +192,6 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
 
             image = Image.open(io.BytesIO(contents))
             image.verify()
-            image = Image.open(io.BytesIO(contents))
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
@@ -227,7 +226,7 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             )
         except Exception:
             return MessageResponse(status=500, message="Lỗi khi tải ảnh lên. Vui lòng thử lại")
-        current_user.avatar_url = avatar_id
+        setattr(current_user, 'avatar_url', avatar_id)
         db.commit()
         logger.info(f"Avatar updated: {current_user.email}")
         return MessageResponse(status=200, message="Bạn đã cập nhật Avatar thành công")
