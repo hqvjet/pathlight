@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
       { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
+  { protocol: 'https', hostname: 'pathlight-user.s3.ap-northeast-1.amazonaws.com', pathname: '/**' },
       // Example production host:
       // { protocol: 'https', hostname: 'cdn.example.com', pathname: '/**' },
     ],

@@ -275,7 +275,8 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={target_user.id}"
+                # Serve directly from S3 object path, not the proxy route
+                avatar_url = f"{config.S3_USER_URL}/avatars/{target_user.id}"
 
         user_info = {
             "id": getattr(target_user, 'id', None),
@@ -322,7 +323,8 @@ async def get_all_users(db: Session) -> UsersListResponse:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
+                    # Serve directly from S3 object path, not the proxy route
+                    avatar_url = f"{config.S3_USER_URL}/avatars/{user.id}"
 
             user_data = {
                 "user_id": getattr(user, 'id', None),
@@ -378,7 +380,8 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             if avatar_id.startswith('http'):
                 avatar_url = avatar_id
             else:
-                avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={current_user.id}"
+                # Serve directly from S3 object path, not the proxy route
+                avatar_url = f"{config.S3_USER_URL}/avatars/{current_user.id}"
         course_stats = await get_course_stats(current_user.email)
         quiz_stats = await get_quiz_stats(current_user.email)
         rank_data = await calculate_user_rank(current_user, db)
@@ -532,7 +535,7 @@ async def get_leaderboard_data(db: Session) -> list:
                 if user.avatar_url.startswith('http'):
                     avatar_url = user.avatar_url
                 else:
-                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
+                    avatar_url = f"{config.S3_USER_URL}/avatars/{user.id}"
             
             leaderboard.append({
                 "rank": i + 1,
@@ -560,7 +563,7 @@ async def get_users_by_ids(user_ids: list[str], db: Session) -> dict:
                 if avatar_id.startswith('http'):
                     avatar_url = avatar_id
                 else:
-                    avatar_url = f"{config.S3_USER_URL}/avatar/?user_id={user.id}"
+                    avatar_url = f"{config.S3_USER_URL}/avatars/{user.id}"
             
             user_data[str(user.id)] = {
                 "id": str(user.id),

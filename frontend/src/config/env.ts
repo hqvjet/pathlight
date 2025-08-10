@@ -22,7 +22,17 @@ export const API_CONFIG = {
 } as const;
 
 // =============================================================================
-// 🔐 AUTHENTICATION CONFIGURATION
+// �️ ASSETS / S3 CONFIGURATION
+// =============================================================================
+export const ASSET_CONFIG = {
+  S3_USER_URL: process.env.NEXT_PUBLIC_S3_USER_URL || 'https://pathlight-user.s3.ap-northeast-1.amazonaws.com',
+  get AVATAR_BASE_URL() {
+    return `${this.S3_USER_URL}/avatars`;
+  },
+} as const;
+
+// =============================================================================
+// �🔐 AUTHENTICATION CONFIGURATION
 // =============================================================================
 export const AUTH_CONFIG = {
   GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
