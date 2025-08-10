@@ -136,26 +136,37 @@ async def change_user_info(request: ChangeInfoRequest, current_user: User, db: S
 
 async def get_user_avatar(avatar_id: str):
     try:
+        logger.info(f"[Avatar] Request to fetch avatar: avatar_id={avatar_id}")
         s3_client = get_s3_client()
         if not s3_client:
+            logger.error("[Avatar] S3 client not available (check AWS creds/region)")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="S3 client not available")
         bucket_name = config.S3_USER_BUCKET_NAME
         if not bucket_name:
+            logger.error("[Avatar] S3 bucket not configured (S3_USER_BUCKET_NAME is empty)")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="S3 bucket not configured")
         avatar_key = f"avatars/{avatar_id}"
+        logger.debug(f"[Avatar] Using bucket='{bucket_name}', key='{avatar_key}'")
         try:
+            logger.debug("[Avatar] Checking object existence with head_object")
             s3_client.head_object(Bucket=bucket_name, Key=avatar_key)
-            presigned_url = s3_client.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': avatar_key}, ExpiresIn=3600)
+            logger.debug("[Avatar] Object exists. Generating presigned_url")
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': avatar_key},
+                ExpiresIn=3600
+            )
+            logger.info("[Avatar] Generated presigned URL successfully; redirecting")
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url=presigned_url)
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                logger.error(f"Avatar not found: {avatar_key}")
+                logger.warning(f"[Avatar] Not found in S3: bucket='{bucket_name}', key='{avatar_key}'")
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar không tồn tại")
-            logger.error(f"S3 error: {e.response['Error']['Message']}")
+            logger.error(f"[Avatar] S3 ClientError: code={e.response['Error'].get('Code')} message={e.response['Error'].get('Message')}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lỗi khi truy cập avatar")
     except Exception as e:
-        logger.error(f"Avatar error {avatar_id}: {str(e)}")
+        logger.error(f"[Avatar] Unexpected error for avatar_id={avatar_id}: {str(e)}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ảnh")
 
 async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Session) -> MessageResponse:
