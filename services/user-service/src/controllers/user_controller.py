@@ -7,7 +7,7 @@ from fastapi import HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional
-from PIL import Image
+from PIL import Image, ImageFile
 import io
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -20,6 +20,9 @@ from schemas.user_schemas import *
 from config import config
 
 logger = logging.getLogger(__name__)
+
+# Allow loading of truncated images to be more fault-tolerant
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ===== LEVEL SYSTEM CONFIGURATION =====
 LEVEL_EXP_THRESHOLDS = [
@@ -176,13 +179,17 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
         contents = await avatar_file.read()
         if len(contents) > 3 * 1024 * 1024:
             return MessageResponse(status=400, message="Kích thước ảnh không được vượt quá 3MB")
+
         s3_client = get_s3_client()
         if not s3_client:
             return MessageResponse(status=500, message="Không thể kết nối đến dịch vụ lưu trữ")
         bucket_name = config.S3_USER_BUCKET_NAME
         if not bucket_name:
             return MessageResponse(status=500, message="Cấu hình lưu trữ không đầy đủ")
+
         avatar_id = str(current_user.id)
+        upload_content_type = 'image/jpeg'
+
         try:
             logger.info(f"Processing avatar for user {current_user.email}: content_type={avatar_file.content_type}, size={len(contents)} bytes")
 
@@ -190,16 +197,10 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
                 logger.warning(f"Avatar file too small: {len(contents)} bytes")
                 return MessageResponse(status=400, message="File ảnh không hợp lệ hoặc bị hỏng")
 
-            # Open and verify the image integrity
             image = Image.open(io.BytesIO(contents))
             logger.debug(f"Image opened: mode={getattr(image, 'mode', None)}, size={getattr(image, 'size', None)}, format={getattr(image, 'format', None)}")
-            image.verify()  # This invalidates the image for further operations
+            image.load()
 
-            # Re-open the image for actual processing
-            image = Image.open(io.BytesIO(contents))
-            logger.debug(f"Image reopened for processing: mode={image.mode}, size={image.size}")
-
-            # Normalize mode to RGB
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
@@ -209,15 +210,22 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
 
-            # Resize and encode as optimized JPEG
             image = image.resize((400, 400), Image.Resampling.LANCZOS)
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='JPEG', optimize=True, quality=85)
             img_buffer.seek(0)
+            upload_content_type = 'image/jpeg'
         except Exception as e:
             logger.error(f"Error processing avatar image for user {current_user.email}: {str(e)}")
             logger.error(f"Image details: content_type={avatar_file.content_type}, filename={avatar_file.filename}, size={len(contents)}")
-            return MessageResponse(status=400, message="Không thể xử lý ảnh. Vui lòng thử ảnh khác")
+            if avatar_file.content_type and avatar_file.content_type.startswith('image/'):
+                logger.warning("Falling back to uploading original bytes without processing")
+                img_buffer = io.BytesIO(contents)
+                img_buffer.seek(0)
+                upload_content_type = avatar_file.content_type
+            else:
+                return MessageResponse(status=400, message="Không thể xử lý ảnh. Vui lòng thử ảnh khác")
+
         try:
             s3_key = f"avatars/{avatar_id}"
             s3_client.upload_fileobj(
@@ -225,7 +233,7 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
                 bucket_name,
                 s3_key,
                 ExtraArgs={
-                    'ContentType': 'image/jpeg',
+                    'ContentType': upload_content_type,
                     'CacheControl': 'public, max-age=31536000',
                     'Metadata': {
                         'user_id': str(current_user.id),
@@ -237,6 +245,7 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             )
         except Exception:
             return MessageResponse(status=500, message="Lỗi khi tải ảnh lên. Vui lòng thử lại")
+
         setattr(current_user, 'avatar_url', avatar_id)
         db.commit()
         logger.info(f"Avatar updated: {current_user.email}")
