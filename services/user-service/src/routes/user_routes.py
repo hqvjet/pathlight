@@ -36,13 +36,30 @@ async def get_user_avatar_endpoint(
     return await get_user_avatar(target_id)
 
 # 2.3. Cập nhật avatar
+# Hỗ trợ cả field 'avatar_file' và 'file' để tương thích với client
 @router.put("/avatar", response_model=MessageResponse)
 async def update_avatar(
-    avatar_file: UploadFile = File(..., description="Avatar image file"),
+    avatar_file: UploadFile | None = File(None, description="Avatar image file"),
+    file: UploadFile | None = File(None, description="Alias for avatar image file (compat)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return await update_user_avatar(avatar_file, current_user, db)
+    selected = avatar_file or file
+    if selected is None:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    return await update_user_avatar(selected, current_user, db)
+
+@router.post("/avatar", response_model=MessageResponse)
+async def create_avatar(
+    avatar_file: UploadFile | None = File(None, description="Avatar image file"),
+    file: UploadFile | None = File(None, description="Alias for avatar image file (compat)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    selected = avatar_file or file
+    if selected is None:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    return await update_user_avatar(selected, current_user, db)
 
 # 2.4. Lấy thông tin USER
 @router.get("/info", response_model=UserInfoResponse)

@@ -190,8 +190,16 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
                 logger.warning(f"Avatar file too small: {len(contents)} bytes")
                 return MessageResponse(status=400, message="File ảnh không hợp lệ hoặc bị hỏng")
 
+            # Open and verify the image integrity
             image = Image.open(io.BytesIO(contents))
-            image.verify()
+            logger.debug(f"Image opened: mode={getattr(image, 'mode', None)}, size={getattr(image, 'size', None)}, format={getattr(image, 'format', None)}")
+            image.verify()  # This invalidates the image for further operations
+
+            # Re-open the image for actual processing
+            image = Image.open(io.BytesIO(contents))
+            logger.debug(f"Image reopened for processing: mode={image.mode}, size={image.size}")
+
+            # Normalize mode to RGB
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
@@ -201,11 +209,14 @@ async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Se
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
 
+            # Resize and encode as optimized JPEG
             image = image.resize((400, 400), Image.Resampling.LANCZOS)
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='JPEG', optimize=True, quality=85)
             img_buffer.seek(0)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error processing avatar image for user {current_user.email}: {str(e)}")
+            logger.error(f"Image details: content_type={avatar_file.content_type}, filename={avatar_file.filename}, size={len(contents)}")
             return MessageResponse(status=400, message="Không thể xử lý ảnh. Vui lòng thử ảnh khác")
         try:
             s3_key = f"avatars/{avatar_id}"
