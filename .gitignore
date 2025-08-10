@@ -54,3 +54,6 @@ htmlcov/
 
 deploy/*
 nginx/*
+
+.pid
+*.sh
