@@ -1,6 +1,4 @@
 'use client';
-
-import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { getAvatarUrl, getUserInitials, type AvatarUser } from '@/utils/avatar';
 
@@ -58,16 +56,16 @@ export default function Avatar({
   const srcToUse = hasError ? defaultAvatarUrl : avatarUrl;
 
   return (
-    <Image
+    <img
       src={srcToUse}
       alt={finalAlt}
       width={size}
       height={size}
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
-  priority={size > 64}
-  // Load directly from S3 without Next.js optimization proxy to avoid 400s
-  unoptimized
+      loading={size > 64 ? 'eager' : 'lazy'}
+      decoding="async"
+      referrerPolicy="no-referrer"
     />
   );
 }
