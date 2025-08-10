@@ -54,3 +54,6 @@ htmlcov/
 
 deploy/*
 nginx/*
+
+.pid
+services/run-all-services.sh
