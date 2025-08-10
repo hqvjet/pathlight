@@ -104,7 +104,14 @@ export default function Layout({ children, title, user }: LayoutProps) {
         {/* Logo & Desktop Toggle */}
         <div className={`flex items-center h-14 px-3 border-b border-gray-700 ${!sidebarOpen && !isMobile && 'justify-center'}`}>
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Image src="/assets/icons/logo.png" alt="logo" width={28} height={28} className="flex-shrink-0" />
+            <Image 
+              src="/assets/icons/logo.png" 
+              alt="logo" 
+              width={28} 
+              height={28} 
+              className="flex-shrink-0" 
+              style={{ width: "auto", height: "28px" }}
+            />
             {(sidebarOpen || isMobile) && (
               <span className="font-bold text-lg truncate">PathLight</span>
             )}
@@ -181,7 +188,14 @@ export default function Layout({ children, title, user }: LayoutProps) {
                   </button>
                 )}
                 <div className="flex items-center gap-2 min-w-0">
-                  <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={24} height={24} className="w-6 h-6 object-contain lg:hidden" />
+                  <Image 
+                    src="/assets/icons/logo.png" 
+                    alt="PathLight Logo" 
+                    width={24} 
+                    height={24} 
+                    className="w-6 h-6 object-contain lg:hidden" 
+                    style={{ width: "24px", height: "auto" }}
+                  />
                   <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{title}</h1>
                 </div>
               </div>

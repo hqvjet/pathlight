@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { showToast } from '@/utils/toast';
-import { api, storage } from '@/utils/api';
+import { api } from '@/lib/api';
+import { storage } from '@/utils/api';
 import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';

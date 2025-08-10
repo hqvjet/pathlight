@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
-import { api } from '@/lib/api-client';
+import { api } from '@/lib/api';
 import { storage } from '@/utils/api';
 import { AuthResponse } from '@/utils/types';
 import AuthLayout from '@/components/layout/AuthLayout';

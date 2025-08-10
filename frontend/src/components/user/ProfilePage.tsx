@@ -9,7 +9,7 @@ import { ProfileFormData } from './profile/types';
 // Simple date picker using native input[type=date] overlay triggered by icon button
 
 export default function ProfilePage() {
-  const { loading, saving, user, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar } = useProfileData();
+  const { loading, saving, user, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfiles, uploadAvatar } = useProfileData();
   const [showNativeDate, setShowNativeDate] = useState(false);
   const [nativeDateValue, setNativeDateValue] = useState('');
 
@@ -23,7 +23,7 @@ export default function ProfilePage() {
     }
   }, [formData.birth_date]);
 
-  const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); await updateProfile(formData as ProfileFormData); };
+  const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); await updateProfiles(formData as ProfileFormData); };
 
   if (loading) {
     return (

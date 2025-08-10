@@ -28,7 +28,12 @@ const nextConfig: NextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
       { protocol: 'https', hostname: 'xmicux090i.execute-api.ap-northeast-1.amazonaws.com', pathname: '/**' },
-      { protocol: 'http', hostname: 'localhost', port: '8002', pathname: '/**' },
+      { protocol: 'https', hostname: 'pathlight-user.s3.ap-northeast-1.amazonaws.com', pathname: '/**' }, // S3 bucket for avatars
+      { protocol: 'http', hostname: 'localhost', port: '8001', pathname: '/**' }, // auth-service
+      { protocol: 'http', hostname: 'localhost', port: '8002', pathname: '/**' }, // user-service
+      { protocol: 'http', hostname: 'localhost', port: '8003', pathname: '/**' }, // course-service
+      { protocol: 'http', hostname: 'localhost', port: '8004', pathname: '/**' }, // quiz-service
+      { protocol: 'http', hostname: 'localhost', port: '8005', pathname: '/**' }, // agentic-service
       { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
@@ -48,8 +53,13 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
+    // In development, don't proxy to AWS - let the frontend handle API routing to individual services
+    if (process.env.NODE_ENV === 'development') {
+      return []
+    }
+    
     return [
-      // API routes proxy to backend
+      // API routes proxy to backend (production only)
       {
         source: '/api/:path*',
         destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api'}/:path*`,

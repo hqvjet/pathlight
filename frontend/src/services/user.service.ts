@@ -92,7 +92,7 @@ export const userService = {
    * Update user profile (change-info endpoint)
    */
   async updateProfile(data: UpdateProfileRequest) {
-    return api.put('/api/users/profile', data);
+    return api.put('/api/users/change-info', data);
   },
 
   /**

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { showToast } from '@/utils/toast';
-import { api } from '@/lib/api-client';
+import { api } from '@/lib/api';
 import { Montserrat } from 'next/font/google';
 import Header from '@/components/layout/Header';
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EmailSentPage from '@/components/auth/EmailSentPage';
-import { api } from '@/lib/api-client';
+import { api } from '@/lib/api';
 import { storage } from '@/utils/api';
 
 export default function EmailSentRoute() {

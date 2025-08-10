@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, storage } from '@/utils/api';
+import { api } from '@/lib/api';
+import { storage } from '@/utils/api';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
 
@@ -35,9 +36,9 @@ export function useDashboard(onLogout: () => void) {
           const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
           if (cached) {
             const { data, timestamp } = JSON.parse(cached);
-            if (Date.now() - timestamp < CACHE_EXPIRY_MS) {
-              setUser(data.user);
-              setDashboardData(data.dashboardData);
+            if (data && Date.now() - timestamp < CACHE_EXPIRY_MS) {
+              if (data.user) setUser(data.user);
+              if (data.dashboardData) setDashboardData(data.dashboardData);
               setLoading(false);
               return;
             } else {
@@ -46,6 +47,7 @@ export function useDashboard(onLogout: () => void) {
           }
         } catch (cacheError) {
           if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
+          localStorage.removeItem(DASHBOARD_CACHE_KEY);
         }
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 8000));
         const response = await Promise.race([api.user.getDashboard(), timeoutPromise]) as { status: number; data?: unknown };

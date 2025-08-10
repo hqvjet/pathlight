@@ -12,17 +12,20 @@ export const getAvatarUrl = (user: AvatarUser): string => {
     return `${user.avatar_url}${separator}${cacheParam}`;
   }
 
-  // Prefer stored avatar id served by our proxy
+  // Use AWS S3 for all avatar requests
+  const baseUrl = 'https://pathlight-user.s3.ap-northeast-1.amazonaws.com';
+  
+  // Prefer stored avatar id served by AWS S3
   if (user?.avatar_id) {
-    const url = `/api/users/avatar?avatar_id=${encodeURIComponent(user.avatar_id)}`;
-    const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
+    const url = `${baseUrl}/avatars/${encodeURIComponent(user.avatar_id)}`;
+    const cacheParam = `?_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
     return `${url}${cacheParam}`;
   }
 
-  // Fallback to user id-based avatar fetch via proxy
+  // Fallback to user id-based avatar fetch via AWS S3
   if (user?.id) {
-    const url = `/api/users/avatar?user_id=${encodeURIComponent(user.id)}`;
-    const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
+    const url = `${baseUrl}/avatars/${encodeURIComponent(user.id)}`;
+    const cacheParam = `?_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
     return `${url}${cacheParam}`;
   }
   

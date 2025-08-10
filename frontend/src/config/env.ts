@@ -3,21 +3,21 @@
 // =============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api',
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com',
   get API_URL() {
     return this.BASE_URL;
   },
   get AUTH_SERVICE_URL() {
-    return this.BASE_URL;
+    return process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || this.BASE_URL;
   },
   get USER_SERVICE_URL() {
-    return this.BASE_URL;
+    return process.env.NEXT_PUBLIC_USER_SERVICE_URL || this.BASE_URL;
   },
   get COURSE_SERVICE_URL() {
-    return this.BASE_URL;
+    return process.env.NEXT_PUBLIC_COURSE_SERVICE_URL || this.BASE_URL;
   },
   get QUIZ_SERVICE_URL() {
-    return this.BASE_URL;
+    return process.env.NEXT_PUBLIC_QUIZ_SERVICE_URL || this.BASE_URL;
   },
 } as const;
 

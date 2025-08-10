@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { showToast } from '@/utils/toast';
-import { api, storage } from '@/utils/api';
+import { api } from '@/lib/api';
+import { storage } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 import { ProfileFormData, UserProfile } from './types';
 
@@ -17,9 +18,10 @@ export function useProfileData() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-      let response = await api.user.getInfo();
+  // Use canonical lib endpoints: getProfile, fallback to getDashboard
+  let response = await api.user.getProfile();
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
-      if (response.status !== 200) { response = await api.user.getDashboard(); if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
+  if (response.status !== 200) { response = await api.user.getDashboard(); if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
       if (response.status === 200) {
         const responseData = response.data as unknown;
         let userData: unknown = responseData;
@@ -42,7 +44,7 @@ export function useProfileData() {
     finally { setLoading(false); }
   }, [router]);
 
-  const updateProfile = async (form: ProfileFormData) => {
+  const updateProfiles = async (form: ProfileFormData) => {
     setSaving(true);
     try {
       const updateData: Record<string, unknown> = {
@@ -86,7 +88,7 @@ export function useProfileData() {
     finally { setUploading(false); setAvatarLoading(false); }
   };
 
-  return { loading, saving, user, editMode, setEditMode, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar };
+  return { loading, saving, user, editMode, setEditMode, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfiles, uploadAvatar };
 }
 
 function formatInitialBirthDate(user: UserProfile) {

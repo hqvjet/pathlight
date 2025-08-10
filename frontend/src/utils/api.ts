@@ -7,10 +7,14 @@ import { cookieStorage } from './cookies';
 export const API_BASE = API_CONFIG.BASE_URL;
 
 export const SERVICE_URLS = {
-  AUTH: API_CONFIG.BASE_URL,
-  USER: API_CONFIG.BASE_URL,
-  COURSE: API_CONFIG.BASE_URL,
-  QUIZ: API_CONFIG.BASE_URL,
+  AUTH: process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || API_CONFIG.BASE_URL,
+  USER: process.env.NEXT_PUBLIC_USER_SERVICE_URL || API_CONFIG.BASE_URL,
+  COURSE: process.env.NEXT_PUBLIC_COURSE_SERVICE_URL || API_CONFIG.BASE_URL,
+  QUIZ: process.env.NEXT_PUBLIC_QUIZ_SERVICE_URL || API_CONFIG.BASE_URL,
+  // AUTH: 'http://localhost:8001',
+  // USER: 'http://localhost:8002',
+  // COURSE: 'http://localhost:8003',
+  // QUIZ: 'http://localhost:8004',
 } as const;
 
 // =============================================================================
@@ -86,8 +90,8 @@ export const getAuthHeaders = (): Record<string, string> => {
 };
 
 export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
-  // If targeting Next.js internal API routes, return relative path to current origin
-  if (endpoint.startsWith('/api/')) {
+  // If no baseUrl is provided and targeting Next.js internal API routes, return relative path to current origin
+  if (endpoint.startsWith('/api/') && !baseUrl) {
     return endpoint;
   }
   const base = baseUrl || API_BASE;
@@ -181,54 +185,54 @@ export const apiRequest = async <T = unknown>(
 export const api = {
   // Authentication
   auth: {
-    signin: (data: unknown) => apiRequest('/signin', {
+    signin: (data: unknown) => apiRequest('/auth/signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    signup: (data: unknown) => apiRequest('/signup', {
+    signup: (data: unknown) => apiRequest('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    signout: () => apiRequest('/signout', { 
+    signout: () => apiRequest('/auth/signout', { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    verifyEmail: (token: string) => apiRequest(`/verify-email?token=${token}`, {
+    verifyEmail: (token: string) => apiRequest(`/auth/verify-email?token=${token}`, {
       method: 'GET',
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    resendVerification: (email: string) => apiRequest('/resend-verification', {
+    resendVerification: (email: string) => apiRequest('/auth/resend-verification', {
       method: 'POST',
       body: JSON.stringify({ email }),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    forgotPassword: (email: string) => apiRequest('/forget-password', {
+    forgotPassword: (email: string) => apiRequest('/auth/forget-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    validateResetToken: (token: string) => apiRequest(`/validate-reset-token/${token}`, {
+    validateResetToken: (token: string) => apiRequest(`/auth/validate-reset-token/${token}`, {
       method: 'GET',
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    resetPassword: (token: string, data: unknown) => apiRequest(`/reset-password/${token}`, {
+    resetPassword: (token: string, data: unknown) => apiRequest(`/auth/reset-password/${token}`, {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    changePassword: (data: unknown) => apiRequest('/change-password', {
+    changePassword: (data: unknown) => apiRequest('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    oauthSignin: (data: unknown) => apiRequest('/oauth-signin', {
+    oauthSignin: (data: unknown) => apiRequest('/auth/oauth-signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
     }),
-    adminSignin: (data: unknown) => apiRequest('/admin/signin', {
+    adminSignin: (data: unknown) => apiRequest('/auth/admin/signin', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.AUTH,
@@ -239,24 +243,24 @@ export const api = {
   user: {
     getProfile: () => apiRequest('/api/users/profile', { 
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     getMe: () => apiRequest('/api/users/me', { 
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     getInfo: (id?: string) => apiRequest(id ? `/api/users/info?id=${id}` : '/api/users/info', {
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     getDashboard: () => apiRequest('/api/users/dashboard', {
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
-    updateProfile: (data: unknown) => apiRequest('/api/users/profile', {
+    updateProfile: (data: unknown) => apiRequest('/api/users/change-info', {
       method: 'PUT',
       body: JSON.stringify(data),
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     updateAvatar: (file: File) => {
       const formData = new FormData();
@@ -268,54 +272,54 @@ export const api = {
           // Let browser set Content-Type for FormData
           ...(storage.getToken() && { Authorization: `Bearer ${storage.getToken()}` }),
         },
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       });
     },
     getAvatar: (userId: string) => apiRequest(`/api/users/avatar?user_id=${userId}`, {
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     setNotifyTime: (data: unknown) => apiRequest('/api/users/notify-time', {
       method: 'PUT',
       body: JSON.stringify(data),
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     saveActivity: () => apiRequest('/api/users/activity', { 
       method: 'POST',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     getAllUsers: () => apiRequest('/api/users', {
       method: 'GET',
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     getUsersByIds: (userIds: string[]) => apiRequest('/api/users/users-by-ids', {
       method: 'POST',
       body: JSON.stringify(userIds),
-      serviceUrl: undefined,
+      serviceUrl: SERVICE_URLS.USER,
     }),
     
     // Test APIs for development
     test: {
       addExperience: (amount: number) => apiRequest(`/api/users/test/add-experience?exp_amount=${amount}`, {
         method: 'POST',
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       updateStats: (data: unknown) => apiRequest('/api/users/test/update-stats', {
         method: 'PUT',
         body: JSON.stringify(data),
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       resetStats: () => apiRequest('/api/users/test/reset-stats', {
         method: 'POST',
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       simulateActivity: () => apiRequest('/api/users/test/simulate-activity', {
         method: 'GET',
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       getLevelSystemInfo: () => apiRequest('/api/users/test/level-system-info', {
         method: 'GET',
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
     },
 
@@ -325,22 +329,22 @@ export const api = {
         year ? `/api/users/activity?year=${year}` : '/api/users/activity', 
         {
           method: 'GET',
-          serviceUrl: undefined,
+          serviceUrl: SERVICE_URLS.USER,
         }
       ),
       save: (data: { date: string; level: number }) => apiRequest('/api/users/activity', {
         method: 'POST',
         body: JSON.stringify(data),
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       saveBatch: (data: { [key: string]: number }) => apiRequest('/api/users/activity', {
         method: 'POST',
         body: JSON.stringify({ activityData: data }),
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
       clear: () => apiRequest('/api/users/activity', {
         method: 'DELETE',
-        serviceUrl: undefined,
+        serviceUrl: SERVICE_URLS.USER,
       }),
     },
   },
@@ -348,39 +352,39 @@ export const api = {
   // Course management
   course: {
     getAll: (params?: Record<string, unknown>) => apiRequest(
-      buildUrlWithParams('/courses', params),
+      buildUrlWithParams('/course', params),
       { 
         method: 'GET',
         serviceUrl: SERVICE_URLS.COURSE,
       }
     ),
-    getById: (id: string) => apiRequest(`/courses/${id}`, { 
+    getById: (id: string) => apiRequest(`/course/${id}`, { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    create: (data: unknown) => apiRequest('/courses', {
+    create: (data: unknown) => apiRequest('/course', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    update: (id: string, data: unknown) => apiRequest(`/courses/${id}`, {
+    update: (id: string, data: unknown) => apiRequest(`/course/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    delete: (id: string) => apiRequest(`/courses/${id}`, { 
+    delete: (id: string) => apiRequest(`/course/${id}`, { 
       method: 'DELETE',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    enroll: (id: string) => apiRequest(`/courses/${id}/enroll`, { 
+    enroll: (id: string) => apiRequest(`/course/${id}/enroll`, { 
       method: 'POST',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    unenroll: (id: string) => apiRequest(`/courses/${id}/unenroll`, { 
+    unenroll: (id: string) => apiRequest(`/course/${id}/unenroll`, { 
       method: 'DELETE',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
-    getEnrollments: () => apiRequest('/courses/enrollments', { 
+    getEnrollments: () => apiRequest('/course/enrollments', { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.COURSE,
     }),
@@ -389,44 +393,44 @@ export const api = {
   // Quiz management
   quiz: {
     getAll: (params?: Record<string, unknown>) => apiRequest(
-      buildUrlWithParams('/quizzes', params),
+      buildUrlWithParams('/quiz', params),
       { 
         method: 'GET',
         serviceUrl: SERVICE_URLS.QUIZ,
       }
     ),
-    getById: (id: string) => apiRequest(`/quizzes/${id}`, { 
+    getById: (id: string) => apiRequest(`/quiz/${id}`, { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    create: (data: unknown) => apiRequest('/quizzes', {
+    create: (data: unknown) => apiRequest('/quiz', {
       method: 'POST',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    update: (id: string, data: unknown) => apiRequest(`/quizzes/${id}`, {
+    update: (id: string, data: unknown) => apiRequest(`/quiz/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    delete: (id: string) => apiRequest(`/quizzes/${id}`, { 
+    delete: (id: string) => apiRequest(`/quiz/${id}`, { 
       method: 'DELETE',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    submit: (id: string, answers: unknown) => apiRequest(`/quizzes/${id}/submit`, {
+    submit: (id: string, answers: unknown) => apiRequest(`/quiz/${id}/submit`, {
       method: 'POST',
       body: JSON.stringify({ answers }),
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    getResult: (id: string) => apiRequest(`/quizzes/${id}/result`, { 
+    getResult: (id: string) => apiRequest(`/quiz/${id}/result`, { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    getHistory: () => apiRequest('/quizzes/history', { 
+    getHistory: () => apiRequest('/quiz/history', { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
-    getUserQuizzes: () => apiRequest('/quizzes', { 
+    getUserquiz: () => apiRequest('/quiz', { 
       method: 'GET',
       serviceUrl: SERVICE_URLS.QUIZ,
     }),
@@ -463,11 +467,11 @@ export const endpoints = {
   allUsers: '/api/users',
   
   // Course endpoints (no prefix needed)
-  courses: '/courses',
-  courseDetail: (id: string) => `/courses/${id}`,
+  course: '/course',
+  courseDetail: (id: string) => `/course/${id}`,
   
   // Quiz endpoints (no prefix needed)
-  quizzes: '/quizzes',
-  quizDetail: (id: string) => `/quizzes/${id}`,
-  submitQuiz: (id: string) => `/quizzes/${id}/submit`,
+  quiz: '/quiz',
+  quizDetail: (id: string) => `/quiz/${id}`,
+  submitQuiz: (id: string) => `/quiz/${id}/submit`,
 } as const;

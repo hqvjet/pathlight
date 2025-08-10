@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api-client';
+import { api } from '@/lib/api';
 import { storage } from '@/utils/api';
 import { showToast } from '@/utils/toast';
 import { AuthResponse } from '@/utils/types';

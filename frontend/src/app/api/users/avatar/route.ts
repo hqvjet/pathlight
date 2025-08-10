@@ -34,7 +34,10 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string | FormData
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  console.log(`[USER AVATAR API] process.env.NEXT_PUBLIC_USER_SERVICE_URL: ${process.env.NEXT_PUBLIC_USER_SERVICE_URL}`);
+  console.log(`[USER AVATAR API] API_CONFIG.USER_SERVICE_URL: ${API_CONFIG.USER_SERVICE_URL}`);
+  
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER AVATAR API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -82,6 +85,11 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest) {
   try {
+    console.log(`[USER AVATAR API] All ENV vars:`, {
+      NEXT_PUBLIC_USER_SERVICE_URL: process.env.NEXT_PUBLIC_USER_SERVICE_URL,
+      NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+    });
+    
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
     const avatarId = searchParams.get('avatar_id');
