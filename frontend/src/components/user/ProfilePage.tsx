@@ -54,8 +54,17 @@ export default function ProfilePage() {
     setFormData({ ...formData, birth_date: display });
   };
 
+  interface LayoutUserProp {
+    avatar_url: string;
+    name: string;
+    email: string;
+    avatarKey?: number;
+  }
+
+  const layoutUser: LayoutUserProp = user ? { avatar_url: `/api/user/avatar?user-id=${user.id}`, name: displayName, email: user.email, avatarKey } : { avatar_url: '', name: '', email: '' };
+
   return (
-    <Layout title="Hồ Sơ Của Tôi" user={{ avatar_url: user?.avatar_url || '', name: displayName, email: user?.email }}>
+    <Layout title="Hồ Sơ Của Tôi" user={layoutUser}>
       <div className="px-8 pt-10 pb-16 bg-[#f7f9fc] min-h-screen">
         <div className="max-w-[1330px] mx-auto">
           <div className="bg-white rounded-md shadow-sm shadow-black/[0.02] p-10">

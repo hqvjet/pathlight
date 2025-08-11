@@ -83,7 +83,7 @@ export const userService = {
   /**
    * Get user information (with optional id parameter)
    */
-  async getUserInfo(id?: string) {
+  async getUserInfo() {
     return api.get('/api/user/info');
   },
 
@@ -118,7 +118,7 @@ export const userService = {
   /**
    * Get user avatar by user ID
    */
-  async getAvatar(userId: string) {
+  async getAvatar() {
     return api.get('/api/user/avatar');
   },
 
@@ -139,7 +139,7 @@ export const userService = {
   /**
    * Get user activity data
    */
-  async getActivity(year?: number) {
+  async getActivity() {
     return api.get('/api/user/activity');
   },
 

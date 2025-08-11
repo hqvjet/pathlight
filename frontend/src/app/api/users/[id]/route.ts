@@ -67,7 +67,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await context.params;
+    await context.params; // id currently not needed; awaited to satisfy dynamic route resolution
     const headers = createProxyHeaders(request);
     
     // For individual user info, use the /info endpoint without query

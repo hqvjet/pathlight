@@ -8,7 +8,7 @@ export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
     <Card className="bg-[#111827] border-none text-white shadow-md md:col-span-1">
       <CardContent className="p-5 space-y-6">
         <div className="flex items-center gap-4">
-          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-violet-500/40" cacheKey={(user as any)?.avatarKey} />
+          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-violet-500/40" cacheKey={user.avatarKey} />
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-tight truncate">{user.name}</h2>
             <p className="text-[11px] text-gray-400 truncate">{user.email}</p>

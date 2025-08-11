@@ -13,6 +13,11 @@ export const getAvatarUrl = (user: AvatarUser): string => {
     return `/api/user/avatar?user-id=${id}`;
   }
 
+  // If avatar_url already points to our internal avatar API (relative), use it
+  if (user?.avatar_url && user.avatar_url.startsWith('/api/user/avatar')) {
+    return user.avatar_url;
+  }
+
   // Legacy: external absolute URL (keep origin/path)
   if (user?.avatar_url && user.avatar_url.startsWith('http')) {
     try {
