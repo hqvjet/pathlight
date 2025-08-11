@@ -6,35 +6,18 @@ export interface AvatarUser {
 
 export const getAvatarUrl = (user: AvatarUser): string => {
   if (!user) return '/assets/images/default_avatar.png';
-  const id = user.id;
 
-  // If we have a user id, always build canonical endpoint with user-id (public avatar endpoint handles fallback & defaults)
-  if (id) {
-    return `/api/user/avatar?user-id=${id}`;
-  }
-
-  // If avatar_url already points to our internal avatar API (relative), use it
-  if (user?.avatar_url && user.avatar_url.startsWith('/api/user/avatar')) {
+  // 1. If explicit avatar_url provided, use it as-is (relative or absolute)
+  if (user.avatar_url) {
     return user.avatar_url;
   }
 
-  // Legacy: external absolute URL (keep origin/path)
-  if (user?.avatar_url && user.avatar_url.startsWith('http')) {
-    try {
-      const urlObj = new URL(user.avatar_url);
-      if (/\/avatar\/?/.test(urlObj.pathname)) {
-        // Try to extract user-id from query if present
-        const qId = urlObj.searchParams.get('user-id');
-        if (qId) return `/api/user/avatar?user-id=${qId}`;
-        return '/api/user/avatar';
-      }
-      return urlObj.origin + urlObj.pathname;
-    } catch {
-      return '/api/user/avatar';
-    }
+  // 2. Fallback build canonical endpoint from id
+  if (user.id) {
+    return `/api/user/avatar?user-id=${user.id}`;
   }
 
-  // Fallback
+  // 3. Default placeholder
   return '/assets/images/default_avatar.png';
 };
 

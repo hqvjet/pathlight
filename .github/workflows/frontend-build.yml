@@ -48,7 +48,8 @@ jobs:
           NEXT_PUBLIC_APP_NAME: Pathlight
           NEXT_PUBLIC_APP_VERSION: 0.1.0
           NEXT_PUBLIC_ENVIRONMENT: ci
-          NEXT_PUBLIC_API_BASE_URL: https://example.com/api
+          # Use real API base (was https://example.com/api causing 404)
+          NEXT_PUBLIC_API_BASE_URL: https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api
         run: npm run build
 
       - name: Upload build artifacts (optional)

@@ -61,7 +61,7 @@ export default function ProfilePage() {
     avatarKey?: number;
   }
 
-  const layoutUser: LayoutUserProp = user ? { avatar_url: `/api/user/avatar?user-id=${user.id}`, name: displayName, email: user.email, avatarKey } : { avatar_url: '', name: '', email: '' };
+  const layoutUser: LayoutUserProp = user ? { avatar_url: (user.avatar_url || `/api/user/avatar?user-id=${user.id}`), name: displayName, email: user.email, avatarKey } : { avatar_url: '', name: '', email: '' };
 
   return (
     <Layout title="Hồ Sơ Của Tôi" user={layoutUser}>
