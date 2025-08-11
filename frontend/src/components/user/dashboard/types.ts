@@ -6,6 +6,7 @@ export interface LeaderboardUser {
   avatar_url?: string;
   id?: string;
   initials: string;
+  avatarKey?: number; // cache busting key
 }
 
 export interface UserProfile {
@@ -16,6 +17,7 @@ export interface UserProfile {
   family_name?: string;
   avatar_url?: string;
   avatar_id?: string;
+  avatarKey?: number; // cache busting key
   remind_time?: string;
   level?: number;
   current_exp?: number;

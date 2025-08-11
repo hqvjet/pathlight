@@ -245,7 +245,7 @@ export const api = {
       method: 'GET',
       serviceUrl: undefined,
     }),
-    getInfo: (id?: string) => apiRequest('/api/user/info', {
+    getInfo: () => apiRequest('/api/user/info', {
       method: 'GET',
       serviceUrl: undefined,
     }),

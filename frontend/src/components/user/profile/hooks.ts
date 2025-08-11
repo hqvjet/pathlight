@@ -32,6 +32,8 @@ export function useProfileData() {
         // Normalize avatar_url for profile page
         if (userObj.id) {
           userObj.avatar_url = `/api/user/avatar?user-id=${userObj.id}`;
+        } else if (!userObj.avatar_url) {
+          userObj.avatar_url = '/api/user/avatar';
         }
         setUser(userObj);
         setFormData({
