@@ -19,7 +19,7 @@ MAX_SIZE_MB = 3
 TARGET_SIZE = (400, 400)
 ALLOWED_PREFIX = 'image/'
 
-__all__ = ["update_avatar", "get_avatar_stream", "get_avatar_redirect"]  # added get_avatar_stream
+__all__ = ["update_avatar", "get_avatar_stream", "get_avatar_redirect", "get_avatar_bytes"]  # added get_avatar_bytes
 
 def _get_s3_client():
     try:
@@ -201,3 +201,58 @@ def get_avatar_redirect(avatar_id: str):
     except Exception as e:  # pragma: no cover
         logger.error(f"Presign error: {e}")
         raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+
+def get_avatar_bytes(avatar_id: str | None) -> tuple[bytes, str, dict]:
+    """Fetch avatar and return raw bytes (non-streaming) for API Gateway/Lambda compatibility.
+    Returns: (content_bytes, media_type, headers)
+    Raises HTTPException on errors similar to get_avatar_stream.
+    """
+    if not avatar_id:
+        raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+    s3 = _get_s3_client()
+    if not s3:
+        raise HTTPException(status_code=500, detail="S3 client not available")
+    bucket = config.S3_USER_BUCKET_NAME
+    if not bucket:
+        raise HTTPException(status_code=500, detail="S3 bucket not configured")
+
+    if '/' in avatar_id:
+        key = avatar_id
+    elif avatar_id.lower().endswith(('.png', '.jpg', '.jpeg')):
+        key = avatar_id
+    else:
+        key = f"avatars/{avatar_id}.jpg"
+
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+    except ClientError as e:
+        code = e.response.get('Error', {}).get('Code')
+        if code in ('404', 'NoSuchKey') and key.endswith('.jpg'):
+            legacy_key = key[:-4]
+            try:
+                obj = s3.get_object(Bucket=bucket, Key=legacy_key)
+                key = legacy_key
+            except ClientError as e2:
+                code2 = e2.response.get('Error', {}).get('Code')
+                if code2 in ('404', 'NoSuchKey'):
+                    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+                logger.error(f"S3 get_object error: {e2}")
+                raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+        else:
+            if code in ('404', 'NoSuchKey'):
+                raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+            logger.error(f"S3 get_object error: {e}")
+            raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+
+    try:
+        content_bytes = obj['Body'].read()
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Read S3 body error: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+
+    headers = {"Cache-Control": "public, max-age=31536000"}
+    etag = obj.get('ETag')
+    if etag:
+        headers['ETag'] = etag.strip('"')
+    media_type = obj.get('ContentType', 'image/jpeg')
+    return content_bytes, media_type, headers

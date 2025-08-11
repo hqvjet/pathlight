@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
@@ -23,7 +23,7 @@ from controllers.user_controller import (
     save_user_activity,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user
-from services.avatar_service import get_avatar_stream  # streaming avatar
+from services.avatar_service import get_avatar_bytes  # bytes version
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,8 @@ async def get_avatar(
     last_error: Optional[HTTPException] = None
     for key in candidates:
         try:
-            return get_avatar_stream(key)
+            content, media_type, headers = get_avatar_bytes(key)
+            return Response(content=content, media_type=media_type, headers=headers)
         except HTTPException as e:
             if e.status_code != 404:
                 raise
