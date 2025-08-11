@@ -41,24 +41,51 @@ async def change_personal_info(
 # 2.2. Lấy avatar (stream trực tiếp)
 @router.get("/avatar")
 async def get_avatar(
-    current_user: User = Depends(get_current_user),
+    user_id: Optional[str] = Query(None, alias="user-id", description="User ID muốn lấy avatar"),
     db: Session = Depends(get_db)
 ):
-    # Fallback theo giới tính nếu chưa có hoặc ảnh bị missing
-    def _gender_default():
-        sex = (current_user.sex or '').lower()
-        if sex.startswith('f') or sex in {'nu', 'female', 'girl', 'woman'}:
-            return 'female.png'
-        return 'male.png'
-    primary_key = current_user.avatar_url or _gender_default()
-    try:
-        return get_avatar_stream(primary_key)
-    except HTTPException as e:
-        if e.status_code == 404:
-            fallback_key = _gender_default()
-            if fallback_key != primary_key:
-                return get_avatar_stream(fallback_key)
-        raise
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Thiếu user-id")
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+
+    def _gender_defaults(user: User) -> list[str]:
+        sex = (getattr(user, 'sex', '') or '').lower()
+        is_female = sex.startswith('f') or sex in {'nu', 'female', 'girl', 'woman'}
+        base = 'female' if is_female else 'male'
+        return [
+            f"{base}.png",
+            f"avatars/{base}.png",
+            f"default/{base}.png",
+            f"avatars/default/{base}.png"
+        ]
+
+    candidates: list[str] = []
+    avatar_url_val = getattr(target_user, 'avatar_url', None)
+    if avatar_url_val:
+        candidates.append(avatar_url_val)
+        if '/' not in avatar_url_val and not avatar_url_val.lower().endswith(('.png', '.jpg', '.jpeg')):
+            candidates.append(f"avatars/{avatar_url_val}.jpg")
+            candidates.append(f"avatars/{avatar_url_val}")
+    else:
+        candidates.extend(_gender_defaults(target_user))
+    for d in _gender_defaults(target_user):
+        if d not in candidates:
+            candidates.append(d)
+
+    last_error: Optional[HTTPException] = None
+    for key in candidates:
+        try:
+            return get_avatar_stream(key)
+        except HTTPException as e:
+            if e.status_code != 404:
+                raise
+            last_error = e
+            continue
+    if last_error:
+        raise last_error
+    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
 
 # 2.3. Cập nhật avatar
 @router.put("/avatar", response_model=MessageResponse)

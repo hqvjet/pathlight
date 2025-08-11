@@ -123,7 +123,10 @@ async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Se
 async def get_user_dashboard(current_user: User, db: Session) -> DashboardResponse:
     try:
         avatar_id = getattr(current_user, 'avatar_url', None)
-        avatar_url = avatar_id if (avatar_id and avatar_id.startswith('http')) else (f"{config.BASE_URL}/user/avatar" if avatar_id else None)
+        # Always provide endpoint with user-id query param when user has (or may have) an avatar.
+        avatar_url = (
+            f"{config.BASE_URL}/user/avatar?user-id={current_user.id}" if avatar_id else None
+        )
         course_stats = get_course_stats(current_user.email)
         quiz_stats = get_quiz_stats(current_user.email)
         rank_data = calculate_user_rank(current_user, db)

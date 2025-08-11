@@ -66,8 +66,8 @@ def update_avatar(avatar_file: UploadFile, current_user: User, db: Session) -> t
         return 500, "Cấu hình lưu trữ không đầy đủ"
     processed = _process_image(raw)
     avatar_id = str(current_user.id)
+    key = f"avatars/{avatar_id}.jpg"  # New: fixed key with .jpg extension
     try:
-        key = f"avatars/{avatar_id}"
         s3.upload_fileobj(
             processed,
             bucket,
@@ -83,10 +83,22 @@ def update_avatar(avatar_file: UploadFile, current_user: User, db: Session) -> t
                 }
             }
         )
+        # Delete old object if naming changed (backward compatibility)
+        old_key = current_user.avatar_url
+        if old_key and old_key != key:
+            try:
+                # If old_key stored only id, construct full path
+                if '/' not in old_key and not old_key.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    legacy_full = f"avatars/{old_key}"
+                    s3.delete_object(Bucket=bucket, Key=legacy_full)
+                else:
+                    s3.delete_object(Bucket=bucket, Key=old_key)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"Could not delete old avatar {old_key}: {e}")
     except Exception as e:  # pragma: no cover
         logger.error(f"Upload avatar failed: {e}")
         return 500, "Lỗi khi tải ảnh lên. Vui lòng thử lại"
-    current_user.avatar_url = key  # store full key instead of only id
+    current_user.avatar_url = key  # always store full key
     db.commit()
     logger.info(f"Avatar updated: {current_user.email}")
     return 200, "Bạn đã cập nhật Avatar thành công"
@@ -97,6 +109,7 @@ def get_avatar_stream(avatar_id: str | None):
     If avatar_id contains '/', treat it as full key.
     If None, raise 404.
     Also allow root-level default files like male.png / female.png
+    Added support for .jpg fixed naming; fallback to legacy key without extension.
     """
     if not avatar_id:
         raise HTTPException(status_code=404, detail="Avatar không tồn tại")
@@ -106,19 +119,37 @@ def get_avatar_stream(avatar_id: str | None):
     bucket = config.S3_USER_BUCKET_NAME
     if not bucket:
         raise HTTPException(status_code=500, detail="S3 bucket not configured")
-    # If file looks like a default (endswith .png and no slash) keep as-is
-    if '/' in avatar_id or avatar_id.endswith('.png'):
+
+    # Determine key
+    if '/' in avatar_id:
+        key = avatar_id
+    elif avatar_id.lower().endswith(('.png', '.jpg', '.jpeg')):
         key = avatar_id
     else:
-        key = f"avatars/{avatar_id}"
+        key = f"avatars/{avatar_id}.jpg"
+
     try:
         obj = s3.get_object(Bucket=bucket, Key=key)
     except ClientError as e:
         code = e.response.get('Error', {}).get('Code')
-        if code in ('404', 'NoSuchKey'):
-            raise HTTPException(status_code=404, detail="Avatar không tồn tại")
-        logger.error(f"S3 get_object error: {e}")
-        raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+        # Fallback: legacy key without extension
+        if code in ('404', 'NoSuchKey') and key.endswith('.jpg'):
+            legacy_key = key[:-4]  # remove .jpg
+            try:
+                obj = s3.get_object(Bucket=bucket, Key=legacy_key)
+                key = legacy_key
+            except ClientError as e2:
+                code2 = e2.response.get('Error', {}).get('Code')
+                if code2 in ('404', 'NoSuchKey'):
+                    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+                logger.error(f"S3 get_object error: {e2}")
+                raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+        else:
+            if code in ('404', 'NoSuchKey'):
+                raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+            logger.error(f"S3 get_object error: {e}")
+            raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+
     body = obj['Body']
     def iter_chunks():
         for chunk in iter(lambda: body.read(8192), b""):
@@ -136,13 +167,37 @@ def get_avatar_redirect(avatar_id: str):
     bucket = config.S3_USER_BUCKET_NAME
     if not bucket:
         raise HTTPException(status_code=500, detail="S3 bucket not configured")
-    key = f"avatars/{avatar_id}"
+
+    # Build key similarly
+    if '/' in avatar_id or avatar_id.lower().endswith(('.png', '.jpg', '.jpeg')):
+        key = avatar_id
+    else:
+        key = f"avatars/{avatar_id}.jpg"
+
     try:
         s3.head_object(Bucket=bucket, Key=key)
+    except ClientError as e:
+        code = e.response.get('Error', {}).get('Code')
+        if code in ('404', 'NoSuchKey') and key.endswith('.jpg'):
+            legacy_key = key[:-4]
+            try:
+                s3.head_object(Bucket=bucket, Key=legacy_key)
+                key = legacy_key
+            except ClientError as e2:
+                code2 = e2.response.get('Error', {}).get('Code')
+                if code2 in ('404', 'NoSuchKey'):
+                    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+                logger.error(f"S3 error: {e2.response['Error'].get('Message')}")
+                raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+        else:
+            if code in ('404', 'NoSuchKey'):
+                raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+            logger.error(f"S3 error: {e.response['Error'].get('Message')}")
+            raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
+
+    try:
         url = s3.generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=3600)
         return RedirectResponse(url=url)
-    except ClientError as e:
-        if e.response['Error']['Code'] == '404':
-            raise HTTPException(status_code=404, detail="Avatar không tồn tại")
-        logger.error(f"S3 error: {e.response['Error'].get('Message')}")
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Presign error: {e}")
         raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
