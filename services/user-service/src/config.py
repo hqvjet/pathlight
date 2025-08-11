@@ -18,6 +18,14 @@ class Config:
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
     
+    # Base URL for this service (needed for building self links)
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", f"http://localhost:{os.getenv('USER_SERVICE_PORT', 8004)}")
+
+    # External service URLs
+    COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", "http://localhost:8005")
+    QUIZ_SERVICE_URL: str = os.getenv("QUIZ_SERVICE_URL", "http://localhost:8006")
+    AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
+    
     # Database configuration
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 

@@ -4,9 +4,26 @@ from typing import Optional
 import logging
 
 from database import get_db
-from schemas.user_schemas import *
-from controllers.user_controller import *
+from schemas.user_schemas import (
+    MessageResponse,
+    ChangeInfoRequest,
+    UserInfoResponse,
+    UsersListResponse,
+    NotifyTimeRequest,
+    DashboardResponse,
+)
+from models import User
+from controllers.user_controller import (
+    change_user_info,
+    update_user_avatar,
+    get_user_info,
+    get_all_users,
+    set_notify_time,
+    get_user_dashboard,
+    save_user_activity,
+)
 from services.user_service_auth import get_current_user, get_current_admin_user
+from services.avatar_service import get_avatar_stream  # streaming avatar
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +38,27 @@ async def change_personal_info(
 ):
     return await change_user_info(request, current_user, db)
 
-# 2.2. Lấy avatar
-@router.get("/avatar/")
-async def get_user_avatar_endpoint(
-    avatar_id: Optional[str] = Query(None, description="Avatar ID to retrieve"),
-    user_id: Optional[str] = Query(None, description="User ID to retrieve avatar for")
+# 2.2. Lấy avatar (stream trực tiếp)
+@router.get("/avatar")
+async def get_avatar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    if not avatar_id and not user_id:
-        raise HTTPException(status_code=400, detail="Either avatar_id or user_id must be provided")
-    
-    target_id = user_id if user_id else avatar_id
-    if target_id is None:
-        raise HTTPException(status_code=400, detail="No valid avatar_id or user_id provided")
-    return await get_user_avatar(target_id)
+    # Fallback theo giới tính nếu chưa có hoặc ảnh bị missing
+    def _gender_default():
+        sex = (current_user.sex or '').lower()
+        if sex.startswith('f') or sex in {'nu', 'female', 'girl', 'woman'}:
+            return 'female.png'
+        return 'male.png'
+    primary_key = current_user.avatar_url or _gender_default()
+    try:
+        return get_avatar_stream(primary_key)
+    except HTTPException as e:
+        if e.status_code == 404:
+            fallback_key = _gender_default()
+            if fallback_key != primary_key:
+                return get_avatar_stream(fallback_key)
+        raise
 
 # 2.3. Cập nhật avatar
 @router.put("/avatar", response_model=MessageResponse)
@@ -85,73 +110,3 @@ async def save_activity(
     db: Session = Depends(get_db)
 ):
     return await save_user_activity(current_user, db)
-
-# 2.6. Lấy thông tin nhiều users theo IDs
-@router.post("/users-by-ids", response_model=dict)
-async def get_users_by_ids_endpoint(
-    user_ids: list[str],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return await get_users_by_ids(user_ids, db)
-
-# Additional utility endpoints
-@router.get("/profile", response_model=UserInfoResponse)
-async def get_current_user_profile(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return await get_user_info(None, current_user, db)
-
-@router.get("/me", response_model=dict)
-async def get_current_user_basic_info(
-    current_user: User = Depends(get_current_user)
-):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "given_name": getattr(current_user, 'given_name', None),
-        "family_name": getattr(current_user, 'family_name', None),
-        "level": getattr(current_user, 'level', 1),
-        "avatar_url": getattr(current_user, 'avatar_url', None),
-        "remind_time": getattr(current_user, 'remind_time', None)
-    }
-
-# Test APIs for development and testing
-@router.put("/test/update-stats", response_model=TestStatsResponse)
-async def update_test_stats_endpoint(
-    request: TestStatsRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-   
-    return await update_test_stats(request, current_user, db)
-
-@router.post("/test/reset-stats", response_model=TestStatsResponse)
-async def reset_test_stats_endpoint(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return await reset_test_stats(current_user, db)
-
-@router.get("/test/simulate-activity", response_model=TestStatsResponse)
-async def simulate_learning_activity_endpoint(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    from ..controllers.user_controller import simulate_learning_activity
-    return await simulate_learning_activity(current_user, db)
-
-@router.get("/test/level-system-info")
-async def get_level_system_info_endpoint():
-    from ..controllers.user_controller import get_level_system_info
-    return await get_level_system_info()
-
-@router.post("/test/add-experience", response_model=TestStatsResponse)
-async def add_experience_endpoint(
-    exp_amount: int = Query(..., description="Amount of experience to add", ge=1, le=10000),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    from ..controllers.user_controller import add_experience
-    return await add_experience(exp_amount, current_user, db)
