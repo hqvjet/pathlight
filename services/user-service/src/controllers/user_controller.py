@@ -53,10 +53,9 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             if not target_user:
                 return UserInfoResponse(status=401, message="Người dùng không tồn tại")
         dob_formatted = getattr(target_user, 'dob', None).strftime("%d/%m/%Y") if getattr(target_user, 'dob', None) else None
-        avatar_url = None
         avatar_id = getattr(target_user, 'avatar_url', None)
-        if avatar_id:
-            avatar_url = avatar_id if avatar_id.startswith('http') else f"{config.BASE_URL}/user/avatar"
+        # Unified avatar_url format with user-id query param (same as dashboard)
+        avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
         user_info = {
             "id": getattr(target_user, 'id', None),
             "email": getattr(target_user, 'email', None),
