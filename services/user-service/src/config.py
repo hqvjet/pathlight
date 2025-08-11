@@ -20,6 +20,7 @@ class Config:
     
     # Base URL for this service (needed for building self links)
     USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", f"http://localhost:{os.getenv('USER_SERVICE_PORT', 8004)}")
+    BASE_URL: str = os.getenv("BASE_URL", os.getenv("USER_SERVICE_URL", f"http://localhost:{os.getenv('USER_SERVICE_PORT', 8004)}"))
 
     # External service URLs
     COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", "http://localhost:8005")

@@ -29,7 +29,7 @@ def _build_avatar_url(user: User) -> str | None:
         return None
     if avatar_id.startswith('http'):
         return avatar_id
-    return f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+    return f"{config.BASE_URL}/user/avatar"
 
 def get_leaderboard_data(db: Session, limit: int = 10) -> list:
     try:
