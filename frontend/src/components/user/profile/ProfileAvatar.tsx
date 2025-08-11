@@ -27,6 +27,7 @@ export const ProfileAvatar: React.FC<Props> = ({ user, uploading, avatarLoading,
           className="w-full h-full object-cover !rounded-none"
           displayName={user.family_name && user.given_name ? `${user.family_name} ${user.given_name}` : (user.name || user.email?.split('@')[0] || 'User')}
           showInitialsFallback
+          cacheKey={avatarKey}
         />
         <button
           type="button"

@@ -40,6 +40,7 @@ export default function NavBar({ user, onLogout, showLogoutButton = false }: Nav
                   className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-gray-200"
                   displayName={user?.name || 'User'}
                   showInitialsFallback={true}
+                  cacheKey={(user as any)?.avatarKey}
                 />
                 <div className="hidden md:block">
                   <div className="text-sm text-gray-600">Xin chào,</div>
@@ -57,6 +58,7 @@ export default function NavBar({ user, onLogout, showLogoutButton = false }: Nav
                   className="w-8 h-8 border-2 border-gray-200"
                   displayName={user?.name || 'User'}
                   showInitialsFallback={true}
+                  cacheKey={(user as any)?.avatarKey}
                 />
               </div>
               

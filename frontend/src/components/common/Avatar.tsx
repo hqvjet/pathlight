@@ -11,6 +11,8 @@ interface AvatarProps {
   alt?: string;
   showInitialsFallback?: boolean;
   displayName?: string;
+  // Optional cache busting key (method 2)
+  cacheKey?: number | string;
 }
 
 export default function Avatar({ 
@@ -19,11 +21,16 @@ export default function Avatar({
   className = '', 
   alt,
   showInitialsFallback = false,
-  displayName 
+  displayName,
+  cacheKey
 }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
   
   const avatarUrl = getAvatarUrl(user);
+  // Append version param if cacheKey provided (stable between renders until changed)
+  const versionedAvatarUrl = cacheKey !== undefined && cacheKey !== null
+    ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}v=${cacheKey}`
+    : avatarUrl;
   const defaultAvatarUrl = '/assets/images/default_avatar.png';
   const finalAlt = alt || `${displayName || user.id || 'User'} avatar`;
   
@@ -55,7 +62,7 @@ export default function Avatar({
   }
 
   // Image avatar with fallback to default
-  const srcToUse = hasError ? defaultAvatarUrl : avatarUrl;
+  const srcToUse = hasError ? defaultAvatarUrl : versionedAvatarUrl;
 
   return (
     <Image

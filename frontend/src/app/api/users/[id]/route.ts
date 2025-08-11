@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER ID API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -59,8 +59,8 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/[id]
- * Get specific user by ID (admin only)
+ * GET /api/user/[id]
+ * Get specific user by ID (now backend should infer from path or token; removed query)
  */
 export async function GET(
   request: NextRequest,
@@ -70,8 +70,8 @@ export async function GET(
     const params = await context.params;
     const headers = createProxyHeaders(request);
     
-    // For individual user info, use the /info endpoint with id parameter
-    const response = await proxyToUserService(`/info?id=${params.id}`, 'GET', headers);
+    // For individual user info, use the /info endpoint without query
+    const response = await proxyToUserService('/info', 'GET', headers);
     return handleApiResponse(response);
   } catch (error) {
     console.error('[USER ID API] GET error:', error);
@@ -83,7 +83,7 @@ export async function GET(
 }
 
 /**
- * PUT /api/users/[id]
+ * PUT /api/user/[id]
  * Update specific user by ID (admin only)
  */
 export async function PUT(
@@ -108,7 +108,7 @@ export async function PUT(
 }
 
 /**
- * DELETE /api/users/[id]
+ * DELETE /api/user/[id]
  * Delete specific user by ID (admin only)
  */
 export async function DELETE(
@@ -132,7 +132,7 @@ export async function DELETE(
 }
 
 /**
- * OPTIONS /api/users/[id]
+ * OPTIONS /api/user/[id]
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

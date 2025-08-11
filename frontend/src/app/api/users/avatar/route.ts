@@ -34,7 +34,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string | FormData
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER AVATAR API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -77,26 +77,20 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/avatar
- * Get user avatar by user_id or avatar_id query parameter
+ * GET /api/user/avatar
+ * Get user's avatar by user-id query param (public)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
-    const avatarId = searchParams.get('avatar_id');
-    
-    if (!userId && !avatarId) {
-      return NextResponse.json(
-        { error: 'Either user_id or avatar_id must be provided' },
-        { status: 400 }
-      );
+    const userId = searchParams.get('user-id');
+    if (!userId) {
+      return NextResponse.json({ detail: 'Thiếu user-id' }, { status: 400 });
     }
-
     const headers = createProxyHeaders(request);
-    const queryString = searchParams.toString();
-    
-    const response = await proxyToUserService(`/avatar/?${queryString}`, 'GET', headers);
+    // Remove auth header to make it public
+    delete headers.Authorization;
+    const response = await proxyToUserService(`/avatar?user-id=${encodeURIComponent(userId)}`, 'GET', headers);
     return handleApiResponse(response);
   } catch (error) {
     console.error('[USER AVATAR API] GET error:', error);
@@ -108,7 +102,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT /api/users/avatar
+ * PUT /api/user/avatar
  * Upload/update user avatar
  */
 export async function PUT(request: NextRequest) {
@@ -128,7 +122,7 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/avatar
+ * OPTIONS /api/user/avatar
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

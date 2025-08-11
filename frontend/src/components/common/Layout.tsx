@@ -210,6 +210,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
                       className="w-7 h-7"
                       displayName={user?.name || user?.email || 'User'}
                       showInitialsFallback={true}
+                      cacheKey={(user as any)?.avatarKey}
                     />
                     <div className="hidden sm:block text-left max-w-28 lg:max-w-36">
                       <div className="text-xs font-medium text-gray-500 leading-none truncate">{user?.email || ''}</div>

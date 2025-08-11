@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER ACTIVITY API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -59,18 +59,13 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/activity
- * Get user activity data (with optional year parameter)
+ * GET /api/user/activity
+ * Get user activity data (no query params)
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const year = searchParams.get('year');
-    
     const headers = createProxyHeaders(request);
-    const endpoint = year ? `/activity?year=${year}` : '/activity';
-    
-    const response = await proxyToUserService(endpoint, 'GET', headers);
+    const response = await proxyToUserService('/activity', 'GET', headers);
     return handleApiResponse(response);
   } catch (error) {
     console.error('[USER ACTIVITY API] GET error:', error);
@@ -82,7 +77,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/users/activity
+ * POST /api/user/activity
  * Save user activity milestone or batch (when activityData is provided)
  */
 export async function POST(request: NextRequest) {
@@ -115,7 +110,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/activity
+ * OPTIONS /api/user/activity
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {
