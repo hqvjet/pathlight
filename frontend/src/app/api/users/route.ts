@@ -57,7 +57,7 @@ async function proxyToUserService(
   endpoint: string,
   config: ProxyRequestConfig
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER API] Proxying ${config.method} request to: ${userServiceUrl}`);
 
@@ -120,7 +120,7 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users
+ * GET /api/user
  * Get all users (admin only) or user list endpoints
  */
 export async function GET(request: NextRequest) {
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/users
+ * POST /api/user
  * Handle POST requests (like users-by-ids)
  */
 export async function POST(request: NextRequest) {
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     const body = await request.text();
     const headers = createProxyHeaders(request);
 
-    // Default to users-by-ids endpoint for POST requests to /api/users
+    // Default to users-by-ids endpoint for POST requests to /api/user
     const response = await proxyToUserService('/users-by-ids', {
       method: 'POST',
       headers,
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users
+ * OPTIONS /api/user
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

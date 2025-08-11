@@ -29,6 +29,10 @@ export function useProfileData() {
         }
         const userObj = userData as UserProfile;
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
+        // Normalize avatar_url for profile page
+        if (userObj.id) {
+          userObj.avatar_url = `/api/user/avatar?user-id=${userObj.id}`;
+        }
         setUser(userObj);
         setFormData({
           given_name: userObj.given_name || '',
@@ -37,6 +41,7 @@ export function useProfileData() {
           sex: userObj.sex || '',
           bio: userObj.bio || ''
         });
+        setAvatarKey(k=>k); // keep current key (no change unless upload)
       } else showToast.authError('Không thể tải thông tin hồ sơ');
     } catch { showToast.authError('Không thể tải thông tin hồ sơ'); }
     finally { setLoading(false); }
@@ -76,7 +81,7 @@ export function useProfileData() {
         const avatarData = response.data as { avatar_url?: string; avatar_id?: string } | undefined;
         if (avatarData && (avatarData.avatar_url || avatarData.avatar_id)) {
           setUser(prev => prev ? { ...prev, avatar_url: avatarData.avatar_url || prev.avatar_url, avatar_id: avatarData.avatar_id || prev.avatar_id } : prev);
-          setAvatarKey(k => k + 1);
+          setAvatarKey(k => k + 1); // bump version immediately
         }
         setTimeout(async () => { await loadUserProfile(); setAvatarKey(k => k + 1); }, 500);
       } else {

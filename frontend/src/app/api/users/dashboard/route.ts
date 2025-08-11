@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER DASHBOARD API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -59,7 +59,7 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/dashboard
+ * GET /api/user/dashboard
  * Get user dashboard data
  */
 export async function GET(request: NextRequest) {
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/dashboard
+ * OPTIONS /api/user/dashboard
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

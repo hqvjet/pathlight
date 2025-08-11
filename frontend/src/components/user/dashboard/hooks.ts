@@ -47,7 +47,7 @@ export function useDashboard(onLogout: () => void) {
         } catch (cacheError) {
           if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
         }
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 8000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
         const response = await Promise.race([api.user.getDashboard(), timeoutPromise]) as { status: number; data?: unknown };
         if (response.status === 401) {
           setLoading(false); onLogout(); return; }
@@ -61,22 +61,22 @@ export function useDashboard(onLogout: () => void) {
         const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
         const profileData: UserProfile = {
           id: userInfo.id || '',
-            email: userInfo.email || '',
-            name: fullName,
-            given_name: userInfo.given_name,
-            family_name: userInfo.family_name,
-            avatar_url: userInfo.avatar_id || userInfo.avatar_url,
-            remind_time: userInfo.remind_time,
-            level: userInfo.level || 1,
-            current_exp: userInfo.current_exp || 0,
-            require_exp: userInfo.require_exp || 100,
-            total_courses: userInfo.course_num || userInfo.total_courses || 0,
-            completed_courses: userInfo.finish_course_num || userInfo.completed_courses || 0,
-            total_quizzes: userInfo.quiz_num || userInfo.total_quizzes || 0,
-            lesson_num: userInfo.lesson_num || 0,
-            average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
-            rank: userInfo.rank || 1,
-            user_num: userInfo.user_num || 1,
+          email: userInfo.email || '',
+          name: fullName,
+          given_name: userInfo.given_name,
+          family_name: userInfo.family_name,
+          avatar_url: userInfo.avatar_url || (userInfo.id ? `/api/user/avatar?user-id=${userInfo.id}` : undefined),
+          remind_time: userInfo.remind_time,
+          level: userInfo.level || 1,
+          current_exp: userInfo.current_exp || 0,
+          require_exp: userInfo.require_exp || 100,
+          total_courses: userInfo.course_num || userInfo.total_courses || 0,
+          completed_courses: userInfo.finish_course_num || userInfo.completed_courses || 0,
+          total_quizzes: userInfo.quiz_num || userInfo.total_quizzes || 0,
+          lesson_num: userInfo.lesson_num || 0,
+          average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
+          rank: userInfo.rank || 1,
+          user_num: userInfo.user_num || 1,
         };
         setUser(profileData);
         setLoading(false);

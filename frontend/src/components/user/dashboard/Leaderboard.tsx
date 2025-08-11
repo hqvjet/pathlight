@@ -5,7 +5,7 @@ import { Trophy, Medal } from 'lucide-react';
 
 export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
   const top3 = [...top].slice(0,3);
-  while (top3.length < 3) top3.push({ rank: top3.length+1, name: 'Đang cập nhật', level:0, experience:0, initials:'?', avatar_url:'' });
+  while (top3.length < 3) top3.push({ rank: top3.length+1, name: 'Đang cập nhật', level:0, experience:0, initials:'?', avatar_url:'', id: undefined });
   const order = [2,1,3];
   const sizes: Record<number,{pedestal:string; avatar:number;}> = { 1:{pedestal:'w-44 h-60', avatar:110}, 2:{pedestal:'w-40 h-52', avatar:96}, 3:{pedestal:'w-40 h-52', avatar:96} };
   return (
@@ -13,10 +13,11 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
       {order.map(r => {
         const u = top3.find(x=>x.rank===r) || top3[r-1];
         const cfg = sizes[u.rank];
+        const userForAvatar = { ...u, id: u.id }; // ensure id present
         return (
           <div key={u.rank} className="flex flex-col items-center">
             <div className="relative mb-5">
-              <Avatar user={u} size={cfg.avatar} displayName={u.name} showInitialsFallback className="ring-3 ring-violet-200/60 shadow-md bg-gradient-to-br from-indigo-400 via-blue-500 to-violet-500" />
+              <Avatar user={userForAvatar} size={cfg.avatar} displayName={u.name} showInitialsFallback className="ring-3 ring-violet-200/60 shadow-md bg-gradient-to-br from-indigo-400 via-blue-500 to-violet-500" cacheKey={userForAvatar.id} />
               {u.rank === 1 && <span className="absolute -top-4 right-2 text-xl" aria-label="Top 1">👑</span>}
               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-medium px-3 py-1 rounded-md shadow whitespace-nowrap">{u.name}</div>
             </div>
@@ -51,7 +52,7 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users
         {users.slice(3,10).map(u => (
           <tr key={u.rank} className="hover:bg-gray-50 transition-colors">
             <td className="py-3 px-4 font-medium text-gray-700">{u.rank}</td>
-            <td className="py-3 px-4"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" /></td>
+            <td className="py-3 px-4"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.id} /></td>
             <td className="py-3 px-4 font-medium text-gray-800 truncate max-w-[140px]">{u.name}</td>
             <td className="py-3 px-4 font-semibold text-violet-600">{u.level}</td>
           </tr>

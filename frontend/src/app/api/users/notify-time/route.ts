@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER NOTIFY TIME API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -59,7 +59,7 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * PUT /api/users/notify-time
+ * PUT /api/user/notify-time
  * Set user daily study notification time
  */
 export async function PUT(request: NextRequest) {
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/notify-time
+ * OPTIONS /api/user/notify-time
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

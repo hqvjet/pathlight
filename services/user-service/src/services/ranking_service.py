@@ -26,10 +26,12 @@ def calculate_user_rank(current_user: User, db: Session) -> dict:
 def _build_avatar_url(user: User) -> str | None:
     avatar_id = getattr(user, 'avatar_url', None)
     if not avatar_id:
-        return None
+        return f"{config.BASE_URL}/user/avatar?user-id={user.id}"  # will fallback to gender/default
     if avatar_id.startswith('http'):
-        return avatar_id
-    return f"{config.USER_SERVICE_URL}/avatar/?user_id={user.id}"
+        # If already contains user-id query keep as is else append
+        return avatar_id if 'user-id=' in avatar_id else f"{avatar_id}?user-id={user.id}"
+    # Internal stored key -> use public endpoint with user-id
+    return f"{config.BASE_URL}/user/avatar?user-id={user.id}"
 
 def get_leaderboard_data(db: Session, limit: int = 10) -> list:
     try:

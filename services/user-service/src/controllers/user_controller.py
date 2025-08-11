@@ -53,10 +53,9 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             if not target_user:
                 return UserInfoResponse(status=401, message="Người dùng không tồn tại")
         dob_formatted = getattr(target_user, 'dob', None).strftime("%d/%m/%Y") if getattr(target_user, 'dob', None) else None
-        avatar_url = None
         avatar_id = getattr(target_user, 'avatar_url', None)
-        if avatar_id:
-            avatar_url = avatar_id if avatar_id.startswith('http') else f"{config.USER_SERVICE_URL}/avatar/?user_id={target_user.id}"
+        # Unified avatar_url format with user-id query param (same as dashboard)
+        avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
         user_info = {
             "id": getattr(target_user, 'id', None),
             "email": getattr(target_user, 'email', None),
@@ -87,7 +86,7 @@ async def get_all_users(db: Session) -> UsersListResponse:
             avatar_id = getattr(u, 'avatar_url', None)
             avatar_url = None
             if avatar_id:
-                avatar_url = avatar_id if avatar_id.startswith('http') else f"{config.USER_SERVICE_URL}/avatar/?user_id={u.id}"
+                avatar_url = avatar_id if avatar_id.startswith('http') else f"{config.BASE_URL}/user/avatar"
             infos.append({
                 "user_id": getattr(u, 'id', None),
                 "family_name": getattr(u, 'family_name', None),
@@ -123,7 +122,10 @@ async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Se
 async def get_user_dashboard(current_user: User, db: Session) -> DashboardResponse:
     try:
         avatar_id = getattr(current_user, 'avatar_url', None)
-        avatar_url = avatar_id if (avatar_id and avatar_id.startswith('http')) else (f"{config.USER_SERVICE_URL}/avatar/?user_id={current_user.id}" if avatar_id else None)
+        # Always provide endpoint with user-id query param when user has (or may have) an avatar.
+        avatar_url = (
+            f"{config.BASE_URL}/user/avatar?user-id={current_user.id}" if avatar_id else None
+        )
         course_stats = get_course_stats(current_user.email)
         quiz_stats = get_quiz_stats(current_user.email)
         rank_data = calculate_user_rank(current_user, db)

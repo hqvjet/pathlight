@@ -5,38 +5,37 @@ export interface AvatarUser {
 }
 
 export const getAvatarUrl = (user: AvatarUser): string => {
-  // Google OAuth avatar absolute URL
+  if (!user) return '/assets/images/default_avatar.png';
+  const id = user.id;
+
+  // If we have a user id, always build canonical endpoint with user-id (public avatar endpoint handles fallback & defaults)
+  if (id) {
+    return `/api/user/avatar?user-id=${id}`;
+  }
+
+  // Legacy: external absolute URL (keep origin/path)
   if (user?.avatar_url && user.avatar_url.startsWith('http')) {
-    const separator = user.avatar_url.includes('?') ? '&' : '?';
-    const cacheParam = `_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
-    return `${user.avatar_url}${separator}${cacheParam}`;
+    try {
+      const urlObj = new URL(user.avatar_url);
+      if (/\/avatar\/?/.test(urlObj.pathname)) {
+        // Try to extract user-id from query if present
+        const qId = urlObj.searchParams.get('user-id');
+        if (qId) return `/api/user/avatar?user-id=${qId}`;
+        return '/api/user/avatar';
+      }
+      return urlObj.origin + urlObj.pathname;
+    } catch {
+      return '/api/user/avatar';
+    }
   }
 
-  // Prefer stored avatar id served by our proxy
-  if (user?.avatar_id) {
-    const url = `/api/users/avatar?avatar_id=${encodeURIComponent(user.avatar_id)}`;
-    const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
-    return `${url}${cacheParam}`;
-  }
-
-  // Fallback to user id-based avatar fetch via proxy
-  if (user?.id) {
-    const url = `/api/users/avatar?user_id=${encodeURIComponent(user.id)}`;
-    const cacheParam = `&_t=${Date.now()}&_r=${Math.random().toString(36).substr(2, 9)}`;
-    return `${url}${cacheParam}`;
-  }
-  
-  // Default avatar
+  // Fallback
   return '/assets/images/default_avatar.png';
 };
 
 export const getUserInitials = (name: string): string => {
   if (!name) return '?';
-  
   const words = name.trim().split(/\s+/);
-  if (words.length === 1) {
-    return words[0][0].toUpperCase();
-  }
-  
-  return words.slice(0, 2).map(word => word[0].toUpperCase()).join('');
+  if (words.length === 1) return words[0][0].toUpperCase();
+  return words.slice(0, 2).map(w => w[0].toUpperCase()).join('');
 };

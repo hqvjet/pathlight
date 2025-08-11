@@ -44,7 +44,7 @@ export const AUTH_CONSTANTS = {
 // 🌐 API CONSTANTS
 // =============================================================================
 export const API_CONSTANTS = {
-  TIMEOUT: 15000, // 15 seconds (reduced from 30s for better UX)
+  TIMEOUT: 30000, // 30 seconds (increased from 15s per request)
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000, // 1 second
   

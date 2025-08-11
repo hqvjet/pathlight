@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER PROFILE API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -72,7 +72,7 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/profile
+ * GET /api/user/profile
  * Get current user profile
  */
 export async function GET(request: NextRequest) {
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT /api/users/profile
+ * PUT /api/user/profile
  * Update user profile (change-info endpoint)
  */
 export async function PUT(request: NextRequest) {
@@ -111,7 +111,7 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/profile
+ * OPTIONS /api/user/profile
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

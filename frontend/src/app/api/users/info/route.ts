@@ -30,7 +30,7 @@ async function proxyToUserService(
   method: string,
   headers: Record<string, string>
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER INFO API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -57,18 +57,13 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * GET /api/users/info
- * Get user information (with optional id parameter for specific user)
+ * GET /api/user/info
+ * Get user information (no query params)
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
     const headers = createProxyHeaders(request);
-    const endpoint = id ? `/info?id=${id}` : '/info';
-    
-    const response = await proxyToUserService(endpoint, 'GET', headers);
+    const response = await proxyToUserService('/info', 'GET', headers);
     return handleApiResponse(response);
   } catch (error) {
     console.error('[USER INFO API] GET error:', error);
@@ -80,7 +75,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/info
+ * OPTIONS /api/user/info
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {

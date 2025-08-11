@@ -31,7 +31,7 @@ async function proxyToUserService(
   headers: Record<string, string>,
   body?: string
 ): Promise<Response> {
-  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/users${endpoint}`;
+  const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER IDS API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -59,7 +59,7 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
 // =============================================================================
 
 /**
- * POST /api/users/users-by-ids
+ * POST /api/user/users-by-ids
  * Get multiple users by their IDs (useful for leaderboard avatars, etc.)
  */
 export async function POST(request: NextRequest) {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * OPTIONS /api/users/users-by-ids
+ * OPTIONS /api/user/users-by-ids
  * Handle CORS preflight requests
  */
 export async function OPTIONS() {
