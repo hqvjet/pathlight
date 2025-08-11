@@ -110,6 +110,7 @@ def get_avatar_stream(avatar_id: str | None):
     If None, raise 404.
     Also allow root-level default files like male.png / female.png
     Added support for .jpg fixed naming; fallback to legacy key without extension.
+    Refactored caching: user-specific avatars return no-store to avoid stale cache on same URL.
     """
     if not avatar_id:
         raise HTTPException(status_code=404, detail="Avatar không tồn tại")
@@ -120,7 +121,6 @@ def get_avatar_stream(avatar_id: str | None):
     if not bucket:
         raise HTTPException(status_code=500, detail="S3 bucket not configured")
 
-    # Determine key
     if '/' in avatar_id:
         key = avatar_id
     elif avatar_id.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -154,7 +154,9 @@ def get_avatar_stream(avatar_id: str | None):
     def iter_chunks():
         for chunk in iter(lambda: body.read(8192), b""):
             yield chunk
-    headers = {"Cache-Control": "public, max-age=31536000"}
+
+    # Caching strategy (no long cache even for default male/female)
+    headers = {"Cache-Control": "no-store"}
     etag = obj.get('ETag')
     if etag:
         headers['ETag'] = etag.strip('"')
@@ -204,6 +206,7 @@ def get_avatar_redirect(avatar_id: str):
 
 def get_avatar_bytes(avatar_id: str | None) -> tuple[bytes, str, dict]:
     """Fetch avatar and return raw bytes (non-streaming) for API Gateway/Lambda compatibility.
+    Applies same caching policy as get_avatar_stream.
     Returns: (content_bytes, media_type, headers)
     Raises HTTPException on errors similar to get_avatar_stream.
     """
@@ -250,7 +253,9 @@ def get_avatar_bytes(avatar_id: str | None) -> tuple[bytes, str, dict]:
         logger.error(f"Read S3 body error: {e}")
         raise HTTPException(status_code=500, detail="Lỗi khi truy cập avatar")
 
-    headers = {"Cache-Control": "public, max-age=31536000"}
+    filename = key.rsplit('/', 1)[-1]
+    # Unified caching: disable long cache for all avatars (including defaults)
+    headers: dict = {"Cache-Control": "no-store"}
     etag = obj.get('ETag')
     if etag:
         headers['ETag'] = etag.strip('"')

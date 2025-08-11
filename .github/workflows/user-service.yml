@@ -104,7 +104,7 @@ jobs:
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-user-service --environment \
-          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, S3_USER_BUCKET_NAME=${{ secrets.S3_USER_BUCKET_NAME }}, USER_SERVICE_PORT=${{ secrets.USER_SERVICE_PORT }}}"
+          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, S3_USER_BUCKET_NAME=${{ secrets.S3_USER_BUCKET_NAME }}, USER_SERVICE_PORT=${{ secrets.USER_SERVICE_PORT }}, BASE_URL=${{ secrets.USER_BASE_URL }}}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
