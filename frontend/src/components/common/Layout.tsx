@@ -12,8 +12,6 @@ import {
   ClipboardListIcon,
   UserCircleIcon,
   LogoutIcon,
-  PlusCircleIcon,
-  DocumentTextIcon,
   MenuIcon,
 } from '@/components/icons';
 
@@ -28,12 +26,11 @@ interface LayoutProps {
   };
 }
 
+// Consolidated menu items
 const menuItems = [
   { label: 'Trang Chủ', icon: HomeIcon, href: '/user/dashboard' },
-  { label: 'Tạo Khóa Học', icon: PlusCircleIcon, href: '/user/create-course' },
-  { label: 'Tạo Quiz', icon: DocumentTextIcon, href: '/user/create-quiz' },
-  { label: 'Khóa Học', icon: BookOpenIcon, href: '/user/my-courses' },
-  { label: 'Quiz', icon: ClipboardListIcon, href: '/user/my-quizzes' },
+  { label: 'Khóa Học Của Tôi', icon: BookOpenIcon, href: '/user/my-courses' },
+  { label: 'Quiz Của Tôi', icon: ClipboardListIcon, href: '/user/my-quizzes' },
   { label: 'Hồ Sơ', icon: UserCircleIcon, href: '/user/profile' },
 ];
 
