@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, storage } from '@/utils/api';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
+import { showToast } from '@/utils/toast';
 
 export function useDashboard(onLogout: () => void) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -85,7 +86,7 @@ export function useDashboard(onLogout: () => void) {
       } catch (error) {
         setLoading(false);
         if (error instanceof Error && error.message === 'Request timeout') {
-          alert('⏱️ Trang web tải chậm. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
+          showToast.warning('⏱️ Trang web tải chậm. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
         } else {
           onLogout();
         }

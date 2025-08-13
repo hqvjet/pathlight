@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AUTH_CONFIG, FEATURE_FLAGS } from '../config/env';
+import { showToast } from '@/utils/toast';
 
 declare global {
   interface Window {
@@ -139,7 +140,7 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
   const signInWithPopup = () => {
     if (!FEATURE_FLAGS.ENABLE_GOOGLE_AUTH) {
       console.log('� Google Auth is disabled');
-      alert('Google OAuth hiện đang bị tắt. Vui lòng liên hệ quản trị viên.');
+      showToast.error('Google OAuth hiện đang bị tắt. Vui lòng liên hệ quản trị viên.');
       return;
     }
 
@@ -148,13 +149,13 @@ export const useGoogleOAuth = ({ onSuccess, onError }: GoogleOAuthConfig) => {
     const clientId = AUTH_CONFIG.GOOGLE_CLIENT_ID;
     if (!clientId) {
       console.error('❌ Google Client ID not configured');
-      alert('Google OAuth chưa được cấu hình. Vui lòng thiết lập Client ID.');
+      showToast.error('Google OAuth chưa được cấu hình. Vui lòng thiết lập Client ID.');
       return;
     }
 
     if (!window.google) {
       console.error('❌ Google API not available');
-      alert('Google Sign-In chưa sẵn sàng. Vui lòng đợi một chút và thử lại.');
+      showToast.error('Google Sign-In chưa sẵn sàng. Vui lòng đợi và thử lại.');
       return;
     }
 

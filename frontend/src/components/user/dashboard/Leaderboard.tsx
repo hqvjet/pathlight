@@ -7,7 +7,7 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
   const top3 = [...top].slice(0,3);
   while (top3.length < 3) top3.push({ rank: top3.length+1, name: 'Đang cập nhật', level:0, experience:0, initials:'?', avatar_url:'', id: undefined });
   const order = [2,1,3];
-  const sizes: Record<number,{pedestal:string; avatar:number;}> = { 1:{pedestal:'w-44 h-60', avatar:110}, 2:{pedestal:'w-40 h-52', avatar:96}, 3:{pedestal:'w-40 h-52', avatar:96} };
+  const sizes: Record<number,{pedestal:string; avatar:number;}> = { 1:{pedestal:'w-44 h-60', avatar:110}, 2:{pedestal:'w-40 h-52', avatar:96}, 3:{pedestal:'w-36 h-46', avatar:84} };
   return (
     <div className="flex justify-center items-end gap-8">
       {order.map(r => {
