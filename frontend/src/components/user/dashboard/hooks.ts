@@ -65,7 +65,7 @@ export function useDashboard(onLogout: () => void) {
           name: fullName,
           given_name: userInfo.given_name,
           family_name: userInfo.family_name,
-          avatar_url: userInfo.avatar_url || (userInfo.id ? `/api/user/avatar?user-id=${userInfo.id}` : undefined),
+          avatar_url: userInfo.avatar_url ? userInfo.avatar_url : (userInfo.id ? `/api/user/avatar?user-id=${userInfo.id}` : undefined),
           remind_time: userInfo.remind_time,
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,

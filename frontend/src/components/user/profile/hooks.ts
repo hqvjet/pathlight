@@ -30,7 +30,7 @@ export function useProfileData() {
         const userObj = userData as UserProfile;
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
         // Normalize avatar_url for profile page
-        if (userObj.id) {
+        if (userObj.id && !userObj.avatar_url) {
           userObj.avatar_url = `/api/user/avatar?user-id=${userObj.id}`;
         } else if (!userObj.avatar_url) {
           userObj.avatar_url = '/api/user/avatar';
