@@ -486,3 +486,125 @@ This service provides a rock-solid foundation for document processing and AI-pow
 ---
 
 *Built with ❤️ by the Pathlight team*
+
+## 🧠 Multi‑Agent Course Generation (Định nghĩa thư mục/file)
+
+Phạm vi: bổ sung hệ thống multi‑agent để tạo nội dung khóa học theo sơ đồ kèm, chỉ định cấu trúc file/thư mục. Phần code bạn sẽ tự triển khai.
+
+### Luồng tổng quát
+1. Orchestrator nhận yêu cầu tạo khóa học (title/mục tiêu hoặc nguồn KB).
+2. Summary Agent khám phá knowledge base, tạo Course Summary + Roadmap, lưu S3.
+3. Analyser kiểm định độ phủ/nội dung, phát hiện thiếu sót, xuất artifact (tùy chọn index vào OpenSearch).
+4. Lesson Creator tạo nội dung từng bài theo Roadmap, lưu S3.
+5. Test Creator sinh bài kiểm tra + giải thích cho từng bài/khóa học, lưu S3.
+6. Test Agent đánh giá tính đúng/độ phủ; có thể phản hồi để Lesson Agent chỉnh.
+7. Orchestrator hợp nhất, phát hành bản cuối (course_pack.json), cập nhật trạng thái.
+
+### Cấu trúc thư mục đề xuất
+```
+src/
+  agents/
+    base/
+      base_agent.py
+      agent_context.py
+      agent_message.py
+      tool_protocols.py
+    orchestrator/
+      course_orchestrator.py
+      workflow_state.py
+      policies.py
+    summary/
+      summary_agent.py
+      prompts/
+    analyser/
+      analysis_agent.py
+      prompts/
+    lesson_creator/
+      lesson_agent.py
+      prompts/
+    test_creator/
+      test_creator_agent.py
+      prompts/
+    test/
+      test_agent.py
+      prompts/
+
+  services/
+    agentic/
+      knowledge_base_service.py
+      retrieval_service.py
+      evaluation_service.py
+      course_pipeline_service.py
+      registry.py
+
+  factories/
+    agent_factory.py
+    orchestrator_factory.py
+
+  controllers/
+    agent_controller.py
+
+  routers/
+    agent_routes.py
+
+  schemas/
+    agent_requests.py
+    agent_responses.py
+    course_models.py
+
+  models/
+    agent_models.py
+    course.py
+    test.py
+
+  infrastructure/
+    knowledge/
+      s3_knowledge_repository.py
+      opensearch_retriever.py
+
+  config/
+    agent_config.py
+
+  workflows/
+    course_generation/
+      pipeline_definition.py
+      checkpoints.py
+      metrics.py
+
+  prompts/
+    shared/
+      style_guide.md
+      rubrics.md
+```
+
+### Chuẩn lưu trữ S3
+- s3://{bucket}/courses/{course_id}/
+  - summary/summary.md
+  - roadmap/roadmap.json
+  - analysis/analysis.json
+  - lessons/{lesson_id}/lesson.md
+  - tests/{test_id}/test.json
+  - final/course_pack.json
+
+### OpenSearch (gợi ý chỉ mục)
+- materials_{env}, lessons_{env}, tests_{env}
+
+### API dự kiến
+- POST /agentic/course/start — khởi chạy pipeline, trả job_id
+- GET /agentic/course/status/{job_id} — xem tiến độ
+- GET /agentic/course/artifacts/{course_id} — liệt kê artifact
+- POST /agentic/course/retry/{step} — chạy lại một bước
+
+### Tích hợp với code sẵn có
+- Thêm router mới `agent_routes.py` vào `main.py`.
+- Dùng lại `infrastructure/openai/client.py`, `infrastructure/aws/s3_client.py`, `infrastructure/aws/opensearch_client.py`.
+- Cấu hình riêng đặt tại `config/agent_config.py`.
+- Phát hiện môi trường: `core/environment.py`.
+
+### TODO ngắn gọn
+- Tạo file/thư mục như trên.
+- Cài đặt BaseAgent + context/message + tool protocols.
+- Orchestrator + pipeline_definition + checkpoints.
+- KnowledgeBaseService, RetrievalService, EvaluationService, Registry/Factories.
+- Các agent cụ thể (summary/analyser/lesson/test_creator/test) và Router/Controller.
+- Viết tests cho orchestrator và từng agent.
