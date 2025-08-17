@@ -1,7 +1,7 @@
 # PathLight \- Adaptive AI Learning Platform
 
 <p align="center">
-  <img src="docs/architecture.png" alt="Architecture" width="640" />
+  <img src="assets/architecture.png" alt="Architecture" width="640" />
 </p>
 
 <p align="center">
