@@ -9,10 +9,10 @@ class Course(Base):
     
     course_id = Column(String, primary_key=True)
     course_info_id = Column(String, ForeignKey("course_info.course_info_id"), nullable=False)
-    user_id = Column(String, nullable=False)  # Foreign key to user service
+    user_id = Column(String, nullable=False)
     finish = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     course_info = relationship("CourseInfo", back_populates="courses")
@@ -24,11 +24,10 @@ class CourseInfo(Base):
     
     course_info_id = Column(String, primary_key=True)
     understand_level_id = Column(String, ForeignKey("understand_level_tag.understand_level_id"), nullable=False)
-    title = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
-    duration = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    duration = Column(Integer, nullable=False)
+    roadmap = Column(String, nullable=True)
     
     # Relationships
     courses = relationship("Course", back_populates="course_info")
@@ -39,9 +38,7 @@ class UnderstandLevelTag(Base):
     __tablename__ = "understand_level_tag"
     
     understand_level_id = Column(String, primary_key=True)
-    understand_level = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    understand_level = Column(String, nullable=False)
     
     # Relationships
     course_infos = relationship("CourseInfo", back_populates="understand_level")
@@ -52,13 +49,13 @@ class Lesson(Base):
     
     lesson_id = Column(String, primary_key=True)
     course_id = Column(String, ForeignKey("course.course_id"), nullable=False)
-    title = Column(String, nullable=True)
-    content = Column(Text, nullable=True)
-    description = Column(Text, nullable=True)
-    img_url = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    img_url = Column(String, nullable=True)
     finish = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     course = relationship("Course", back_populates="lessons")
@@ -70,13 +67,12 @@ class Test(Base):
     
     test_id = Column(String, primary_key=True)
     lesson_id = Column(String, ForeignKey("lesson.lesson_id"), nullable=False)
-    title = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
-    duration = Column(Integer, nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    duration = Column(Integer, nullable=False)
     finish = Column(Boolean, nullable=False, default=False)
-    exp_int = Column(Integer, nullable=True)
+    exp = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     lesson = relationship("Lesson", back_populates="tests")
@@ -89,13 +85,11 @@ class LessonQA(Base):
     qa_id = Column(String, primary_key=True)
     test_id = Column(String, ForeignKey("test.test_id"), nullable=False)
     difficult_level_id = Column(String, ForeignKey("difficult_level.difficult_level_id"), nullable=False)
-    question = Column(Text, nullable=True)
-    option1 = Column(String, nullable=True)
-    option2 = Column(String, nullable=True)
-    option3 = Column(String, nullable=True)
-    option4 = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    question = Column(String, nullable=False)
+    option1 = Column(String, nullable=False)
+    option2 = Column(String, nullable=False)
+    option3 = Column(String, nullable=False)
+    option4 = Column(String, nullable=False)
     
     # Relationships
     test = relationship("Test", back_populates="lesson_qas")
@@ -106,9 +100,38 @@ class DifficultLevel(Base):
     __tablename__ = "difficult_level"
     
     difficult_level_id = Column(String, primary_key=True)
-    difficult_level = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    difficult_level = Column(String, nullable=False)
     
     # Relationships
     lesson_qas = relationship("LessonQA", back_populates="difficult_level")
+
+
+class FinalTest(Base):
+    __tablename__ = "final_test"
+
+    final_test_id = Column(String, primary_key=True)
+    course_id = Column(String, ForeignKey("course.course_id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    duration = Column(Integer, nullable=False)
+    exp = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    course = relationship("Course", backref="final_tests")
+    final_qas = relationship("FinalQA", back_populates="final_test")
+
+
+class FinalQA(Base):
+    __tablename__ = "final_qa"
+
+    final_qa_id = Column(String, primary_key=True)
+    final_test_id = Column(String, ForeignKey("final_test.final_test_id"), nullable=False)
+    question = Column(String, nullable=False)
+    option1 = Column(String, nullable=False)
+    option2 = Column(String, nullable=False)
+    option3 = Column(String, nullable=False)
+    option4 = Column(String, nullable=False)
+
+    # Relationships
+    final_test = relationship("FinalTest", back_populates="final_qas")
