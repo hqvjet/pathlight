@@ -8,6 +8,7 @@ import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
 from fastapi import Request, UploadFile
+from fastapi.responses import JSONResponse
 from jose import jwt
 
 from src.config import config
@@ -53,7 +54,7 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 async def upload_files_docs(request: Request, files: List[UploadFile]):
 	user_id = _verify_token(request)
 	if not user_id:
-		return {"status": 401, "message": "Unauthorized"}
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
 	allowed_ext = {".pdf", ".pptx", ".docx"}
 	total_size = 0

@@ -26,11 +26,12 @@ async def lifespan(app: FastAPI):
         bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
         or not config.DATABASE_URL
         or bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or _env_flag("COURSE_SERVICE_SKIP_DB")
     )
     if skip_db:
         logger.info(
-            "Skipping database setup | AWS_LAMBDA_FUNCTION_NAME=%s, DATABASE_URL_set=%s, PYTEST=%s",
-            bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")), bool(config.DATABASE_URL), bool(os.getenv("PYTEST_CURRENT_TEST")),
+            "Skipping database setup | AWS_LAMBDA_FUNCTION_NAME=%s, DATABASE_URL_set=%s, PYTEST=%s, COURSE_SERVICE_SKIP_DB=%s",
+            bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")), bool(config.DATABASE_URL), bool(os.getenv("PYTEST_CURRENT_TEST")), _env_flag("COURSE_SERVICE_SKIP_DB"),
         )
     else:
         try:
