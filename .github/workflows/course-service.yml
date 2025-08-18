@@ -107,7 +107,10 @@ jobs:
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-course-service --environment \
-            "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, S3_UPLOAD_PREFIX=uploads}"
+            "Variables={COURSE_SKIP_DB_SETUP=true, DATABASE_URL=${{ secrets.DATABASE_URL }}, \
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, \
+            SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, REGION=ap-northeast-1, \
+            S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, S3_UPLOAD_PREFIX=uploads}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
