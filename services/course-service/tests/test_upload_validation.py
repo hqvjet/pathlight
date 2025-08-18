@@ -2,9 +2,7 @@ from io import BytesIO
 
 def test_requires_auth(client):
     resp = client.post("/course/upload/file", files={"files": ("a.pdf", b"x", "application/pdf")})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == 401
+    assert resp.status_code == 403
 
 
 def test_reject_bad_extension_with_auth(mocker, client):
