@@ -54,22 +54,22 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 async def upload_files_docs(request: Request, files: List[UploadFile]):
 	user_id = _verify_token(request)
 	if not user_id:
-		logger.info("Upload aborted: unauthorized (missing/invalid bearer token)")
+		logger.warning("Upload aborted: unauthorized (missing/invalid bearer token)")
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
-	allowed_ext = {".pdf", ".pptx", ".docx"}
+	allowed_ext = {".pdf", ".pptx", ".docx", ".doc"}
 	total_size = 0
 	file_payloads = []
 	for f in files:
 		original = f.filename or ""
 		ext = "." + original.rsplit(".", 1)[1].lower() if "." in original else ""
 		if ext not in allowed_ext:
-			logger.info("Upload failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, original, user_id)
+			logger.warning("Upload failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, original, user_id)
 			return {"status": 401, "message": "Định dạng file không được hỗ trợ"}
 		content = await f.read()
 		total_size += len(content)
 		if total_size > 20 * 1024 * 1024:
-			logger.info("Upload failed: total size %d exceeds 20MB limit (user_id=%s)", total_size, user_id)
+			logger.warning("Upload failed: total size %d exceeds 20MB limit (user_id=%s)", total_size, user_id)
 			return {"status": 401, "message": "File vượt quá dung lượng giới hạn, xin vui lòng xem lại"}
 		enc_name = _encrypted_filename(user_id, original)
 		file_payloads.append((f, content, enc_name))
@@ -92,7 +92,6 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 	except ClientError as e:
 		code = e.response.get("Error", {}).get("Code", "ClientError")
 		logger.error("S3 head_bucket error: %s", code)
-		# Common cases: 403 Forbidden (no access), 404 Not Found (bucket missing)
 		if code in {"403", "Forbidden"}:
 			return {"status": 500, "message": "Access denied to S3 bucket. Check IAM permissions."}
 		if code in {"404", "NotFound", "NoSuchBucket"}:
@@ -125,10 +124,5 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 				return {"status": 500, "message": "S3 region mismatch during upload. Verify AWS_REGION and bucket region."}
 			return {"status": 500, "message": f"S3 upload failed: {code}"}
 
-	logger.info(
-		"Upload successful (user_id=%s): %d file(s) uploaded: %s",
-		user_id,
-		len(uploaded_names),
-		uploaded_names,
-	)
+	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
