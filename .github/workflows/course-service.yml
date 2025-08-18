@@ -56,11 +56,10 @@ jobs:
           echo "COURSE_SKIP_DB_SETUP=true" >> services/course-service/.env
           echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/course-service/.env
           echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/course-service/.env
-          # Map repo secrets to app's expected AWS var names
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/course-service/.env
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/course-service/.env
-          echo "AWS_REGION=ap-northeast-1" >> services/course-service/.env
-          echo "S3_BUCKET_NAME=${{ secrets.S3_COURSE_BUCKET_NAME }}" >> services/course-service/.env
+          echo "ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/course-service/.env
+          echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/course-service/.env
+          echo "REGION=ap-northeast-1" >> services/course-service/.env
+          echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> services/course-service/.env
           echo "S3_UPLOAD_PREFIX=uploads" >> services/course-service/.env
 
       - name: Run Tests
@@ -104,11 +103,11 @@ jobs:
           aws lambda update-function-code --function-name pathlight-course-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/course_service:latest
           echo "✅ Lambda function code updated successfully."
 
-      - name: Update Lambda Environment Variables (Non-AWS secrets only)
+      - name: Update Lambda Environment Variables (exclude AWS_* vars)
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-course-service --environment \
-          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, AWS_ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, AWS_SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, AWS_REGION=ap-northeast-1, S3_BUCKET_NAME=${{ secrets.S3_COURSE_BUCKET_NAME }}, S3_UPLOAD_PREFIX=uploads, COURSE_SERVICE_PORT=${{ secrets.COURSE_SERVICE_PORT }}, BASE_URL=${{ secrets.COURSE_BASE_URL }}}"
+            "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, S3_UPLOAD_PREFIX=uploads}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
