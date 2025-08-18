@@ -7,7 +7,6 @@ from typing import List
 from dotenv import load_dotenv
 
 # Load environment from common paths
-# In local/dev, let .env override previously exported vars to avoid stale values.
 _dotenv_override = (
     os.getenv("AWS_LAMBDA_FUNCTION_NAME") is None
     and os.getenv("DOTENV_OVERRIDE", "true").lower() == "true"
@@ -35,15 +34,10 @@ class CourseConfig:
     ALLOWED_HEADERS: List[str] = ["*"]
 
     # AWS S3
-    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
-    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-    AWS_REGION: str = os.getenv("AWS_REGION", "ap-southeast-1")
+    ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")
+    SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
+    REGION: str = os.getenv("REGION", "ap-northeast-1")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
-    S3_UPLOAD_PREFIX: str = os.getenv("S3_UPLOAD_PREFIX", "uploads")
-    
-    AWS_S3_ENDPOINT_URL: str = os.getenv("AWS_S3_ENDPOINT_URL", "")
-    S3_FORCE_PATH_STYLE: bool = os.getenv("S3_FORCE_PATH_STYLE", "false").lower() == "true"
-
 
 config = CourseConfig()
 

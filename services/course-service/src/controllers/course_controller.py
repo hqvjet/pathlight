@@ -29,16 +29,13 @@ def _verify_token(request: Request):
 
 
 def _get_s3_client():
-	"""Create S3 client supporting both AWS cloud and local S3-compatible endpoints."""
+	"""Create S3 client supporting both AWS cloud and S3-compatible endpoints."""
 	kwargs = {
 		"service_name": "s3",
-		"aws_access_key_id": config.AWS_ACCESS_KEY_ID or None,
-		"aws_secret_access_key": config.AWS_SECRET_ACCESS_KEY or None,
-		"region_name": config.AWS_REGION or None,
-		"config": BotoConfig(s3={"addressing_style": "path"} if config.S3_FORCE_PATH_STYLE else {}),
+		"aws_access_key_id": getattr(config, "ACCESS_KEY_ID", None) or None,
+		"aws_secret_access_key": getattr(config, "SECRET_ACCESS_KEY", None) or None,
+		"region_name": getattr(config, "REGION", None) or None,
 	}
-	if config.AWS_S3_ENDPOINT_URL:
-		kwargs["endpoint_url"] = config.AWS_S3_ENDPOINT_URL
 	return boto3.client(**kwargs)
 
 
@@ -78,17 +75,15 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 	if not bucket:
 		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
-	prefix = config.S3_UPLOAD_PREFIX.strip("/")
-
 	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
 	except EndpointConnectionError as e:
 		logger.error("S3 endpoint connection failed: %s", str(e))
-		return {"status": 500, "message": "Cannot connect to S3 endpoint. Check AWS_S3_ENDPOINT_URL and network."}
+		return {"status": 500, "message": "Cannot connect to S3 endpoint. Check network or region."}
 	except NoCredentialsError:
 		logger.error("AWS credentials not found")
-		return {"status": 500, "message": "AWS credentials missing. Configure AWS_ACCESS_KEY_ID/SECRET."}
+		return {"status": 500, "message": "Credentials missing. Configure ACCESS_KEY_ID/SECRET_ACCESS_KEY."}
 	except ClientError as e:
 		code = e.response.get("Error", {}).get("Code", "ClientError")
 		logger.error("S3 head_bucket error: %s", code)
@@ -103,7 +98,7 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 
 	uploaded_names = []
 	for f, body, enc_name in file_payloads:
-		key = f"{prefix}/{user_id}/{enc_name}" if prefix else f"{user_id}/{enc_name}"
+		key = enc_name
 		try:
 			s3.put_object(
 				Bucket=bucket,
@@ -117,7 +112,7 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 			return {"status": 500, "message": "Cannot connect to S3 endpoint during upload."}
 		except NoCredentialsError:
 			logger.error("AWS credentials not found during upload")
-			return {"status": 500, "message": "AWS credentials missing during upload."}
+			return {"status": 500, "message": "Credentials missing during upload."}
 		except ClientError as e:
 			code = e.response.get("Error", {}).get("Code", "ClientError")
 			logger.error("S3 put_object error: %s", code)

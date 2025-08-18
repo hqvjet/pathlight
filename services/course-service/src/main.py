@@ -20,14 +20,17 @@ def _env_flag(name: str) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     logger.info("Course Service starting up")
 
-    skip_db = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")) or _env_flag("COURSE_SKIP_DB_SETUP") or not config.DATABASE_URL
+    skip_db = (
+        bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+        or not config.DATABASE_URL
+        or bool(os.getenv("PYTEST_CURRENT_TEST"))
+    )
     if skip_db:
         logger.info(
-            "Skipping database setup | AWS_LAMBDA_FUNCTION_NAME=%s, COURSE_SKIP_DB_SETUP=%s, DATABASE_URL_set=%s",
-            bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")), _env_flag("COURSE_SKIP_DB_SETUP"), bool(config.DATABASE_URL),
+            "Skipping database setup | AWS_LAMBDA_FUNCTION_NAME=%s, DATABASE_URL_set=%s, PYTEST=%s",
+            bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")), bool(config.DATABASE_URL), bool(os.getenv("PYTEST_CURRENT_TEST")),
         )
     else:
         try:
@@ -39,7 +42,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info("Course Service shutting down")
 
 
@@ -60,13 +62,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Only include upload API under /course
 app.include_router(course_router, prefix="/course")
 
-
-# AWS Lambda handler
 mangum_handler = Mangum(app, lifespan="off")
-
 
 def handler(event, context):
     logger.info("Lambda Event:")
