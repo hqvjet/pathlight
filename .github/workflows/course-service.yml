@@ -53,14 +53,12 @@ jobs:
 
       - name: Load Environment Variables
         run: |
-          echo "COURSE_SKIP_DB_SETUP=true" >> services/course-service/.env
           echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/course-service/.env
           echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/course-service/.env
           echo "ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/course-service/.env
           echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/course-service/.env
           echo "REGION=ap-northeast-1" >> services/course-service/.env
           echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> services/course-service/.env
-          echo "S3_UPLOAD_PREFIX=uploads" >> services/course-service/.env
 
       - name: Run Tests
         run: |
@@ -107,10 +105,10 @@ jobs:
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-course-service --environment \
-            "Variables={COURSE_SKIP_DB_SETUP=true, DATABASE_URL=${{ secrets.DATABASE_URL }}, \
+            "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, \
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, \
             SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, REGION=ap-northeast-1, \
-            S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, S3_UPLOAD_PREFIX=uploads}"
+            S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
