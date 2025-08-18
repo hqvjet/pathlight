@@ -54,7 +54,7 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 async def upload_files_docs(request: Request, files: List[UploadFile]):
 	user_id = _verify_token(request)
 	if not user_id:
-		logger.warning("Upload aborted: unauthorized (missing/invalid bearer token)")
+		logger.info("Upload aborted: unauthorized (missing/invalid bearer token)")
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
 	allowed_ext = {".pdf", ".pptx", ".docx"}
@@ -64,12 +64,12 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		original = f.filename or ""
 		ext = "." + original.rsplit(".", 1)[1].lower() if "." in original else ""
 		if ext not in allowed_ext:
-			logger.warning("Upload failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, original, user_id)
+			logger.info("Upload failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, original, user_id)
 			return {"status": 401, "message": "Định dạng file không được hỗ trợ"}
 		content = await f.read()
 		total_size += len(content)
 		if total_size > 20 * 1024 * 1024:
-			logger.warning("Upload failed: total size %d exceeds 20MB limit (user_id=%s)", total_size, user_id)
+			logger.info("Upload failed: total size %d exceeds 20MB limit (user_id=%s)", total_size, user_id)
 			return {"status": 401, "message": "File vượt quá dung lượng giới hạn, xin vui lòng xem lại"}
 		enc_name = _encrypted_filename(user_id, original)
 		file_payloads.append((f, content, enc_name))
