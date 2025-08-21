@@ -117,22 +117,59 @@ class VectorizationService:
         start_time = datetime.now()
         logger.info(f"Starting vectorization process for {len(file_streams_dict)} files")
         logger.info(f"Material ID: {material_id}, Category: {category}")
-        
+
         # Validate inputs
         self.validate_inputs(file_streams_dict, material_id)
-        
+
         # Process files and create embeddings
         file_contents, processing_errors = await self.file_processor.process_multiple_files(file_streams_dict)
         documents, embedding_errors = await self.embedding_service.create_document_embeddings(file_contents)
         material_data = self.prepare_material_data(material_id, category, documents)
-        
-        # Index to OpenSearch if available
+
+        # Index to OpenSearch if available: one document per chunk
         try:
-            await self.opensearch_client.index_material_data(
-                self.opensearch_index_name, 
-                material_data.model_dump(), 
-                material_id
-            )
+            async def index_single_chunk(doc, chunk):
+                payload = {
+                    "id": str(material_data.id),
+                    "category": int(material_data.category),
+                    "documents": [
+                        {
+                            "document_id": int(doc.document_id),
+                            "document_source": str(doc.document_source),
+                            "chunks": [
+                                {
+                                    "chunk_id": int(chunk.chunk_id),
+                                    "chunk_text": str(chunk.chunk_text),
+                                    "embedding": list(chunk.embedding),
+                                }
+                            ],
+                        }
+                    ],
+                }
+                # Composite _id ensures uniqueness per chunk
+                composite_id = f"{material_id}:{int(doc.document_id)}:{int(chunk.chunk_id)}"
+                return await self.opensearch_client.index_document(
+                    self.opensearch_index_name,
+                    payload,
+                    composite_id,
+                )
+
+            # Create concurrent indexing tasks
+            tasks = []
+            for doc in material_data.documents:
+                for chunk in doc.chunks:
+                    tasks.append(index_single_chunk(doc, chunk))
+
+            # Run indexing tasks, capture individual failures
+            if tasks:
+                results = await __import__('asyncio').gather(*tasks, return_exceptions=True)
+                for res in results:
+                    if isinstance(res, Exception):
+                        if not processing_errors:
+                            processing_errors = []
+                        processing_errors.append({
+                            "opensearch": f"Indexing chunk failed: {str(res)}"
+                        })
         except Exception as e:
             log_exception(logger, "OpenSearch indexing failed", e)
             # Only add to warnings, don't fail the entire process unless in Lambda
@@ -144,10 +181,10 @@ class VectorizationService:
                 if not processing_errors:
                     processing_errors = []
                 processing_errors.append({"opensearch": f"Indexing failed: {str(e)}"})
-        
+
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
-        
+
         # Prepare response
         response = VectorizationResponse(
             status=200,
@@ -158,24 +195,26 @@ class VectorizationService:
             total_chunks=sum(len(doc.chunks) for doc in documents),
             processed_files=len(file_contents),
             total_files=len(file_streams_dict),
-            processing_time=processing_time
+            processing_time=processing_time,
         )
-        
+
         # Include warnings if any errors occurred
         if processing_errors or embedding_errors:
             response.warnings = {
                 "processing_errors": processing_errors if processing_errors else None,
-                "embedding_errors": embedding_errors if embedding_errors else None
+                "embedding_errors": embedding_errors if embedding_errors else None,
             }
-        
+
         # Log completion with structured format
         log_structured(
-            logger, 'INFO', "Vectorization completed", 
-            material_id=material_id, 
+            logger,
+            'INFO',
+            "Vectorization completed",
+            material_id=material_id,
             total_documents=len(documents),
             total_chunks=sum(len(doc.chunks) for doc in documents),
             processing_time_seconds=f"{processing_time:.3f}",
-            environment=self.opensearch_client.environment
+            environment=self.opensearch_client.environment,
         )
-        
+
         return response

@@ -1,0 +1,11 @@
+planner:
+  prompt_path: files/planner_ai_instruction.yaml
+
+lesson_creator:
+  prompt_path: files/lesson_creator_instruction.yaml
+
+test_creator:
+  prompt_path: files/test_creator_instruction.yaml
+
+final_test_creator:
+  prompt_path: files/final_test_creator_instruction.yaml

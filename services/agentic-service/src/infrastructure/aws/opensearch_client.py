@@ -5,6 +5,7 @@ Elegant OpenSearch operations with environment-aware configuration.
 Smart enough to know when it should work and when to gracefully skip.
 """
 
+import asyncio
 from opensearchpy import OpenSearch, OpenSearchException
 from requests.exceptions import Timeout, ConnectionError
 from typing import Optional, Dict, Any
@@ -31,8 +32,9 @@ class OpenSearchClient:
         use_ssl: bool = True,
         verify_certs: bool = True,
         timeout: int = 60,
-        enabled: bool = True,
-        force_local: bool = False
+    enabled: bool = True,
+    skip_local: bool = True,
+    force_local: bool = False
     ):
         """
         Initialize OpenSearch client with environment-aware behavior.
@@ -46,12 +48,13 @@ class OpenSearchClient:
             verify_certs: Whether to verify certificates
             timeout: Connection timeout
             enabled: Whether OpenSearch is enabled
+            skip_local: Skip initializing OpenSearch when environment is local
             force_local: Force OpenSearch in local environment
         """
         self.environment = get_environment_type()
         self.enabled = enabled
         self.client = self._initialize_client_conditional(
-            host, port, username, password, use_ssl, verify_certs, timeout, force_local
+            host, port, username, password, use_ssl, verify_certs, timeout, skip_local, force_local
         )
 
     def _initialize_client_conditional(
@@ -63,14 +66,15 @@ class OpenSearchClient:
         use_ssl: bool, 
         verify_certs: bool, 
         timeout: int,
+        skip_local: bool,
         force_local: bool
     ) -> Optional[OpenSearch]:
         """Initialize OpenSearch client based on environment conditions."""
         try:
             # Skip OpenSearch initialization in local environment if not forced
-            if self.environment == 'local' and not force_local:
-                logger.info("Running in local environment - skipping OpenSearch initialization")
-                logger.info("Set FORCE_OPENSEARCH_LOCAL=true to enable OpenSearch in local development")
+            if self.environment == 'local' and skip_local and not force_local:
+                logger.info("Local mode: SKIP_OPENSEARCH_LOCAL=true -> skipping OpenSearch initialization")
+                logger.info("Set FORCE_OPENSEARCH_LOCAL=true to override or SKIP_OPENSEARCH_LOCAL=false to enable")
                 return None
             
             # Check if OpenSearch is explicitly disabled
@@ -83,6 +87,13 @@ class OpenSearchClient:
                 logger.info("Running in test environment - skipping OpenSearch initialization")
                 return None
             
+            # In local environment, disable SSL and certificate verification by default
+            if self.environment == 'local':
+                if use_ssl or verify_certs:
+                    logger.info("Local mode: overriding OpenSearch SSL settings (use_ssl=False, verify_certs=False)")
+                use_ssl = False
+                verify_certs = False
+
             return self._initialize_client(host, port, username, password, use_ssl, verify_certs, timeout)
             
         except Exception as e:
@@ -110,8 +121,9 @@ class OpenSearchClient:
                 ] if not value]
                 raise OpenSearchConfigurationError(f"Missing OpenSearch configuration: {', '.join(missing)}")
             
+            scheme = 'https'
             opensearch_client = OpenSearch(
-                hosts=[{'host': host, 'port': int(port)}],
+                hosts=[{'host': host, 'port': int(port), 'scheme': scheme}],
                 http_auth=(username, password),
                 use_ssl=use_ssl,
                 verify_certs=verify_certs,
@@ -176,6 +188,23 @@ class OpenSearchClient:
     def is_available(self) -> bool:
         """Check if OpenSearch client is available."""
         return self.client is not None
+
+    def info(self) -> Dict[str, Any]:
+        """Expose basic cluster info similar to opensearchpy client."""
+        if not self.is_available():
+            raise OpenSearchConfigurationError("OpenSearch client not available")
+        return self.client.info()
+
+    async def search(self, index: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Async wrapper around the synchronous opensearchpy search call."""
+        if not self.is_available():
+            raise OpenSearchOperationError("OpenSearch client not available")
+        
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.client.search(index=index, body=body)
+        )
 
     @async_retry(max_retries=3, exceptions=(OpenSearchException, ConnectionError, Timeout))
     async def index_document(self, index_name: str, document: Dict[str, Any], doc_id: str) -> Dict:

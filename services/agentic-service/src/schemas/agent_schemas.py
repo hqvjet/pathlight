@@ -1,0 +1,30 @@
+from pydantic import BaseModel, Field
+from typing import List
+
+class AgentRequest(BaseModel):
+    id: str = Field(..., description="ID of the Course/Quiz for retrieval and saving")
+
+class TestResponse(BaseModel):
+    source_uri: str = Field(..., description="ID of the generated test")
+
+class LessonResponse(BaseModel):
+    source_uri: str = Field(..., description="ID of the generated lesson")
+    test_source_uri: List[TestResponse] = Field(..., description="List of tests associated with the lesson")
+
+class AgentResponse(BaseModel):
+    title: str = Field(..., description="Title of the Course/Quiz")
+    description: str = Field(..., description="Description of the Course/Quiz")
+    roadmap: List[str] = Field(..., description="Roadmap of the Course/Quiz")
+    lessons: List[LessonResponse] = Field(..., description="Lessons included in the Course/Quiz")
+    final_test: List[TestResponse] = Field(..., description="Final test for the Course/Quiz")
+    s3_bucket: str = Field(..., description="S3 bucket where the Course/Quiz is stored")
+
+# Tool schemas
+class RetrievalArgs(BaseModel):
+    id: str = Field(..., description="ID of the Course/Quiz for retrieval")
+    query: str = Field(..., description="Query string for the retrieval")
+    k: int = Field(..., description="Number of results to return")
+
+class S3UploadArgs(BaseModel):
+    key: str = Field(..., description="S3 object key")
+    json_content: str = Field(..., description="JSON content to upload")

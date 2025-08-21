@@ -33,6 +33,7 @@ class S3Client:
         """
         self.environment = get_environment_type()
         self.region = region
+        # print(f"Access Key ID: {access_key_id}, Secret Access Key: {secret_access_key}")
         self.client = self._initialize_client(access_key_id, secret_access_key)
         
     def _initialize_client(self, access_key_id: str, secret_access_key: str) -> boto3.client:
@@ -227,3 +228,24 @@ class S3Client:
             "total_successful": len(file_streams),
             "total_failed": len(failed_files)
         }
+
+    def upload_file(self, bucket_name: str, filename: str, content: str) -> Optional[str]:
+        """
+        Save a file to S3 with error handling.
+
+        Args:
+            bucket_name: S3 bucket name
+            filename: File key in S3
+            content: File content as bytes
+
+        Returns:
+            S3 object URL or None if failed
+        """
+        if not bucket_name or not filename or not content:
+            raise ValueError("bucket_name, filename, and content must be provided.")
+
+        self.client.put_object(
+            Bucket=bucket_name, 
+            Key=filename, 
+            Body=content
+        )

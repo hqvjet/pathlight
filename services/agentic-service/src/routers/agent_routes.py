@@ -8,11 +8,14 @@ Simple, elegant, and easy to understand.
 from fastapi import APIRouter
 from controllers.file_controller import FileController
 from schemas.vectorize_schemas import VectorizeRequest
+from schemas.agent_schemas import AgentRequest, AgentResponse
 from models.responses import VectorizationResponse
+from controllers.agent_controller import AgentController
 
 
 router = APIRouter(prefix="/agentic", tags=["files"])
 file_controller = FileController()
+agent_controller = AgentController()
 
 
 @router.post("/vectorize", response_model=VectorizationResponse)
@@ -40,3 +43,7 @@ async def vectorize_files(request: VectorizeRequest) -> VectorizationResponse:
         request.id, 
         request.category
     )
+
+@router.post("/course/generate", response_model=AgentResponse)
+def generate_course(request: AgentRequest) -> AgentResponse:
+    return agent_controller.generate_course(request)
