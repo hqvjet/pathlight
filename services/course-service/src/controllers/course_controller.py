@@ -222,6 +222,12 @@ async def _call_generate(course_id: str, understand_level: str, duration_hours: 
 
 
 def _persist_course(course_id: str, course_info_id: str, user_id: str, title: str, description: str, understand_level: str, duration: int) -> bool:
+	# Allow tests / certain environments to skip DB persistence entirely
+	import os
+	if str(os.getenv("COURSE_SERVICE_SKIP_DB", "")).lower() in {"1", "true", "yes"}:
+		logger.info("Skipping DB persistence (COURSE_SERVICE_SKIP_DB set) user=%s course_id=%s", user_id, course_id)
+		return True
+
 	session = SessionLocal()
 	try:
 		level = session.query(UnderstandLevelTag).filter_by(understand_level=understand_level).first()
