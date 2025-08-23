@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from src.controllers.course_controller import upload_files_docs, create_course
 from src.services.course_auth import require_bearer
 
-router = APIRouter(prefix="", tags=["Course"])
+router = APIRouter(prefix="/course", tags=["Course"])
 
 
 @router.post("/upload/file")

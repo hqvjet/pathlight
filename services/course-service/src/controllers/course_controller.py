@@ -191,32 +191,49 @@ def _validate_create_course_payload(payload: Dict[str, Any]):
 
 async def _call_vectorize(course_id: str, uploaded_files: List[str], token: str) -> bool:
 	vectorize_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
-	headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 	payload = {"id": course_id, "category": 0, "uploaded_file": uploaded_files}
-	try:
-		async with httpx.AsyncClient(timeout=60) as client:
-			resp = await client.post(vectorize_url, json=payload, headers=headers)
-	except Exception as e:
-		logger.error("Vectorize request error: %s", e)
-		return False
-	if resp.status_code != 200:
-		logger.error("Vectorize failed status=%s body=%s", resp.status_code, resp.text)
-		return False
-	return True
+	return await _post_agentic(vectorize_url, payload, token, phase="vectorize")
 
 
 async def _call_generate(course_id: str, understand_level: str, duration_hours: int, token: str) -> bool:
 	generate_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
-	headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 	payload = {"id": course_id, "difficulty": understand_level, "duration": duration_hours * 60}
+	return await _post_agentic(generate_url, payload, token, phase="generate")
+
+async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: str) -> bool:
+	"""Post to agentic endpoint supporting two modes:
+	1. Default (no SigV4 required): send token in X-User-Token header (avoid Authorization clash with AWS IAM)
+	2. SigV4 mode (if AGENTIC_EXPECT_SIGV4=true): sign request and optionally include token as X-User-Token.
+	"""
+	import os, json as _json
+	use_sigv4 = str(os.getenv("AGENTIC_EXPECT_SIGV4", "")).lower() in {"1", "true", "yes"}
+	headers = {"Content-Type": "application/json"}
+	# Always pass user token in a neutral header to avoid AWS parser rejecting plain bearer
+	headers["X-User-Token"] = token
+	body = _json.dumps(payload)
+	if use_sigv4:
+		try:
+			from botocore.auth import SigV4Auth  # type: ignore
+			from botocore.awsrequest import AWSRequest  # type: ignore
+			from botocore.credentials import Credentials  # type: ignore
+			region = os.getenv("REGION", getattr(config, "REGION", "ap-northeast-1"))
+			creds = Credentials(os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"], os.getenv("AWS_SESSION_TOKEN"))
+			aws_req = AWSRequest(method="POST", url=url, data=body, headers={"Content-Type": "application/json"})
+			SigV4Auth(creds, "lambda", region).add_auth(aws_req)
+			# Merge signed headers
+			for k, v in aws_req.headers.items():
+				headers[k] = v
+		except Exception as e:
+			logger.error("%s signing error: %s", phase, e)
+			return False
 	try:
 		async with httpx.AsyncClient(timeout=120) as client:
-			resp = await client.post(generate_url, json=payload, headers=headers)
+			resp = await client.post(url, content=body, headers=headers)
 	except Exception as e:
-		logger.error("Generate request error: %s", e)
+		logger.error("%s request error: %s", phase, e)
 		return False
 	if resp.status_code != 200:
-		logger.error("Generate failed status=%s body=%s", resp.status_code, resp.text)
+		logger.error("%s failed status=%s body=%s", phase, resp.status_code, resp.text)
 		return False
 	return True
 
