@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Dict, Any
 from datetime import datetime
 import hashlib
+import uuid
 import secrets
 import logging
 
@@ -12,6 +13,9 @@ from fastapi.responses import JSONResponse
 from jose import jwt
 
 from src.config import config
+from src.database import SessionLocal
+from src.models import Course, CourseInfo, UnderstandLevelTag
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +84,6 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		logger.error("Upload failed: S3_BUCKET_NAME is not configured")
 		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
-	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
 	except EndpointConnectionError as e:
@@ -126,3 +129,132 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 
 	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
+
+
+async def create_course(request: Request, payload: Dict[str, Any]):
+	status, token, user_id = _auth_and_decode(request)
+	if status is not None:
+		return status
+	assert token is not None and user_id is not None, "Auth decode should guarantee token & user_id"
+	token_str: str = token
+	user_id_str: str = user_id
+
+	valid, err_resp, fields = _validate_create_course_payload(payload)
+	if not valid:
+		return err_resp
+	(title, description, understand_level, duration, uploaded_files) = fields  # type: ignore
+
+	course_id = str(uuid.uuid4())
+	course_info_id = str(uuid.uuid4())
+
+	v_ok = await _call_vectorize(course_id, uploaded_files, token_str)
+	if not v_ok:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
+	g_ok = await _call_generate(course_id, understand_level, duration, token_str)
+	if not g_ok:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
+
+	persist_ok = _persist_course(course_id, course_info_id, user_id_str, title, description, understand_level, duration)
+	if not persist_ok:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
+
+	return JSONResponse(status_code=200, content={"status": 200, "message": "Đã tạo khóa học thành công"})
+
+def _auth_and_decode(request: Request):
+	auth_header = request.headers.get("Authorization") or ""
+	if not auth_header.startswith("Bearer "):
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
+	token = auth_header.split(" ", 1)[1]
+	try:
+		decoded = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+		user_id = decoded.get("sub")
+		if not user_id:
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
+		return None, token, user_id
+	except Exception:
+		logger.info("create_course invalid token decode")
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
+
+
+def _validate_create_course_payload(payload: Dict[str, Any]):
+	title = payload.get("title")
+	description = payload.get("description")
+	understand_level = payload.get("understand_level")
+	duration = payload.get("duration")
+	uploaded_files = payload.get("uploaded_file")
+	if not uploaded_files or not isinstance(uploaded_files, list):
+		return False, JSONResponse(status_code=401, content={"status": 401, "message": "Không tìm thấy file, xin vui lòng thử lại"}), None
+	if not title or not description or not understand_level or not duration:
+		return False, JSONResponse(status_code=401, content={"status": 401, "message": "Không tìm thấy file, xin vui lòng thử lại"}), None
+	return True, None, (title, description, understand_level, duration, uploaded_files)
+
+
+async def _call_vectorize(course_id: str, uploaded_files: List[str], token: str) -> bool:
+	vectorize_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
+	headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+	payload = {"id": course_id, "category": 0, "uploaded_file": uploaded_files}
+	try:
+		async with httpx.AsyncClient(timeout=60) as client:
+			resp = await client.post(vectorize_url, json=payload, headers=headers)
+	except Exception as e:
+		logger.error("Vectorize request error: %s", e)
+		return False
+	if resp.status_code != 200:
+		logger.error("Vectorize failed status=%s body=%s", resp.status_code, resp.text)
+		return False
+	return True
+
+
+async def _call_generate(course_id: str, understand_level: str, duration_hours: int, token: str) -> bool:
+	generate_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
+	headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+	payload = {"id": course_id, "difficulty": understand_level, "duration": duration_hours * 60}
+	try:
+		async with httpx.AsyncClient(timeout=120) as client:
+			resp = await client.post(generate_url, json=payload, headers=headers)
+	except Exception as e:
+		logger.error("Generate request error: %s", e)
+		return False
+	if resp.status_code != 200:
+		logger.error("Generate failed status=%s body=%s", resp.status_code, resp.text)
+		return False
+	return True
+
+
+def _persist_course(course_id: str, course_info_id: str, user_id: str, title: str, description: str, understand_level: str, duration: int) -> bool:
+	session = SessionLocal()
+	try:
+		level = session.query(UnderstandLevelTag).filter_by(understand_level=understand_level).first()
+		if not level:
+			level = UnderstandLevelTag(
+				understand_level_id=str(uuid.uuid4()),
+				understand_level=understand_level,
+			)
+			session.add(level)
+			session.flush()
+
+		course_info = CourseInfo(
+			course_info_id=course_info_id,
+			understand_level_id=level.understand_level_id,
+			title=title,
+			description=description,
+			duration=duration,
+			roadmap=None,
+		)
+		course = Course(
+			course_id=course_id,
+			course_info_id=course_info.course_info_id,
+			user_id=user_id,
+			finish=False,
+		)
+		session.add(course_info)
+		session.add(course)
+		session.commit()
+		logger.info("create_course success user=%s course_id=%s", user_id, course_id)
+		return True
+	except Exception as e:
+		session.rollback()
+		logger.error("DB save failed course_id=%s error=%s", course_id, e)
+		return False
+	finally:
+		session.close()

@@ -39,6 +39,8 @@ class CourseConfig:
     REGION: str = os.getenv("REGION", "ap-northeast-1")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
 
+    AGENTIC_SERVICE_ENDPOINT: str = os.getenv("AGENTIC_SERVICE_ENDPOINT", "https://zlly4nvqqa3e7hag574nsvcgiy0tlekb.lambda-url.ap-northeast-1.on.aws/agentic/vectorize")
+
 config = CourseConfig()
 
 def get_database_url(): 

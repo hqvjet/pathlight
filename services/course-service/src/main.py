@@ -63,7 +63,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(course_router, prefix="/course")
+app.include_router(course_router)
 
 mangum_handler = Mangum(app, lifespan="off")
 
