@@ -201,34 +201,37 @@ async def _call_generate(course_id: str, understand_level: str, duration_hours: 
 	return await _post_agentic(generate_url, payload, token, phase="generate")
 
 async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: str) -> Tuple[bool, Optional[str]]:
-	"""Post to agentic endpoint supporting two modes:
-	1. Default (no SigV4 required): send token in X-User-Token header (avoid Authorization clash with AWS IAM)
-	2. SigV4 mode (if AGENTIC_EXPECT_SIGV4=true): sign request and optionally include token as X-User-Token.
-	"""
 	import os, json as _json
 	use_sigv4 = str(os.getenv("AGENTIC_EXPECT_SIGV4", "")).lower() in {"1", "true", "yes"}
+	default_timeout = 60 if phase == "vectorize" else 120
+	timeout_env = os.getenv("COURSE_AGENTIC_TIMEOUT_SECONDS")
+	try:
+		custom_timeout = int(timeout_env) if timeout_env else default_timeout
+	except ValueError:
+		custom_timeout = default_timeout
 	headers = {"Content-Type": "application/json"}
-	# Always pass user token in a neutral header to avoid AWS parser rejecting plain bearer
 	headers["X-User-Token"] = token
 	body = _json.dumps(payload)
 	if use_sigv4:
 		try:
-			from botocore.auth import SigV4Auth  # type: ignore
-			from botocore.awsrequest import AWSRequest  # type: ignore
-			from botocore.credentials import Credentials  # type: ignore
+			from botocore.auth import SigV4Auth
+			from botocore.awsrequest import AWSRequest
+			from botocore.credentials import Credentials
 			region = os.getenv("REGION", getattr(config, "REGION", "ap-northeast-1"))
 			creds = Credentials(os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"], os.getenv("AWS_SESSION_TOKEN"))
 			aws_req = AWSRequest(method="POST", url=url, data=body, headers={"Content-Type": "application/json"})
 			SigV4Auth(creds, "lambda", region).add_auth(aws_req)
-			# Merge signed headers
 			for k, v in aws_req.headers.items():
 				headers[k] = v
 		except Exception as e:
 			logger.error("%s signing error: %s", phase, e)
-			return False
+			return False, str(e)
 	try:
-		async with httpx.AsyncClient(timeout=120) as client:
+		async with httpx.AsyncClient(timeout=custom_timeout) as client:
 			resp = await client.post(url, content=body, headers=headers)
+	except httpx.TimeoutException as e:
+		logger.error("%s timeout after %ss: %s", phase, custom_timeout, e)
+		return (False, f"timeout after {custom_timeout}s")
 	except Exception as e:
 		logger.error("%s request error: %s", phase, e)
 		return (False, str(e))
@@ -240,14 +243,24 @@ async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: st
 def _error_response(phase: str, backend_error: str | None):
 	import os
 	verbose = (str(os.getenv("COURSE_VERBOSE_ERRORS", "")).lower() in {"1", "true", "yes"}) or bool(os.getenv("DEBUG"))
-	if verbose and backend_error:
-		return JSONResponse(status_code=500, content={"status": 500, "message": f"{phase} failed", "detail": backend_error})
-	# fallback generic per existing contract / tests
+	if backend_error:
+		low = backend_error.lower()
+		classify = str(os.getenv("COURSE_ERROR_CLASSIFY", "")).lower() in {"1", "true", "yes"}
+		if classify:
+			if "timeout" in low:
+				if verbose:
+					return JSONResponse(status_code=504, content={"status": 504, "message": f"{phase} timeout", "detail": backend_error})
+				return JSONResponse(status_code=504, content={"status": 504, "message": "Dịch vụ xử lý quá thời gian, vui lòng thử lại"})
+			if any(k in low for k in ["status=500", "status=502", "status=503", "status=504"]):
+				if verbose:
+					return JSONResponse(status_code=502, content={"status": 502, "message": f"{phase} backend error", "detail": backend_error})
+				return JSONResponse(status_code=502, content={"status": 502, "message": "Dịch vụ phía sau gặp lỗi, vui lòng thử lại"})
+		if verbose:
+			return JSONResponse(status_code=500, content={"status": 500, "message": f"{phase} failed", "detail": backend_error})
 	return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
 
 
 def _persist_course(course_id: str, course_info_id: str, user_id: str, title: str, description: str, understand_level: str, duration: int) -> bool:
-	# Allow tests / certain environments to skip DB persistence entirely
 	import os
 	if str(os.getenv("COURSE_SERVICE_SKIP_DB", "")).lower() in {"1", "true", "yes"}:
 		logger.info("Skipping DB persistence (COURSE_SERVICE_SKIP_DB set) user=%s course_id=%s", user_id, course_id)
