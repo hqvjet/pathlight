@@ -17,7 +17,7 @@ def test_upload_success(mocker, client):
     # put_object ok
 
     resp = client.post(
-        "/upload/file",
+        "/course/upload/file",
         headers={"Authorization": "Bearer tok"},
         files={"files": ("file.pdf", b"hello", "application/pdf")},
     )
@@ -35,7 +35,7 @@ def test_upload_endpoint_unreachable(mocker, client):
     mocker.patch("src.controllers.course_controller.boto3.client", return_value=mock_s3)
 
     resp = client.post(
-        "/upload/file",
+        "/course/upload/file",
         headers={"Authorization": "Bearer tok"},
         files={"files": ("file.pdf", b"hello", "application/pdf")},
     )
@@ -51,7 +51,7 @@ def test_upload_missing_credentials(mocker, client):
     mocker.patch("src.controllers.course_controller.boto3.client", return_value=mock_s3)
 
     resp = client.post(
-        "/upload/file",
+        "/course/upload/file",
         headers={"Authorization": "Bearer tok"},
         files={"files": ("file.pdf", b"hello", "application/pdf")},
     )
@@ -68,7 +68,7 @@ def test_upload_bucket_not_found(mocker, client):
     mocker.patch("src.controllers.course_controller.boto3.client", return_value=mock_s3)
 
     resp = client.post(
-        "/upload/file",
+        "/course/upload/file",
         headers={"Authorization": "Bearer tok"},
         files={"files": ("file.pdf", b"hello", "application/pdf")},
     )
