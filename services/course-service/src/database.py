@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from .config import get_database_url, get_debug_mode
+from src.config import get_database_url, get_debug_mode
 
 DATABASE_URL = get_database_url()
 DEBUG = get_debug_mode()
