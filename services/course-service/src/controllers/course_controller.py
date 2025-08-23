@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import hashlib
 import uuid
@@ -147,16 +147,16 @@ async def create_course(request: Request, payload: Dict[str, Any]):
 	course_id = str(uuid.uuid4())
 	course_info_id = str(uuid.uuid4())
 
-	v_ok = await _call_vectorize(course_id, uploaded_files, token_str)
+	v_ok, v_err = await _call_vectorize(course_id, uploaded_files, token_str)
 	if not v_ok:
-		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
-	g_ok = await _call_generate(course_id, understand_level, duration, token_str)
+		return _error_response(phase="vectorize", backend_error=v_err)
+	g_ok, g_err = await _call_generate(course_id, understand_level, duration, token_str)
 	if not g_ok:
-		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
+		return _error_response(phase="generate", backend_error=g_err)
 
 	persist_ok = _persist_course(course_id, course_info_id, user_id_str, title, description, understand_level, duration)
 	if not persist_ok:
-		return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
+		return _error_response(phase="persist", backend_error="db_persist_failed")
 
 	return JSONResponse(status_code=200, content={"status": 200, "message": "Đã tạo khóa học thành công"})
 
@@ -189,18 +189,18 @@ def _validate_create_course_payload(payload: Dict[str, Any]):
 	return True, None, (title, description, understand_level, duration, uploaded_files)
 
 
-async def _call_vectorize(course_id: str, uploaded_files: List[str], token: str) -> bool:
+async def _call_vectorize(course_id: str, uploaded_files: List[str], token: str) -> Tuple[bool, Optional[str]]:
 	vectorize_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
 	payload = {"id": course_id, "category": 0, "uploaded_file": uploaded_files}
 	return await _post_agentic(vectorize_url, payload, token, phase="vectorize")
 
 
-async def _call_generate(course_id: str, understand_level: str, duration_hours: int, token: str) -> bool:
+async def _call_generate(course_id: str, understand_level: str, duration_hours: int, token: str) -> Tuple[bool, Optional[str]]:
 	generate_url = f"{config.AGENTIC_SERVICE_ENDPOINT}"
 	payload = {"id": course_id, "difficulty": understand_level, "duration": duration_hours * 60}
 	return await _post_agentic(generate_url, payload, token, phase="generate")
 
-async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: str) -> bool:
+async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: str) -> Tuple[bool, Optional[str]]:
 	"""Post to agentic endpoint supporting two modes:
 	1. Default (no SigV4 required): send token in X-User-Token header (avoid Authorization clash with AWS IAM)
 	2. SigV4 mode (if AGENTIC_EXPECT_SIGV4=true): sign request and optionally include token as X-User-Token.
@@ -231,11 +231,19 @@ async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: st
 			resp = await client.post(url, content=body, headers=headers)
 	except Exception as e:
 		logger.error("%s request error: %s", phase, e)
-		return False
+		return (False, str(e))
 	if resp.status_code != 200:
 		logger.error("%s failed status=%s body=%s", phase, resp.status_code, resp.text)
-		return False
-	return True
+		return (False, f"status={resp.status_code} body={resp.text[:400]}")
+	return (True, None)
+
+def _error_response(phase: str, backend_error: str | None):
+	import os
+	verbose = (str(os.getenv("COURSE_VERBOSE_ERRORS", "")).lower() in {"1", "true", "yes"}) or bool(os.getenv("DEBUG"))
+	if verbose and backend_error:
+		return JSONResponse(status_code=500, content={"status": 500, "message": f"{phase} failed", "detail": backend_error})
+	# fallback generic per existing contract / tests
+	return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
 
 
 def _persist_course(course_id: str, course_info_id: str, user_id: str, title: str, description: str, understand_level: str, duration: int) -> bool:
