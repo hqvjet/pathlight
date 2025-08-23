@@ -16,6 +16,7 @@ os.environ.setdefault("COURSE_SKIP_DB_SETUP", "true")
 os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
 # Provide a dummy in-memory DB URL if not set to satisfy SQLAlchemy engine creation
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+os.environ.setdefault("AGENTIC_SERVICE_ENDPOINT", "http://agentic-test")
 
 from src.main import app
 
