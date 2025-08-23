@@ -41,7 +41,7 @@ def test_create_course_success(mocker, client):
         "duration": 10,
         "uploaded_file": ["a.pdf"],
     }
-    resp = client.post("/course/create", json=payload, headers={"Authorization": "Bearer tok"})
+    resp = client.post("/create", json=payload, headers={"Authorization": "Bearer tok"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == 200
@@ -58,7 +58,7 @@ def test_create_course_missing_files(mocker, client):
         "duration": 10,
         "uploaded_file": [],
     }
-    resp = client.post("/course/create", json=payload, headers={"Authorization": "Bearer tok"})
+    resp = client.post("/create", json=payload, headers={"Authorization": "Bearer tok"})
     assert resp.status_code == 401
     data = resp.json()
     assert data["status"] == 401
@@ -90,7 +90,7 @@ def test_create_course_vectorize_fail(mocker, client):
         "duration": 10,
         "uploaded_file": ["a.pdf"],
     }
-    resp = client.post("/course/create", json=payload, headers={"Authorization": "Bearer tok"})
+    resp = client.post("/create", json=payload, headers={"Authorization": "Bearer tok"})
     # Vectorize fail returns 401 generic error per current controller logic
     assert resp.status_code == 401
     data = resp.json()
