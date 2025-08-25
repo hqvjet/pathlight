@@ -126,3 +126,92 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 
 	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
+
+
+
+def _unauth_delete_response():
+	return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa xác thực hoặc phiên đăng nhập đã hết hạn"})
+
+
+async def delete_single_course(request: Request, course_id: str | None):
+	"""Delete one course of the authenticated user (and its related data)."""
+	user_id = _verify_token(request)
+	if not user_id:
+		return _unauth_delete_response()
+	if not course_id:
+		return _unauth_delete_response()
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
+		if not course:
+			return _unauth_delete_response()
+		lesson_ids = [l.lesson_id for l in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
+		test_ids = [t.test_id for t in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
+		final_test_ids = [ft.final_test_id for ft in session.query(FinalTest.final_test_id).filter(FinalTest.course_id == course.course_id).all()]
+		if test_ids:
+			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if test_ids:
+			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if lesson_ids:
+			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		course_info_id = course.course_info_id
+		session.delete(course)
+		other = session.query(Course).filter(Course.course_info_id == course_info_id).first()
+		if not other:
+			session.query(CourseInfo).filter(CourseInfo.course_info_id == course_info_id).delete(synchronize_session=False)
+		session.commit()
+		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa khóa học thành công"})
+	except Exception as e:
+		logger.error("delete_single_course error user=%s course=%s err=%s", user_id, course_id, e)
+		session.rollback()
+		return _unauth_delete_response()
+	finally:
+		session.close()
+
+
+async def delete_all_courses(request: Request):
+	"""Delete all courses belonging to the authenticated user."""
+	user_id = _verify_token(request)
+	if not user_id:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
+	session = SessionLocal()
+	try:
+		courses = session.query(Course).filter(Course.user_id == user_id).all()
+		if not courses:
+			return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
+		course_ids = [c.course_id for c in courses]
+		course_info_ids = [c.course_info_id for c in courses]
+		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id.in_(course_ids)).all()]
+		test_ids = [tid for (tid,) in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
+		final_test_ids = [fid for (fid,) in session.query(FinalTest.final_test_id).filter(FinalTest.course_id.in_(course_ids)).all()]
+		if test_ids:
+			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if test_ids:
+			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if lesson_ids:
+			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		session.query(Course).filter(Course.course_id.in_(course_ids), Course.user_id == user_id).delete(synchronize_session=False)
+		for ci in course_info_ids:
+			still = session.query(Course).filter(Course.course_info_id == ci).first()
+			if not still:
+				session.query(CourseInfo).filter(CourseInfo.course_info_id == ci).delete(synchronize_session=False)
+		session.commit()
+		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
+	except Exception as e:
+		logger.error("delete_all_courses error user=%s err=%s", user_id, e)
+		session.rollback()
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
+	finally:
+		session.close()
