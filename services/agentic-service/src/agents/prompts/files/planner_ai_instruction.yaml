@@ -24,7 +24,7 @@ prompt: |
 
   # Mục tiêu đầu ra
 
-  * Sinh **một đối tượng JSON** duy nhất theo **schema mô tả ở dưới** (không kèm giải thích).
+  * Sinh **một đối tượng JSON** duy nhất theo **schema mô tả ở dưới** (không kèm giải thích và chú thích độ khó khóa học và thời gian khóa học).
   * Upload **chính đối tượng JSON đó** lên S3 bằng `s3_uploader` với khóa mặc định `<id>.json` (trừ khi chỉ định khác).
 
   > Lưu ý: 

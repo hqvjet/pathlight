@@ -31,7 +31,7 @@ class RetrievalTool(BaseTool):
         """
         Run the retrieval tool with the given query.
         """
-        print(f"[Retrieval Tool] - Invoked with id: {id}, query: {query}, k: {k}")
+        # print(f"[Retrieval Tool] - Invoked with id: {id}, query: {query}, k: {k}")
         if not id or not query or not k:
             raise ValueError("id, query, and k must be provided.")
 
@@ -83,12 +83,12 @@ class S3Uploader(BaseTool):
         """
         Run the S3 uploader tool with the given parameters.
         """
-        print(f"[S3 Uploader] - Invoked with key: {key}")
+        # print(f"[S3 Uploader] - Invoked with key: {key}")
         if not key or not json_content:
             raise ValueError("key and json_content must be provided.")
 
         shared_clients.s3.upload_file(bucket_name=config.S3_BUCKET_NAME, filename=key, content=json_content)
-        return "Upload successful"
+        return "# **Upload the content to s3 successful**"
 
 # Quick manual test (optional). Run this module directly to test.
 # if __name__ == "__main__":

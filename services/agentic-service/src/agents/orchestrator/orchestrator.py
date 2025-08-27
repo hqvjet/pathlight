@@ -26,9 +26,9 @@ class Orchestrator:
         elif not title and not description and not roadmap:
             print('Using Planner Agent')
             return 'create_plan'
-        # elif not lessons:
-        #     print('Using Lesson Creator Agent')
-        #     return 'create_lesson'
+        elif not lessons:
+            print('Using Lesson Creator Agent')
+            return 'create_lesson'
         # elif not final_test:
         #     print('Using Final Test Creator Agent')
         #     return 'create_final_test'

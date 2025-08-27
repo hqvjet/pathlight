@@ -3,14 +3,10 @@ from typing import List, Optional
 
 class TestItem(BaseModel):
     test_id: str
-    summary: str
     source_uri: str
 
 class Lesson(BaseModel):
     lesson_id: str
-    title: str
-    summary: str
-    description: str
     test: Optional[List[TestItem]]
     source_uri: str
 

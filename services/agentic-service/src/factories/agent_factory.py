@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, START, END
 
 from schemas.context import State
 from agents.planner.planner_agent import PlannerAgent
-# from agents.lesson_creator.lesson_creator_agent import LessonCreatorAgent
+from agents.lesson_creator.lesson_creator_agent import LessonCreatorAgent
 # from agents.test_creator.test_creator_agent import TestCreatorAgent
 from agents.orchestrator.orchestrator import Orchestrator
 from agents.base.prompt_manager import PromptManager
@@ -35,12 +35,19 @@ class CourseAgentFactory:
             llm_manager=llm_manager,
             tool_manager=tool_manager
         )
+        self.lesson_creator_agent = LessonCreatorAgent(
+            name=LESSON_CREATOR_AGENT_NAME,
+            foundation_model="gpt-5-nano",
+            prompt_manager=prompt_manager,
+            llm_manager=llm_manager,
+            tool_manager=tool_manager
+        )
         self.build_graph()
 
     def build_nodes(self):
         self.graph.add_node("orchestrator", lambda state:state)
         self.graph.add_node("planner", self.planner_agent)
-        # self.graph.add_node("lesson_creator", lambda state:state)
+        self.graph.add_node("lesson_creator", self.lesson_creator_agent)
         # self.graph.add_node("final_test_creator", TestCreatorAgent)
         # self.graph.add_node("test_creator", TestCreatorAgent)
 
@@ -48,7 +55,7 @@ class CourseAgentFactory:
         self.graph.add_edge(START, 'orchestrator')
         self.graph.add_conditional_edges('orchestrator', path=self.orchestrator, path_map={
             'create_plan': 'planner',
-            # 'create_lesson': 'lesson_creator',
+            'create_lesson': 'lesson_creator',
             # 'create_final_test': 'final_test_creator',
             'done': END
         })
@@ -57,6 +64,7 @@ class CourseAgentFactory:
         #     'report': 'orchestrator'
         # })
         self.graph.add_edge('planner', 'orchestrator')
+        self.graph.add_edge('lesson_creator', 'orchestrator')
         # self.graph.add_edge('final_test_creator', 'orchestrator')
 
     def build_graph(self):
@@ -65,7 +73,7 @@ class CourseAgentFactory:
 
 graph = CourseAgentFactory().graph
 course_agent = graph.compile()
-# save_architecture(course_agent, filename="course_architecture.png")
+save_architecture(course_agent, filename="course_architecture.png")
 
 async def invoke_course_agent(payload):
     results = await course_agent.ainvoke(payload)
