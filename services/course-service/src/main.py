@@ -7,7 +7,14 @@ from mangum import Mangum
 import json
 
 from src.config import config
-from src.database import create_tables, engine
+# Trì hoãn import database (SQLAlchemy có issue với Python 3.13 trong test)
+create_tables = None  # type: ignore
+def _lazy_db_import():  # nhỏ gọn
+    global create_tables
+    if create_tables is None:
+        from src.database import create_tables as _ct  # type: ignore
+        create_tables = _ct
+    return create_tables
 from src.routes.course_routes import router as course_router
 
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +42,7 @@ async def lifespan(app: FastAPI):
         )
     else:
         try:
-            create_tables()
+            _lazy_db_import()()
             logger.info("Database setup completed successfully")
         except Exception as e:
             logger.error(f"Error during startup: {e}")

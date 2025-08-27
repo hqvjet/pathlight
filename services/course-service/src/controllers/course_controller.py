@@ -1,47 +1,52 @@
+"""Course controller (gọn nhẹ)"""
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-import hashlib
-import uuid
-import secrets
-import logging
+import hashlib, uuid, secrets, logging, os
 
 import boto3
-from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
 from fastapi import Request, UploadFile
 from fastapi.responses import JSONResponse
 from jose import jwt
+import httpx
 
 from src.config import config
-from src.database import SessionLocal
-from src.models import Course, CourseInfo, UnderstandLevelTag
-import httpx
+SessionLocal = None  # type: ignore
+Course = CourseInfo = UnderstandLevelTag = None  # type: ignore
+
+def _lazy_models():
+	global SessionLocal, Course, CourseInfo, UnderstandLevelTag
+	if SessionLocal is None:
+		from src.database import SessionLocal as _SL  # type: ignore
+		from src.models import Course as _C, CourseInfo as _CI, UnderstandLevelTag as _UL  # type: ignore
+		SessionLocal, Course, CourseInfo, UnderstandLevelTag = _SL, _C, _CI, _UL
+	return SessionLocal, Course, CourseInfo, UnderstandLevelTag
 
 logger = logging.getLogger(__name__)
 
 
-def _verify_token(request: Request):
-	"""Return user_id (sub) if Authorization header is valid; otherwise None."""
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+def _decode(request: Request) -> Tuple[Optional[str], Optional[str]]:
+	auth = request.headers.get("Authorization", "")
+	if not auth.startswith("Bearer "):
+		return None, None
+	token = auth.split(" ", 1)[1]
 	try:
-		auth_header = request.headers.get("Authorization")
-		if not auth_header or not auth_header.startswith("Bearer "):
-			return None
-		token = auth_header.split(" ")[1]
 		payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-		return payload.get("sub")
+		return payload.get("sub"), token
 	except Exception:
-		return None
+		return None, None
 
 
 def _get_s3_client():
-	"""Create S3 client supporting both AWS cloud and S3-compatible endpoints."""
-	kwargs = {
-		"service_name": "s3",
-		"aws_access_key_id": getattr(config, "ACCESS_KEY_ID", None) or None,
-		"aws_secret_access_key": getattr(config, "SECRET_ACCESS_KEY", None) or None,
-		"region_name": getattr(config, "REGION", None) or None,
-	}
-	return boto3.client(**kwargs)
+	return boto3.client(
+		"s3",
+		aws_access_key_id=getattr(config, "ACCESS_KEY_ID", None) or None,
+		aws_secret_access_key=getattr(config, "SECRET_ACCESS_KEY", None) or None,
+		region_name=getattr(config, "REGION", None) or None,
+	)
 
 
 def _encrypted_filename(user_id: str, original_name: str) -> str:
@@ -56,124 +61,64 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 
 
 async def upload_files_docs(request: Request, files: List[UploadFile]):
-	user_id = _verify_token(request)
+	user_id, _ = _decode(request)
 	if not user_id:
-		logger.warning("Upload aborted: unauthorized (missing/invalid bearer token)")
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
-	allowed_ext = {".pdf", ".pptx", ".docx", ".doc"}
-	total_size = 0
-	file_payloads = []
+	allowed = {".pdf", ".pptx", ".docx", ".doc"}
+	total = 0
+	staged: List[Tuple[UploadFile, bytes, str]] = []
 	for f in files:
-		original = f.filename or ""
-		ext = "." + original.rsplit(".", 1)[1].lower() if "." in original else ""
-		if ext not in allowed_ext:
-			logger.warning("Upload failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, original, user_id)
+		name = f.filename or ""
+		ext = "." + name.rsplit(".", 1)[1].lower() if "." in name else ""
+		if ext not in allowed:
 			return {"status": 401, "message": "Định dạng file không được hỗ trợ"}
-		content = await f.read()
-		total_size += len(content)
-		if total_size > 20 * 1024 * 1024:
-			logger.warning("Upload failed: total size %d exceeds 20MB limit (user_id=%s)", total_size, user_id)
+		body = await f.read()
+		total += len(body)
+		if total > 20 * 1024 * 1024:
 			return {"status": 401, "message": "File vượt quá dung lượng giới hạn, xin vui lòng xem lại"}
-		enc_name = _encrypted_filename(user_id, original)
-		file_payloads.append((f, content, enc_name))
+		staged.append((f, body, _encrypted_filename(user_id, name)))
 
-	s3 = _get_s3_client()
 	bucket = config.S3_BUCKET_NAME
 	if not bucket:
-		logger.error("Upload failed: S3_BUCKET_NAME is not configured")
 		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
+	s3 = _get_s3_client()
 	try:
 		s3.head_bucket(Bucket=bucket)
-	except EndpointConnectionError as e:
-		logger.error("S3 endpoint connection failed: %s", str(e))
-		return {"status": 500, "message": "Cannot connect to S3 endpoint. Check network or region."}
-	except NoCredentialsError:
-		logger.error("AWS credentials not found")
-		return {"status": 500, "message": "Credentials missing. Configure ACCESS_KEY_ID/SECRET_ACCESS_KEY."}
-	except ClientError as e:
-		code = e.response.get("Error", {}).get("Code", "ClientError")
-		logger.error("S3 head_bucket error: %s", code)
-		if code in {"403", "Forbidden"}:
-			return {"status": 500, "message": "Access denied to S3 bucket. Check IAM permissions."}
-		if code in {"404", "NotFound", "NoSuchBucket"}:
-			return {"status": 500, "message": "S3 bucket not found. Ensure bucket exists in the configured region."}
-		if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
-			return {"status": 500, "message": "S3 region mismatch. Verify AWS_REGION matches the bucket's region."}
-		return {"status": 500, "message": f"S3 error: {code}"}
+	except (EndpointConnectionError, NoCredentialsError, ClientError) as e:
+		return _s3_error(e)
 
-	uploaded_names = []
-	for f, body, enc_name in file_payloads:
-		key = enc_name
+	uploaded: List[str] = []
+	for f, body, key in staged:
 		try:
-			s3.put_object(
-				Bucket=bucket,
-				Key=key,
-				Body=body,
-				ContentType=f.content_type or "application/octet-stream",
-			)
-			uploaded_names.append(enc_name)
-		except EndpointConnectionError as e:
-			logger.error("S3 upload endpoint error: %s", str(e))
-			return {"status": 500, "message": "Cannot connect to S3 endpoint during upload."}
-		except NoCredentialsError:
-			logger.error("AWS credentials not found during upload")
-			return {"status": 500, "message": "Credentials missing during upload."}
-		except ClientError as e:
-			code = e.response.get("Error", {}).get("Code", "ClientError")
-			logger.error("S3 put_object error: %s", code)
-			if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
-				return {"status": 500, "message": "S3 region mismatch during upload. Verify AWS_REGION and bucket region."}
-			return {"status": 500, "message": f"S3 upload failed: {code}"}
-
-	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
-	return {"status": 200, "uploaded_file": uploaded_names}
+			s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType=f.content_type or "application/octet-stream")
+			uploaded.append(key)
+		except (EndpointConnectionError, NoCredentialsError, ClientError) as e:
+			return _s3_error(e)
+	return {"status": 200, "uploaded_file": uploaded}
 
 
 async def create_course(request: Request, payload: Dict[str, Any]):
-	status, token, user_id = _auth_and_decode(request)
-	if status is not None:
-		return status
-	assert token is not None and user_id is not None, "Auth decode should guarantee token & user_id"
-	token_str: str = token
-	user_id_str: str = user_id
+	user_id, token = _decode(request)
+	if not user_id or not token:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
 	valid, err_resp, fields = _validate_create_course_payload(payload)
 	if not valid:
 		return err_resp
-	(title, description, understand_level, duration, uploaded_files) = fields  # type: ignore
+	title, description, understand_level, duration, uploaded_files = fields  # type: ignore
 
-	course_id = str(uuid.uuid4())
-	course_info_id = str(uuid.uuid4())
-
-	v_ok, v_err = await _call_vectorize(course_id, uploaded_files, token_str)
-	if not v_ok:
-		return _error_response(phase="vectorize", backend_error=v_err)
-	g_ok, g_err = await _call_generate(course_id, understand_level, duration, token_str)
-	if not g_ok:
-		return _error_response(phase="generate", backend_error=g_err)
-
-	persist_ok = _persist_course(course_id, course_info_id, user_id_str, title, description, understand_level, duration)
-	if not persist_ok:
-		return _error_response(phase="persist", backend_error="db_persist_failed")
-
+	course_id, course_info_id = str(uuid.uuid4()), str(uuid.uuid4())
+	ok_v, err_v = await _call_vectorize(course_id, uploaded_files, token)
+	if not ok_v:
+		return _error_response("vectorize", err_v)
+	ok_g, err_g = await _call_generate(course_id, understand_level, duration, token)
+	if not ok_g:
+		return _error_response("generate", err_g)
+	if not _persist_course(course_id, course_info_id, user_id, title, description, understand_level, duration):
+		return _error_response("persist", "db_persist_failed")
 	return JSONResponse(status_code=200, content={"status": 200, "message": "Đã tạo khóa học thành công"})
-
-def _auth_and_decode(request: Request):
-	auth_header = request.headers.get("Authorization") or ""
-	if not auth_header.startswith("Bearer "):
-		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
-	token = auth_header.split(" ", 1)[1]
-	try:
-		decoded = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-		user_id = decoded.get("sub")
-		if not user_id:
-			return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
-		return None, token, user_id
-	except Exception:
-		logger.info("create_course invalid token decode")
-		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"}), None, None
 
 
 def _validate_create_course_payload(payload: Dict[str, Any]):
@@ -201,17 +146,14 @@ async def _call_generate(course_id: str, understand_level: str, duration_hours: 
 	return await _post_agentic(generate_url, payload, token, phase="generate")
 
 async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: str) -> Tuple[bool, Optional[str]]:
-	import os, json as _json
 	use_sigv4 = str(os.getenv("AGENTIC_EXPECT_SIGV4", "")).lower() in {"1", "true", "yes"}
 	default_timeout = 60 if phase == "vectorize" else 120
-	timeout_env = os.getenv("COURSE_AGENTIC_TIMEOUT_SECONDS")
 	try:
-		custom_timeout = int(timeout_env) if timeout_env else default_timeout
+		timeout = int(os.getenv("COURSE_AGENTIC_TIMEOUT_SECONDS", "") or default_timeout)
 	except ValueError:
-		custom_timeout = default_timeout
-	headers = {"Content-Type": "application/json"}
-	headers["X-User-Token"] = token
-	body = _json.dumps(payload)
+		timeout = default_timeout
+	body = __import__("json").dumps(payload)
+	headers = {"Content-Type": "application/json", "X-User-Token": token}
 	if use_sigv4:
 		try:
 			from botocore.auth import SigV4Auth
@@ -221,63 +163,39 @@ async def _post_agentic(url: str, payload: Dict[str, Any], token: str, phase: st
 			creds = Credentials(os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"], os.getenv("AWS_SESSION_TOKEN"))
 			aws_req = AWSRequest(method="POST", url=url, data=body, headers={"Content-Type": "application/json"})
 			SigV4Auth(creds, "lambda", region).add_auth(aws_req)
-			for k, v in aws_req.headers.items():
-				headers[k] = v
+			headers.update(dict(aws_req.headers))
 		except Exception as e:
-			logger.error("%s signing error: %s", phase, e)
 			return False, str(e)
 	try:
-		async with httpx.AsyncClient(timeout=custom_timeout) as client:
+		async with httpx.AsyncClient(timeout=timeout) as client:
 			resp = await client.post(url, content=body, headers=headers)
-	except httpx.TimeoutException as e:
-		logger.error("%s timeout after %ss: %s", phase, custom_timeout, e)
-		return (False, f"timeout after {custom_timeout}s")
+	except httpx.TimeoutException:
+		return False, f"timeout after {timeout}s"
 	except Exception as e:
-		logger.error("%s request error: %s", phase, e)
-		return (False, str(e))
+		return False, str(e)
 	if resp.status_code != 200:
-		logger.error("%s failed status=%s body=%s", phase, resp.status_code, resp.text)
-		return (False, f"status={resp.status_code} body={resp.text[:400]}")
-	return (True, None)
+		return False, f"status={resp.status_code} body={resp.text[:400]}"
+	return True, None
 
-def _error_response(phase: str, backend_error: str | None):
-	import os
-	verbose = (str(os.getenv("COURSE_VERBOSE_ERRORS", "")).lower() in {"1", "true", "yes"}) or bool(os.getenv("DEBUG"))
-	if backend_error:
-		low = backend_error.lower()
-		classify = str(os.getenv("COURSE_ERROR_CLASSIFY", "")).lower() in {"1", "true", "yes"}
-		if classify:
-			if "timeout" in low:
-				if verbose:
-					return JSONResponse(status_code=504, content={"status": 504, "message": f"{phase} timeout", "detail": backend_error})
-				return JSONResponse(status_code=504, content={"status": 504, "message": "Dịch vụ xử lý quá thời gian, vui lòng thử lại"})
-			if any(k in low for k in ["status=500", "status=502", "status=503", "status=504"]):
-				if verbose:
-					return JSONResponse(status_code=502, content={"status": 502, "message": f"{phase} backend error", "detail": backend_error})
-				return JSONResponse(status_code=502, content={"status": 502, "message": "Dịch vụ phía sau gặp lỗi, vui lòng thử lại"})
-		if verbose:
-			return JSONResponse(status_code=500, content={"status": 500, "message": f"{phase} failed", "detail": backend_error})
+def _error_response(phase: str, backend_error: Optional[str]):
+	verbose = str(os.getenv("COURSE_VERBOSE_ERRORS", "")).lower() in {"1", "true", "yes"} or bool(os.getenv("DEBUG"))
+	if backend_error and verbose:
+		return JSONResponse(status_code=500, content={"status": 500, "message": f"{phase} failed", "detail": backend_error})
 	return JSONResponse(status_code=401, content={"status": 401, "message": "Có lỗi xảy ra, xin vui lòng thử lại"})
 
 
 def _persist_course(course_id: str, course_info_id: str, user_id: str, title: str, description: str, understand_level: str, duration: int) -> bool:
-	import os
 	if str(os.getenv("COURSE_SERVICE_SKIP_DB", "")).lower() in {"1", "true", "yes"}:
-		logger.info("Skipping DB persistence (COURSE_SERVICE_SKIP_DB set) user=%s course_id=%s", user_id, course_id)
 		return True
-
-	session = SessionLocal()
+	_SL, _C, _CI, _UL = _lazy_models()
+	session = _SL()
 	try:
-		level = session.query(UnderstandLevelTag).filter_by(understand_level=understand_level).first()
+		level = session.query(_UL).filter_by(understand_level=understand_level).first()
 		if not level:
-			level = UnderstandLevelTag(
-				understand_level_id=str(uuid.uuid4()),
-				understand_level=understand_level,
-			)
+			level = _UL(understand_level_id=str(uuid.uuid4()), understand_level=understand_level)
 			session.add(level)
 			session.flush()
-
-		course_info = CourseInfo(
+		info = _CI(
 			course_info_id=course_info_id,
 			understand_level_id=level.understand_level_id,
 			title=title,
@@ -285,20 +203,30 @@ def _persist_course(course_id: str, course_info_id: str, user_id: str, title: st
 			duration=duration,
 			roadmap=None,
 		)
-		course = Course(
-			course_id=course_id,
-			course_info_id=course_info.course_info_id,
-			user_id=user_id,
-			finish=False,
-		)
-		session.add(course_info)
+		course = _C(course_id=course_id, course_info_id=info.course_info_id, user_id=user_id, finish=False)
+		session.add(info)
 		session.add(course)
 		session.commit()
-		logger.info("create_course success user=%s course_id=%s", user_id, course_id)
 		return True
-	except Exception as e:
+	except Exception:
 		session.rollback()
-		logger.error("DB save failed course_id=%s error=%s", course_id, e)
 		return False
 	finally:
 		session.close()
+
+
+def _s3_error(exc: Exception):
+	if isinstance(exc, EndpointConnectionError):
+		return {"status": 500, "message": "Cannot connect to S3 endpoint."}
+	if isinstance(exc, NoCredentialsError):
+		return {"status": 500, "message": "Credentials missing."}
+	if isinstance(exc, ClientError):
+		code = exc.response.get("Error", {}).get("Code", "")
+		if code in {"NoSuchBucket", "404", "NotFound"}:
+			return {"status": 500, "message": "S3 bucket not found."}
+		if code in {"403", "Forbidden"}:
+			return {"status": 500, "message": "Access denied to S3 bucket."}
+		if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
+			return {"status": 500, "message": "S3 region mismatch."}
+		return {"status": 500, "message": f"S3 error: {code or 'unknown'}"}
+	return {"status": 500, "message": "S3 error"}
