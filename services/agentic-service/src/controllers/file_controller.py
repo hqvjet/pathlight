@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from fastapi import HTTPException
 
 from core.logging import setup_logger, log_exception, log_structured
+from core.exceptions import AgenticServiceError, get_error_status_code
 from core.environment import get_environment_type
 from infrastructure.aws.s3_client import S3Client
 from infrastructure.aws.opensearch_client import OpenSearchClient
@@ -143,12 +144,17 @@ class FileController:
             HTTPException: If critical errors occur during processing
         """
         try:
+            # fail_on_any_error default True in service ensures any warning -> error
             return await self.vectorization_service.vectorize_files(
                 file_streams_dict, material_id, category
             )
+        except AgenticServiceError as e:
+            log_exception(logger, "Vectorization process failed (service error)", e)
+            status_code = get_error_status_code(e)
+            detail = {"message": str(e)}
+            if getattr(e, 'details', None):
+                detail["details"] = e.details
+            raise HTTPException(status_code=status_code, detail=detail)
         except Exception as e:
-            log_exception(logger, "Vectorization process failed", e)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Vectorization failed: {str(e)}"
-            )
+            log_exception(logger, "Vectorization process failed (unexpected)", e)
+            raise HTTPException(status_code=500, detail={"message": f"Vectorization failed: {str(e)}"})

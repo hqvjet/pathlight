@@ -8,10 +8,16 @@ The conductor that makes all the pieces work together beautifully.
 from datetime import datetime
 from io import BytesIO
 from typing import Dict, List
-from fastapi import HTTPException
+from fastapi import HTTPException  # (may be used by callers)
 
 from core.logging import setup_logger, log_exception, log_structured
-from core.exceptions import ValidationError, ProcessingError
+from core.exceptions import (
+    ValidationError,
+    ProcessingError,
+    FileProcessingError,
+    EmbeddingCreationError,
+    PartialProcessingError,
+)
 from services.file_processor import FileProcessor
 from services.embedding_service import EmbeddingService
 from infrastructure.aws.opensearch_client import OpenSearchClient
@@ -95,10 +101,11 @@ class VectorizationService:
             raise ProcessingError(f"Failed to prepare data for indexing: {str(e)}")
 
     async def vectorize_files(
-        self, 
-        file_streams_dict: Dict[str, BytesIO], 
-        material_id: str, 
-        category: int
+        self,
+        file_streams_dict: Dict[str, BytesIO],
+        material_id: str,
+        category: int,
+        fail_on_any_error: bool = True,
     ) -> VectorizationResponse:
         """
         Process file streams and create embeddings for text chunks.
@@ -122,8 +129,18 @@ class VectorizationService:
         self.validate_inputs(file_streams_dict, material_id)
 
         # Process files and create embeddings
-        file_contents, processing_errors = await self.file_processor.process_multiple_files(file_streams_dict)
-        documents, embedding_errors = await self.embedding_service.create_document_embeddings(file_contents)
+        try:
+            file_contents, processing_errors = await self.file_processor.process_multiple_files(file_streams_dict)
+        except FileProcessingError as e:
+            # Re-raise as is – controller will map to HTTP 500
+            log_exception(logger, "All files failed during processing", e)
+            raise
+
+        try:
+            documents, embedding_errors = await self.embedding_service.create_document_embeddings(file_contents)
+        except EmbeddingCreationError as e:
+            log_exception(logger, "Embedding creation failed for all documents", e)
+            raise
         material_data = self.prepare_material_data(material_id, category, documents)
 
         # Index to OpenSearch if available: one document per chunk
@@ -181,14 +198,29 @@ class VectorizationService:
                 if not processing_errors:
                     processing_errors = []
                 processing_errors.append({"opensearch": f"Indexing failed: {str(e)}"})
-
+        
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
 
-        # Prepare response
+        # Determine if we should convert warnings to an error response
+        has_any_errors = bool(processing_errors or embedding_errors)
+        if has_any_errors and (fail_on_any_error or len(documents) == 0):
+            # Partial success (some documents) or total failure (should already have raised earlier)
+            details = {
+                "material_id": material_id,
+                "category": category,
+                "processing_errors": processing_errors,
+                "embedding_errors": embedding_errors,
+            }
+            raise PartialProcessingError(
+                message="Vectorization completed with errors",
+                details=details,
+            )
+
+        # Prepare success (possibly with warnings) response
         response = VectorizationResponse(
             status=200,
-            message="Vectorization completed successfully",
+            message="Vectorization completed successfully" if not has_any_errors else "Vectorization completed with warnings",
             material_id=material_id,
             category=category,
             total_documents=len(documents),
@@ -198,23 +230,22 @@ class VectorizationService:
             processing_time=processing_time,
         )
 
-        # Include warnings if any errors occurred
-        if processing_errors or embedding_errors:
+        if has_any_errors:
             response.warnings = {
-                "processing_errors": processing_errors if processing_errors else None,
-                "embedding_errors": embedding_errors if embedding_errors else None,
+                "processing_errors": processing_errors or None,
+                "embedding_errors": embedding_errors or None,
             }
 
-        # Log completion with structured format
         log_structured(
             logger,
             'INFO',
-            "Vectorization completed",
+            "Vectorization completed" if not has_any_errors else "Vectorization completed with warnings",
             material_id=material_id,
             total_documents=len(documents),
             total_chunks=sum(len(doc.chunks) for doc in documents),
             processing_time_seconds=f"{processing_time:.3f}",
             environment=self.opensearch_client.environment,
+            has_warnings=str(has_any_errors),
         )
 
         return response

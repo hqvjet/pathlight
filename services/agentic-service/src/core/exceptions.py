@@ -160,6 +160,18 @@ class InternalServerError(HTTPError):
         super().__init__(message, 500, details)
 
 
+class PartialProcessingError(HTTPError):
+    """Raised when a vectorization (or similar) job partially succeeds but has errors.
+
+    Mapped to HTTP 422 so clients can distinguish between complete failure (500) and
+    validation issues (400) vs partial success that produced some usable data but
+    should generally be retried or inspected.
+    """
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, 422, details)
+
+
 # =============================================================================
 # Utility Functions
 # =============================================================================
@@ -236,4 +248,5 @@ EXCEPTION_STATUS_CODES = {
     S3OperationError: 500,
     OpenSearchOperationError: 500,
     InternalServerError: 500,
+    PartialProcessingError: 422,
 }
