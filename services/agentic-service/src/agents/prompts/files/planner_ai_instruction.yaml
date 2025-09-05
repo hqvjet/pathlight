@@ -46,7 +46,6 @@ prompt: |
 
   * Ngôn ngữ: tiếng Việt, văn phong trung tính, chính xác.
   * Không chứa HTML/Markdown trong giá trị.
-  * Thiếu dữ liệu thì điền **UNKNOWN** (không bịa).
 
   ---
 
@@ -73,14 +72,11 @@ prompt: |
     Gợi ý từ khóa: `syllabus`, `curriculum`, `modules`, `lessons`, `prerequisites`, `table of contents`.
   * **Lượt 3 – Thực hành & thời lượng**: truy project/assignment/assessment/duration/schedule.
     Gợi ý: `project`, `assignment`, `lab`, `assessment`, `capstone`, `duration`, `weeks`, `hours`, `schedule`.
-  * **Lượt 4 – Lấp chỗ trống còn thiếu**: chỉ tập trung vào mục còn `UNKNOWN` trong checklist; thêm từ khóa chuyên ngành để tăng đặc hiệu.
-  * **Điều chỉnh `k`** linh hoạt theo độ nhiễu/độ phủ.
 
   3. **Hợp nhất & chuẩn hóa**
 
   * Ưu tiên thông tin có cấu trúc (mục lục, heading, bullet) > mô tả rời.
   * Sắp roadmap theo tiến trình: nền tảng → cốt lõi → nâng cao → ứng dụng (dự án/case study).
-  * Không suy đoán: giữ `UNKNOWN` nếu không có bằng chứng từ snippets.
 
   4. **Xuất & Upload**
 

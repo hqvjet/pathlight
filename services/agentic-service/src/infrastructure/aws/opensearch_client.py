@@ -15,6 +15,8 @@ from core.logging import setup_logger, log_exception
 from core.exceptions import OpenSearchConfigurationError, OpenSearchOperationError
 from core.environment import get_environment_type
 from core.retry import async_retry
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 logger = setup_logger(__name__)

@@ -3,6 +3,8 @@ from typing import List
 
 class AgentRequest(BaseModel):
     id: str = Field(..., description="ID of the Course/Quiz for retrieval and saving")
+    difficulty: str = Field(..., description="Difficulty level for course planning (e.g., easy, medium, hard)")
+    duration: int = Field(..., description="Target duration in seconds (e.g., 1200 for 20 minutes)")
 
 class TestResponse(BaseModel):
     source_uri: str = Field(..., description="ID of the generated test")
@@ -28,3 +30,6 @@ class RetrievalArgs(BaseModel):
 class S3UploadArgs(BaseModel):
     key: str = Field(..., description="S3 object key")
     json_content: str = Field(..., description="JSON content to upload")
+
+class S3ReadArgs(BaseModel):
+    key: str = Field(..., description="S3 object key to read")

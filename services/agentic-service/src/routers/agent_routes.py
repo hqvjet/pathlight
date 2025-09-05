@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from controllers.file_controller import FileController
 from schemas.vectorize_schemas import VectorizeRequest
 from schemas.agent_schemas import AgentRequest, AgentResponse
+from schemas.context import State, StateResponse
 from models.responses import VectorizationResponse
 from controllers.agent_controller import AgentController
 
@@ -44,6 +45,17 @@ async def vectorize_files(request: VectorizeRequest) -> VectorizationResponse:
         request.category
     )
 
-@router.post("/course/generate", response_model=AgentResponse)
-def generate_course(request: AgentRequest) -> AgentResponse:
-    return agent_controller.generate_course(request)
+@router.post("/course/generate", response_model=StateResponse)
+async def generate_course(request: AgentRequest) -> StateResponse:
+    state = await agent_controller.generate_course(request)
+    # Map State -> StateResponse (drop internal fields)
+    return StateResponse(
+        id=state.id,
+        difficulty=state.difficulty,
+        duration=state.duration,
+        title=state.title,
+        description=state.description,
+        roadmap=state.roadmap,
+        lessons=state.lessons,
+        final_test=state.final_test,
+    )

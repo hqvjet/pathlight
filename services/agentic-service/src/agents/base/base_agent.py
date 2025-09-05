@@ -22,7 +22,6 @@ class BaseAgent:
     def build_chain(self, llm: ChatOpenAI):
         # LangChain LLM for structured output
         prompt = self.prompt_manager.get_prompt(self.name)
-        print(prompt)
 
         return prompt | llm
 

@@ -1,11 +1,46 @@
+import asyncio
+from typing import Any, Dict
+from fastapi import HTTPException
 from factories.agent_factory import invoke_course_agent
 from schemas.agent_schemas import AgentRequest, AgentResponse
+from schemas.context import State
+from core.logging import setup_logger
 
 class AgentController:
     def __init__(self):
-        pass
+        self.logger = setup_logger(__name__)
 
-    def generate_course(self, request: AgentRequest) -> AgentResponse:
-        results = invoke_course_agent(request)
-        print(results)
-        return results
+    async def generate_course(self, request: AgentRequest) -> State:
+        # Build initial state for the agent graph
+        init_state = State(
+            id=request.id,
+            difficulty=request.difficulty,
+            duration=request.duration,
+        )
+
+        try:
+            # 15-minute timeout guard
+            result = await asyncio.wait_for(invoke_course_agent(init_state), timeout=900)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Course generation timed out after 15 minutes")
+
+        # concise summary instead of full payload to console
+        try:
+            lessons = getattr(result, "lessons", []) or []
+            self.logger.info(
+                "generate_course finished | title=%s | roadmap_len=%s | lessons=%s",
+                getattr(result, "title", None),
+                len(getattr(result, "roadmap", []) or []),
+                len(lessons),
+            )
+        except Exception:
+            pass
+
+        # Ensure we return a Pydantic model or plain JSON serializable dict
+        if isinstance(result, State):
+            return result
+        try:
+            return State(**result)  # type: ignore[arg-type]
+        except Exception:
+            # Last resort: return minimal object
+            raise HTTPException(status_code=500, detail="Agent returned unexpected result shape")

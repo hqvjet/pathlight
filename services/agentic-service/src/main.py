@@ -133,7 +133,6 @@ if __name__ == "__main__":
         "main:app", 
         host="0.0.0.0", 
         port=config.SERVICE_PORT, 
-        reload=True,
         log_level=config.LOG_LEVEL.lower(),
         timeout_keep_alive=60  # Keep-alive timeout for long-running requests
     )

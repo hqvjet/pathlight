@@ -1,5 +1,5 @@
 import re
-from agents.base.public_tools import RetrievalTool, S3Uploader
+from agents.base.public_tools import RetrievalTool, S3Uploader, S3Reader
 from constant import (
     FINAL_TEST_CREATOR_AGENT_NAME,
     LESSON_CREATOR_AGENT_NAME,
@@ -13,14 +13,15 @@ class ToolManager:
     def __init__(self):
         self.tools = {
             "retrieval_tool": RetrievalTool(),
-            "s3_uploader": S3Uploader()
+            "s3_uploader": S3Uploader(),
+            "s3_reader": S3Reader(),
         }
         self.tool_map = {
             PLANNER_AGENT_NAME: [self.tools["retrieval_tool"], self.tools["s3_uploader"]],
             ORCHESTRATOR_AGENT_NAME: [self.tools["retrieval_tool"], self.tools["s3_uploader"]],
-            FINAL_TEST_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"], self.tools["s3_uploader"]],
-            LESSON_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"], self.tools["s3_uploader"]],
-            TEST_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"], self.tools["s3_uploader"]],
+            FINAL_TEST_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
+            LESSON_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
+            TEST_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
         }
         
     def get_tools(self, agent_name: str) -> list:

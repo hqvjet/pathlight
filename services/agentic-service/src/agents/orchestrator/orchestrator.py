@@ -1,36 +1,70 @@
 from schemas.context import State
+from core.logging import setup_logger
+from core.tracing import StepTracer
+
 
 class Orchestrator:
     def __init__(self):
-        pass
+        self.logger = setup_logger(__name__)
 
     def __call__(self, state: State) -> str:
-        print("[Orchestrator] state:", state)
+        tracer = StepTracer("orchestrator", state.id, logger=self.logger)
+        # Summarize the incoming state compactly
+        tracer.record(
+            "start",
+            "route next step",
+            title=state.title,
+            roadmap_len=len(state.roadmap or []),
+            lessons=len(state.lessons or []),
+            expected=state.lessons_expected,
+        )
 
-        # Require vars
+        # Required
         id = state.id
         difficulty = state.difficulty
         duration = state.duration
-        s3_bucket = state.s3_bucket
 
-        # Generated vars
+        # Generated/Progress
         title = state.title
         description = state.description
-        roadmap = state.roadmap
-        lessons = state.lessons
-        final_test = state.final_test
+        roadmap = state.roadmap or []
+        lessons = state.lessons or []
+        expected = state.lessons_expected
 
         if not id or not difficulty or not duration:
-            raise ValueError("ID, Difficulty, Duration, and S3 Bucket are required in the state.")
+            raise ValueError("ID, Difficulty, Duration are required in the state.")
 
-        elif not title and not description and not roadmap:
-            print('Using Planner Agent')
-            return 'create_plan'
-        elif not lessons:
-            print('Using Lesson Creator Agent')
-            return 'create_lesson'
-        # elif not final_test:
-        #     print('Using Final Test Creator Agent')
-        #     return 'create_final_test'
+        # 1) Need a plan
+        if not title and not description and not roadmap:
+            tracer.record("decide", "planner needed (no title/description/roadmap)")
+            return "create_plan"
+
+        # 2) Generate lessons iteratively until complete
+        planned_total = expected or (len(roadmap) if roadmap else None)
+        if planned_total is None:
+            if len(lessons) == 0:
+                tracer.record("decide", "lesson creator initial (no lessons yet)")
+                return "create_lesson"
         else:
-            return 'done'
+            if len(lessons) < planned_total:
+                tracer.record(
+                    "decide",
+                    "lesson creator iterative",
+                    have=len(lessons),
+                    planned=planned_total,
+                )
+                return "create_lesson"
+
+        # 3) After lessons done, create tests if any lesson lacks tests
+        for l in lessons:
+            if not getattr(l, "tests", None):
+                tracer.record("decide", "test creator needed", lesson_id=l.lesson_id)
+                return "create_test"
+
+        # 4) If all lessons have tests but no final test, create final test
+        if lessons and not state.final_test:
+            tracer.record("decide", "final test creator needed")
+            return "create_final_test"
+
+        tracer.record("done", "workflow complete")
+        return "done"
