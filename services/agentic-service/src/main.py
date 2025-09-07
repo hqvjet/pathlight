@@ -3,10 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from mangum import Mangum
+import os
 
 load_dotenv(override=True)  # Override existing .env variables
 
-# Import config from the clean config package
 from config import config
 
 # Configure logging
@@ -24,7 +24,8 @@ if config_errors:
         raise ValueError(f"Configuration errors: {config_errors}")
     
 
-from routers.file_routes import router as file_router
+from routers.agent_routes import router as agent_router
+from routers.agent_routes import file_controller as shared_file_controller
 
 # Create FastAPI instance
 app = FastAPI(
@@ -45,7 +46,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(file_router)
+app.include_router(agent_router)
 
 # Health check endpoints
 @app.get("/")
@@ -87,10 +88,8 @@ async def debug_config():
 @app.get("/debug/opensearch")
 async def debug_opensearch():
     """Debug endpoint to test OpenSearch connection"""
-    from controllers.file_controller import FileController
-    
     try:
-        controller = FileController()
+        controller = shared_file_controller
         if not controller.opensearch_client:
             return {
                 "status": "error",
@@ -134,7 +133,6 @@ if __name__ == "__main__":
         "main:app", 
         host="0.0.0.0", 
         port=config.SERVICE_PORT, 
-        reload=True,
         log_level=config.LOG_LEVEL.lower(),
         timeout_keep_alive=60  # Keep-alive timeout for long-running requests
     )

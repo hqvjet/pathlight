@@ -1,0 +1,5 @@
+PLANNER_AGENT_NAME = "planner_agent"
+LESSON_CREATOR_AGENT_NAME = "lesson_creator_agent"
+TEST_CREATOR_AGENT_NAME = "test_creator_agent"
+FINAL_TEST_CREATOR_AGENT_NAME = "final_test_creator_agent"
+ORCHESTRATOR_AGENT_NAME = "orchestrator_agent"

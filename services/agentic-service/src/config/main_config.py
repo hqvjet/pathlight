@@ -11,7 +11,8 @@ class AppSettings:
     OPENSEARCH_PORT = 443
     OPENSEARCH_USE_SSL = True
     OPENSEARCH_VERIFY_CERTS = True
-    OPENSEARCH_INDEX_NAME = "pathlight_materials"
+    # Default OpenSearch index aligned with provided mapping
+    OPENSEARCH_INDEX_NAME = "pathlight-vector-db"
     OPENSEARCH_TIMEOUT = 60
     EMBEDDING_MODEL = "text-embedding-3-small"
     LOG_LEVEL = "INFO"
@@ -23,46 +24,49 @@ class Config:
     def __init__(self):
         # Detect environment
         self.environment = self._detect_environment()
-        
+
         # Environment info
         self.ENVIRONMENT = self.environment
         self.IS_LAMBDA = self.environment == "lambda"
         self.IS_LOCAL = self.environment == "local"
         self.IS_TESTING = os.getenv('TESTING', '').lower() == 'true' or os.getenv('PYTEST_CURRENT_TEST') is not None
-        
+
         # Secrets (from environment variables only)
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.ACCESS_KEY_ID = os.getenv("ACCESS_KEY_ID", "")
         self.SECRET_ACCESS_KEY = os.getenv("SECRET_ACCESS_KEY", "")
         self.OPENSEARCH_USER = os.getenv("OPENSEARCH_USERNAME", "")
         self.OPENSEARCH_PASSWORD = os.getenv("OPENSEARCH_PASSWORD", "")
-        
+
         # Infrastructure settings
         self.REGION = os.getenv("REGION", "ap-northeast-1")
         self.S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "")
         self.OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOST", "")
-        
-        # Application settings with environment-aware defaults
+
+        # OpenSearch feature flags
         self.OPENSEARCH_ENABLED = self._get_opensearch_enabled_default()
+        # New: skip OS init in local by default; can be overridden
+        self.SKIP_OPENSEARCH_LOCAL = os.getenv("SKIP_OPENSEARCH_LOCAL", "true").lower() == "true"
+        # Back-compat: force OS init in local regardless of skip flag
         self.FORCE_OPENSEARCH_LOCAL = os.getenv("FORCE_OPENSEARCH_LOCAL", "false").lower() == "true"
-        
+
         # Settings from AppSettings (with possible env overrides)
         self.OPENSEARCH_PORT = int(os.getenv("OPENSEARCH_PORT", str(AppSettings.OPENSEARCH_PORT)))
         self.OPENSEARCH_USE_SSL = os.getenv("OPENSEARCH_USE_SSL", str(AppSettings.OPENSEARCH_USE_SSL)).lower() == "true"
         self.OPENSEARCH_VERIFY_CERTS = os.getenv("OPENSEARCH_VERIFY_CERTS", str(AppSettings.OPENSEARCH_VERIFY_CERTS)).lower() == "true"
         self.OPENSEARCH_INDEX_NAME = os.getenv("OPENSEARCH_INDEX_NAME", AppSettings.OPENSEARCH_INDEX_NAME)
         self.OPENSEARCH_TIMEOUT = int(os.getenv("OPENSEARCH_TIMEOUT", str(AppSettings.OPENSEARCH_TIMEOUT)))
-        
+
         # File processing settings
         self.MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", str(AppSettings.MAX_TOKENS_PER_CHUNK)))
         self.ALLOWED_FILE_EXTENSIONS = AppSettings.ALLOWED_FILE_EXTENSIONS
         self.MAX_FILE_SIZE_BYTES = int(os.getenv("MAX_FILE_SIZE_BYTES", str(AppSettings.MAX_FILE_SIZE_BYTES)))
-        
+
         # Other settings
         self.EMBEDDING_MODEL = AppSettings.EMBEDDING_MODEL
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", AppSettings.LOG_LEVEL)
         self.SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8000"))
-        
+
         # CORS Configuration
         self.ALLOWED_ORIGINS = ["*"]
         self.ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -110,8 +114,11 @@ class Config:
         if not self.S3_BUCKET_NAME:
             errors.append("S3_BUCKET_NAME is required")
         
-        # OpenSearch validation (only if enabled)
-        if self.OPENSEARCH_ENABLED:
+        # OpenSearch validation (only if enabled and not intentionally skipped in local)
+        should_validate_opensearch = self.OPENSEARCH_ENABLED and not (
+            self.IS_LOCAL and self.SKIP_OPENSEARCH_LOCAL and not self.FORCE_OPENSEARCH_LOCAL
+        )
+        if should_validate_opensearch:
             if not self.OPENSEARCH_HOST:
                 errors.append("OPENSEARCH_HOST is required when OpenSearch is enabled")
             if not self.OPENSEARCH_USER:
@@ -136,6 +143,9 @@ class Config:
         logger.info("=== Configuration Summary ===")
         logger.info(f"Environment: {self.ENVIRONMENT}")
         logger.info(f"OpenSearch Enabled: {self.OPENSEARCH_ENABLED}")
+        if self.IS_LOCAL:
+            logger.info(f"Skip OpenSearch in Local: {self.SKIP_OPENSEARCH_LOCAL}")
+            logger.info(f"Force OpenSearch in Local: {self.FORCE_OPENSEARCH_LOCAL}")
         logger.info(f"OpenSearch Host: {self.OPENSEARCH_HOST if self.OPENSEARCH_HOST else 'Not configured'}")
         logger.info(f"S3 Bucket: {self.S3_BUCKET_NAME if self.S3_BUCKET_NAME else 'Not configured'}")
         logger.info(f"Max File Size: {self.MAX_FILE_SIZE_BYTES / (1024*1024):.0f}MB")

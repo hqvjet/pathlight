@@ -36,7 +36,8 @@ class FileProcessingConfig:
             self.allowed_extensions = ['pdf', 'docx', 'txt', 'md', 'pptx', 'xlsx']
         
         if self.opensearch_index_name is None:
-            self.opensearch_index_name = 'pathlight-materials'
+            # Align with provided OpenSearch index name
+            self.opensearch_index_name = 'pathlight-vector-db'
         
         self._validate_config()
 

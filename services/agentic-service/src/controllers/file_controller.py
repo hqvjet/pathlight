@@ -10,10 +10,12 @@ from typing import List, Dict, Any
 from fastapi import HTTPException
 
 from core.logging import setup_logger, log_exception, log_structured
+from core.exceptions import AgenticServiceError, get_error_status_code
 from core.environment import get_environment_type
 from infrastructure.aws.s3_client import S3Client
 from infrastructure.aws.opensearch_client import OpenSearchClient
 from infrastructure.openai.client import OpenAIClient
+from infrastructure.clients import clients as shared_clients
 from services.file_processor import FileProcessor
 from services.embedding_service import EmbeddingService
 from services.vectorization_service import VectorizationService
@@ -33,20 +35,20 @@ class FileController:
     All the heavy lifting is done by dedicated services.
     """
     
-    def __init__(self):
-        """Initialize FileController with service dependencies."""
+    def __init__(self, s3_client: S3Client | None = None, opensearch_client: OpenSearchClient | None = None, openai_client: OpenAIClient | None = None):
+        """Initialize FileController with injected service dependencies."""
         logger.info("Initializing FileController...")
-        
+
         self.environment = get_environment_type()
         logger.info(f"Detected environment: {self.environment}")
-        
+
         # Load configuration
         self.config = FileProcessingConfig.from_app_config(config)
-        
-        # Initialize infrastructure clients
-        self.s3_client = self._create_s3_client()
-        self.opensearch_client = self._create_opensearch_client()
-        self.openai_client = self._create_openai_client()
+
+        # Use shared clients by default, allow overrides via DI
+        self.s3_client = s3_client or shared_clients.s3
+        self.opensearch_client = opensearch_client or shared_clients.opensearch
+        self.openai_client = openai_client or shared_clients.openai
         
         # Initialize services
         self.file_processor = FileProcessor(self.config.allowed_extensions)
@@ -60,61 +62,11 @@ class FileController:
         
         logger.info("FileController initialization completed successfully")
 
-    def _create_s3_client(self) -> S3Client:
-        """Create and configure S3 client."""
-        try:
-            return S3Client(
-                region=config.REGION,
-                access_key_id=config.ACCESS_KEY_ID,
-                secret_access_key=config.SECRET_ACCESS_KEY
-            )
-        except Exception as e:
-            log_exception(logger, "Failed to initialize S3 client", e)
-            raise HTTPException(
-                status_code=500,
-                detail="S3 configuration error. Please check AWS credentials and configuration."
-            )
+    # Note: S3 client is now provided via DI/shared clients
 
-    def _create_opensearch_client(self) -> OpenSearchClient:
-        """Create and configure OpenSearch client."""
-        try:
-            return OpenSearchClient(
-                host=config.OPENSEARCH_HOST,
-                port=config.OPENSEARCH_PORT,
-                username=config.OPENSEARCH_USER,
-                password=config.OPENSEARCH_PASSWORD,
-                use_ssl=config.OPENSEARCH_USE_SSL,
-                verify_certs=config.OPENSEARCH_VERIFY_CERTS,
-                timeout=config.OPENSEARCH_TIMEOUT,
-                enabled=config.OPENSEARCH_ENABLED,
-                force_local=config.FORCE_OPENSEARCH_LOCAL
-            )
-        except Exception as e:
-            log_exception(logger, "Failed to initialize OpenSearch client", e)
-            # OpenSearch failure is not critical in all environments
-            if self.environment == 'lambda':
-                raise HTTPException(
-                    status_code=500,
-                    detail="OpenSearch configuration error in production environment."
-                )
-            logger.warning("Continuing without OpenSearch in development environment")
-            return OpenSearchClient(
-                host="", port=443, username="", password="", enabled=False
-            )
+    # Note: OpenSearch client is now provided via DI/shared clients
 
-    def _create_openai_client(self) -> OpenAIClient:
-        """Create and configure OpenAI client."""
-        try:
-            return OpenAIClient(
-                api_key=config.OPENAI_API_KEY,
-                model=config.EMBEDDING_MODEL
-            )
-        except Exception as e:
-            log_exception(logger, "Failed to initialize OpenAI client", e)
-            raise HTTPException(
-                status_code=500,
-                detail="OpenAI configuration error. Please check API key configuration."
-            )
+    # Note: OpenAI client is now provided via DI/shared clients
 
     def get_files_by_names(self, file_names: List[str]) -> S3FileResponse:
         """
@@ -192,12 +144,17 @@ class FileController:
             HTTPException: If critical errors occur during processing
         """
         try:
+            # fail_on_any_error default True in service ensures any warning -> error
             return await self.vectorization_service.vectorize_files(
                 file_streams_dict, material_id, category
             )
+        except AgenticServiceError as e:
+            log_exception(logger, "Vectorization process failed (service error)", e)
+            status_code = get_error_status_code(e)
+            detail = {"message": str(e)}
+            if getattr(e, 'details', None):
+                detail["details"] = e.details
+            raise HTTPException(status_code=status_code, detail=detail)
         except Exception as e:
-            log_exception(logger, "Vectorization process failed", e)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Vectorization failed: {str(e)}"
-            )
+            log_exception(logger, "Vectorization process failed (unexpected)", e)
+            raise HTTPException(status_code=500, detail={"message": f"Vectorization failed: {str(e)}"})
