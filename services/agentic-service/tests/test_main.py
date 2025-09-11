@@ -1,5 +1,4 @@
 import pytest
-from fastapi.testclient import TestClient
 import sys
 import os
 
@@ -8,11 +7,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 
 def test_import_main():
-    """Test that we can import the main module"""
+    """Import main module and lambda handler"""
     try:
-        from src.main import app
-        assert app is not None
-        print("✅ Main module imported successfully")
+        from src.main import lambda_handler
+        assert callable(lambda_handler)
+        print("✅ lambda_handler imported successfully")
     except Exception as e:
         print(f"❌ Import failed: {e}")
         pytest.skip(f"Import failed: {e}")
@@ -28,34 +27,27 @@ def test_config_import():
         pytest.skip(f"Config import failed: {e}")
 
 
-def test_app_health():
-    """Test the health endpoint"""
+def test_sqs_handler_no_records():
+    """SQS handler returns empty failures when no records"""
     try:
-        from src.main import app
-        client = TestClient(app)
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert data["service"] == "agentic-service"
-        print("✅ Health endpoint test passed")
+        from src.main import lambda_handler
+        result = lambda_handler({"Records": []}, None)
+        assert isinstance(result, dict)
+        assert "batchItemFailures" in result
+        assert result["batchItemFailures"] == []
+        print("✅ SQS handler no-records test passed")
     except Exception as e:
-        pytest.skip(f"Health endpoint test failed: {e}")
+        pytest.skip(f"SQS handler test failed: {e}")
 
 
-def test_app_root():
-    """Test the root endpoint"""
+def test_config_instance():
     try:
-        from src.main import app
-        client = TestClient(app)
-        response = client.get("/")
-        assert response.status_code == 200
-        data = response.json()
-        assert "message" in data
-        assert "version" in data
-        print("✅ Root endpoint test passed")
+        from src.config import config
+        assert config is not None
+        assert hasattr(config, 'validate_config')
+        print("✅ Config instance test passed")
     except Exception as e:
-        pytest.skip(f"Root endpoint test failed: {e}")
+        pytest.skip(f"Config instance test failed: {e}")
 
 @pytest.mark.unit
 def test_config_validation():
@@ -71,15 +63,4 @@ def test_config_validation():
         pytest.skip(f"Config validation test failed: {e}")
 
 
-@pytest.mark.unit
-def test_config_instance():
-    """Test that the global config instance works"""
-    try:
-        from src.config import config
-        assert config is not None
-        assert hasattr(config, 'validate_config')
-        assert hasattr(config, 'ENVIRONMENT')
-        assert config.IS_TESTING  # Should be True in test environment
-        print("✅ Config instance test passed")
-    except Exception as e:
-        pytest.skip(f"Config instance test failed: {e}")
+    

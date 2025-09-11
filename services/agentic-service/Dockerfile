@@ -17,4 +17,4 @@ COPY src/ ./src/
 ENV PYTHONPATH="${LAMBDA_TASK_ROOT}/src:${PYTHONPATH}"
 
 # Lambda handler
-CMD ["src.main.handler"]
+CMD ["src.main.lambda_handler"]

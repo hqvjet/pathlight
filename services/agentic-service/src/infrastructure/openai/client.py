@@ -7,7 +7,6 @@ Makes AI operations feel natural and reliable.
 
 import openai
 from typing import List
-from fastapi import HTTPException
 
 from core.logging import setup_logger, log_exception
 from core.exceptions import OpenAIConfigurationError, EmbeddingCreationError
@@ -43,10 +42,7 @@ class OpenAIClient:
             
         except Exception as e:
             log_exception(logger, "Failed to configure OpenAI client", e)
-            raise HTTPException(
-                status_code=500,
-                detail="OpenAI configuration error. Please check API key configuration."
-            )
+            raise OpenAIConfigurationError("OpenAI configuration error. Please check API key configuration.")
 
     @async_retry(max_retries=3, exceptions=(Exception,))
     async def create_embedding(self, text: str) -> List[float]:

@@ -5,7 +5,7 @@ Clean, well-defined response models for API endpoints.
 Clear data structures that speak for themselves.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, validator
 
 
@@ -24,6 +24,11 @@ class FileProcessingResult(BaseModel):
         return v.strip()
 
 
+class VectorizationWarning(BaseModel):
+    processing_errors: Optional[List[Dict[str, Any]]] = None
+    embedding_errors: Optional[List[Dict[str, Any]]] = None
+
+
 class VectorizationResponse(BaseModel):
     """Response for vectorization operations."""
     status: int
@@ -35,11 +40,11 @@ class VectorizationResponse(BaseModel):
     processed_files: int
     total_files: int
     processing_time: float
-    warnings: Optional[Dict[str, Any]] = None
+    warnings: Optional[VectorizationWarning] = None
 
 
 class S3FileResponse(BaseModel):
-    """Response for S3 file operations."""
+    """Deprecated: prefer models.s3.S3GetFilesResult"""
     file_streams: Dict[str, Any]
     file_metadata: Dict[str, Dict[str, Any]]
     failed_files: Optional[list] = None

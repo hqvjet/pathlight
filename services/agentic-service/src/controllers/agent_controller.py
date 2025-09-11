@@ -1,10 +1,10 @@
 import asyncio
 from typing import Any, Dict
-from fastapi import HTTPException
 from factories.agent_factory import invoke_course_agent
 from schemas.agent_schemas import AgentRequest, AgentResponse
 from schemas.context import State
 from core.logging import setup_logger
+from core.exceptions import InternalServerError
 
 class AgentController:
     def __init__(self):
@@ -22,7 +22,7 @@ class AgentController:
             # 15-minute timeout guard
             result = await asyncio.wait_for(invoke_course_agent(init_state), timeout=900)
         except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Course generation timed out after 15 minutes")
+            raise InternalServerError("Course generation timed out after 15 minutes")
 
         # concise summary instead of full payload to console
         try:
@@ -42,5 +42,5 @@ class AgentController:
         try:
             return State(**result)  # type: ignore[arg-type]
         except Exception:
-            # Last resort: return minimal object
-            raise HTTPException(status_code=500, detail="Agent returned unexpected result shape")
+            # Last resort
+            raise InternalServerError("Agent returned unexpected result shape")
