@@ -28,9 +28,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     AWS Lambda entrypoint for SQS-triggered processing.
 
-    The handler delegates to process_sqs_event, which supports the following operations:
-    - VECTORIZE_MATERIAL: build embeddings for documents listed in S3
-    - GENERATE_COURSE: run the multi-agent pipeline to generate a course
+    The handler delegates to process_sqs_event, which supports the following operation:
+    - GENERATE_COURSE_WITH_VECTORIZE: vectorize provided S3 documents and generate the course in one job
     """
     # Validate/parse with schema; still return a plain dict for Lambda
     parsed = SQSEvent(**event)

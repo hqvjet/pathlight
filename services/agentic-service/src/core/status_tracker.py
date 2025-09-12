@@ -70,3 +70,7 @@ def mark_final_ready(course_id: str, count: int) -> None:
         course_id,
         {"final_ready": True, "progress": "final_ready", "final_count": count},
     )
+
+
+def mark_vectorized(course_id: str, ok: bool = True) -> None:
+    update_item(course_id, {"vectorized": bool(ok)})

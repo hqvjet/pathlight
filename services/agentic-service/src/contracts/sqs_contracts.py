@@ -4,33 +4,22 @@ SQS message contracts for agentic-service.
 Messages are JSON objects sent to an SQS queue triggering the Lambda.
 
 Required fields (common):
-- type: str  -> one of ["VECTORIZE_MATERIAL", "GENERATE_COURSE"]
+- type: str  -> one of ["GENERATE_COURSE_WITH_VECTORIZE"]
 - correlation_id: str -> id for tracing/log correlation (e.g., request id)
 - timestamp: str -> ISO8601 creation time
 
 Type-specific payloads:
 
-1) VECTORIZE_MATERIAL
+1) GENERATE_COURSE_WITH_VECTORIZE
 {
-  "type": "VECTORIZE_MATERIAL",
-  "correlation_id": "...",
-  "timestamp": "...",
-  "payload": {
-    "material_id": "course-or-quiz-id",
-    "category": 0,
-    "s3_keys": ["path/to/file1.pdf", "path/to/file2.docx"]
-  }
-}
-
-2) GENERATE_COURSE
-{
-  "type": "GENERATE_COURSE",
+  "type": "GENERATE_COURSE_WITH_VECTORIZE",
   "correlation_id": "...",
   "timestamp": "...",
   "payload": {
     "id": "course-id",
     "difficulty": "easy|medium|hard",
-    "duration": 1200
+    "duration": 1200,
+    "s3_keys": ["path/to/file1.pdf", "path/to/file2.docx"]
   }
 }
 """
@@ -41,38 +30,28 @@ from pydantic import BaseModel, Field
 
 
 class MessageType(str, Enum):
-    VECTORIZE_MATERIAL = "VECTORIZE_MATERIAL"
-    GENERATE_COURSE = "GENERATE_COURSE"
+  GENERATE_COURSE_WITH_VECTORIZE = "GENERATE_COURSE_WITH_VECTORIZE"
 
 
 class BaseMessage(BaseModel):
-    type: MessageType
-    correlation_id: str = Field(..., description="Correlation id for tracing")
-    timestamp: str
+  type: MessageType
+  correlation_id: str = Field(..., description="Correlation id for tracing")
+  timestamp: str
 
 
-class VectorizePayload(BaseModel):
-    material_id: str
-    category: int
-    s3_keys: List[str]
+class GenerateCourseWithVectorizePayload(BaseModel):
+  id: str
+  difficulty: str
+  duration: int
+  s3_keys: List[str]
 
 
-class VectorizeMessage(BaseMessage):
-    payload: VectorizePayload
-
-
-class GenerateCoursePayload(BaseModel):
-    id: str
-    difficulty: str
-    duration: int
-
-
-class GenerateCourseMessage(BaseMessage):
-    payload: GenerateCoursePayload
+class GenerateCourseWithVectorizeMessage(BaseMessage):
+  payload: GenerateCourseWithVectorizePayload
 
 
 class SQSBatchResponse(BaseModel):
-    batchItemFailures: List[dict] = Field(default_factory=list)
+  batchItemFailures: List[dict] = Field(default_factory=list)
 
 
 # --- AWS SQS Event (minimal schema we actually use) ---
