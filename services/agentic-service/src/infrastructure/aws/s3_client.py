@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 from io import BytesIO
 from typing import Dict, Any, Optional, Tuple, List
-from fastapi import HTTPException
+from pydantic import BaseModel
 
 from core.logging import setup_logger, log_exception, log_structured
 from core.exceptions import S3ConfigurationError, S3OperationError
@@ -74,17 +74,17 @@ class S3Client:
             error_code = e.response['Error']['Code']
             log_exception(logger, f"S3 connection test failed with error code {error_code}", e)
             if error_code in ['InvalidAccessKeyId', 'SignatureDoesNotMatch']:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid AWS credentials. Please check ACCESS_KEY_ID and SECRET_ACCESS_KEY."
-                )
+                raise S3ConfigurationError("Invalid AWS credentials. Please check ACCESS_KEY_ID and SECRET_ACCESS_KEY.")
             raise
         except BotoCoreError as e:
             log_exception(logger, "S3 connection test failed with BotoCore error", e)
-            raise HTTPException(
-                status_code=500,
-                detail="AWS service configuration error. Please check your AWS settings."
-            )
+            raise S3ConfigurationError("AWS service configuration error. Please check your AWS settings.")
+
+    class FileMetadata(BaseModel):
+        size_bytes: int
+        content_type: str
+        last_modified: Any
+        etag: str
 
     def get_file_metadata(self, bucket_name: str, filename: str) -> Dict[str, Any]:
         """

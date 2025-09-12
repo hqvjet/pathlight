@@ -119,7 +119,8 @@ jobs:
           ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, \
           OPENSEARCH_HOST=${{ secrets.OPENSEARCH_HOST }}, OPENSEARCH_PORT=${{ secrets.OPENSEARCH_PORT }}, \
           OPENSEARCH_USERNAME=${{ secrets.OPENSEARCH_USERNAME }}, OPENSEARCH_PASSWORD=${{ secrets.OPENSEARCH_PASSWORD }}, \
-          OPENSEARCH_INDEX_NAME=${{ secrets.OPENSEARCH_INDEX_NAME }}}"
+          OPENSEARCH_INDEX_NAME=${{ secrets.OPENSEARCH_INDEX_NAME }}, DATABASE_URL=${{ secrets.DATABASE_URL }}, \
+          DDB_TABLE_NAME=${{ secrets.DDB_TABLE_NAME }}}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success

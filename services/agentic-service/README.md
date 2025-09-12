@@ -1,7 +1,7 @@
 # 🚀 Agentic Service - Document Processing & AI Vectorization
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green.svg)](https://fastapi.tiangolo.com)
+# Trigger: AWS SQS (Lambda)
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20S3%20%7C%20OpenSearch-orange.svg)](https://aws.amazon.com)
 
 > **Beautiful, modular, and production-ready** document processing service that transforms files into AI-searchable vectors using OpenAI embeddings and AWS infrastructure.
@@ -50,7 +50,8 @@ src/
 ├── 🎮  controllers/              # Slim controllers
 │   └── file_controller.py        # Orchestration (150 lines!)
 └── 🛣️   routers/                 # API routes
-    └── file_routes.py            # FastAPI routes
+  └── handlers/                 # Event handlers (SQS)
+    └── sqs_handler.py
 ```
 
 ## 🚀 Quick Start
@@ -110,7 +111,7 @@ LOG_LEVEL=INFO
 
 ```bash
 # Development server with auto-reload
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+python -m src.main  # prints local readiness message
 
 # Or using the startup script
 python src/main.py

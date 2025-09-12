@@ -2,10 +2,14 @@ import fitz  # PyMuPDF
 from docx import Document
 from pptx import Presentation
 from io import BytesIO
-from fastapi import UploadFile
+
+class _UploadFileLike:
+    """Lightweight type placeholder for objects exposing .file and .filename"""
+    file: BytesIO
+    filename: str
 
 
-def extract_content_with_tags(file: UploadFile, extension: str) -> str:
+def extract_content_with_tags(file: _UploadFileLike, extension: str) -> str:
     """
     Extract content from uploaded files and add structured tags.
     

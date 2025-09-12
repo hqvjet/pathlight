@@ -9,7 +9,6 @@ import asyncio
 from opensearchpy import OpenSearch, OpenSearchException
 from requests.exceptions import Timeout, ConnectionError
 from typing import Optional, Dict, Any
-from fastapi import HTTPException
 
 from core.logging import setup_logger, log_exception
 from core.exceptions import OpenSearchConfigurationError, OpenSearchOperationError
@@ -143,10 +142,7 @@ class OpenSearchClient:
             log_exception(logger, "OpenSearch configuration error", e)
             if self.environment == 'lambda':
                 # In Lambda, this is a critical error
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"OpenSearch configuration error in Lambda: {str(e)}"
-                )
+                raise OpenSearchConfigurationError(f"OpenSearch configuration error in Lambda: {str(e)}")
             else:
                 # In local/dev, just warn and continue
                 logger.warning("Continuing without OpenSearch in development environment")
@@ -154,10 +150,7 @@ class OpenSearchClient:
         except Exception as e:
             log_exception(logger, "Unexpected error initializing OpenSearch client", e)
             if self.environment == 'lambda':
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to initialize OpenSearch in Lambda: {str(e)}"
-                )
+                raise OpenSearchConfigurationError(f"Failed to initialize OpenSearch in Lambda: {str(e)}")
             return None
 
     def _test_connection(self, client: OpenSearch, timeout: int = 30) -> OpenSearch:
@@ -182,10 +175,7 @@ class OpenSearchClient:
                     f"Set OPENSEARCH_ENABLED=false or FORCE_OPENSEARCH_LOCAL=false for local development."
                 )
             else:
-                raise HTTPException(
-                    status_code=503,
-                    detail="OpenSearch service is unavailable. Please try again later."
-                )
+                raise OpenSearchConfigurationError("OpenSearch service is unavailable. Please try again later.")
 
     def is_available(self) -> bool:
         """Check if OpenSearch client is available."""
@@ -274,10 +264,7 @@ class OpenSearchClient:
             log_exception(logger, "Failed to index data to OpenSearch", e)
             if self.environment == 'lambda':
                 # In production, indexing failure might be critical
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"OpenSearch indexing failed in production: {str(e)}"
-                )
+                raise OpenSearchOperationError(f"OpenSearch indexing failed in production: {str(e)}")
             else:
                 # In development, just log the error and continue
                 logger.warning(f"OpenSearch indexing failed in {self.environment} environment, continuing...")

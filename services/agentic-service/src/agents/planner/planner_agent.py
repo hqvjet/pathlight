@@ -12,6 +12,7 @@ from agents.base.llm_manager import LLMManager
 from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
+from core import status_tracker as status
 
 
 class PlannerAgent(BaseAgent):
@@ -101,4 +102,8 @@ class PlannerAgent(BaseAgent):
         tracer.record(
             "done", "plan extracted", title=state.title, roadmap_len=len(state.roadmap or [])
         )
+        try:
+            status.mark_plan_ready(state.id, state.title, state.description, len(state.roadmap or []))
+        except Exception:
+            pass
         return state

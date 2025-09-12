@@ -7,10 +7,9 @@ No more 900+ line monsters - just elegant coordination.
 
 from io import BytesIO
 from typing import List, Dict, Any
-from fastapi import HTTPException
 
 from core.logging import setup_logger, log_exception, log_structured
-from core.exceptions import AgenticServiceError, get_error_status_code
+from core.exceptions import AgenticServiceError, get_error_status_code, BadRequestError, InternalServerError
 from core.environment import get_environment_type
 from infrastructure.aws.s3_client import S3Client
 from infrastructure.aws.opensearch_client import OpenSearchClient
@@ -20,7 +19,8 @@ from services.file_processor import FileProcessor
 from services.embedding_service import EmbeddingService
 from services.vectorization_service import VectorizationService
 from config.file_config import FileProcessingConfig
-from models.responses import VectorizationResponse, S3FileResponse
+from models.responses import VectorizationResponse
+from models.s3 import S3GetFilesResult, S3FileMeta
 from config import config
 
 
@@ -68,7 +68,7 @@ class FileController:
 
     # Note: OpenAI client is now provided via DI/shared clients
 
-    def get_files_by_names(self, file_names: List[str]) -> S3FileResponse:
+    def get_files_by_names(self, file_names: List[str]) -> S3GetFilesResult:
         """
         Retrieve multiple files from S3 by their names.
         
@@ -85,16 +85,10 @@ class FileController:
         
         # Validation
         if not config.S3_BUCKET_NAME:
-            raise HTTPException(
-                status_code=500, 
-                detail="S3 bucket name not configured. Please set AWS_S3_BUCKET_NAME environment variable."
-            )
+            raise InternalServerError("S3 bucket name not configured. Please set S3_BUCKET_NAME.")
 
         if not file_names:
-            raise HTTPException(
-                status_code=400,
-                detail="No file names provided"
-            )
+            raise BadRequestError("No file names provided")
 
         # Use S3 client to retrieve files
         result = self.s3_client.get_multiple_files(
@@ -106,21 +100,33 @@ class FileController:
         # Handle the case where all files failed
         if result["failed_files"] and not result["file_streams"]:
             error_code = 404 if any("not found" in f["error"] for f in result["failed_files"]) else 500
-            raise HTTPException(
-                status_code=error_code,
-                detail={
-                    "message": "All files failed to retrieve",
+            # Map to domain error
+            if error_code == 404:
+                raise BadRequestError("All files failed to retrieve", details={
                     "failed_files": result["failed_files"],
-                    "total_failed": result["total_failed"]
-                }
-            )
+                    "total_failed": result["total_failed"],
+                })
+            raise InternalServerError("All files failed to retrieve", details={
+                "failed_files": result["failed_files"],
+                "total_failed": result["total_failed"],
+            })
 
-        return S3FileResponse(
+        # Coerce metadata values to typed model
+        typed_meta = {
+            k: S3FileMeta(
+                size_bytes=v.get("size_bytes", 0),
+                content_type=v.get("content_type", "application/octet-stream"),
+                last_modified=str(v.get("last_modified", "")),
+                etag=v.get("etag", ""),
+            )
+            for k, v in result["file_metadata"].items()
+        }
+        return S3GetFilesResult(
             file_streams=result["file_streams"],
-            file_metadata=result["file_metadata"],
+            file_metadata=typed_meta,
             failed_files=result["failed_files"],
             total_successful=result["total_successful"],
-            total_failed=result["total_failed"]
+            total_failed=result["total_failed"],
         )
 
     async def vectorize_files(
@@ -154,7 +160,8 @@ class FileController:
             detail = {"message": str(e)}
             if getattr(e, 'details', None):
                 detail["details"] = e.details
-            raise HTTPException(status_code=status_code, detail=detail)
+            # Re-raise preserving type; caller can decide mapping
+            raise e
         except Exception as e:
             log_exception(logger, "Vectorization process failed (unexpected)", e)
-            raise HTTPException(status_code=500, detail={"message": f"Vectorization failed: {str(e)}"})
+            raise InternalServerError(f"Vectorization failed: {str(e)}")

@@ -8,7 +8,6 @@ The conductor that makes all the pieces work together beautifully.
 from datetime import datetime
 from io import BytesIO
 from typing import Dict, List
-from fastapi import HTTPException  # (may be used by callers)
 
 from core.logging import setup_logger, log_exception, log_structured
 from core.exceptions import (
@@ -22,7 +21,7 @@ from services.file_processor import FileProcessor
 from services.embedding_service import EmbeddingService
 from infrastructure.aws.opensearch_client import OpenSearchClient
 from schemas.vectorize_schemas import MaterialData
-from models.responses import VectorizationResponse
+from models.responses import VectorizationResponse, VectorizationWarning
 
 
 logger = setup_logger(__name__)
@@ -231,10 +230,10 @@ class VectorizationService:
         )
 
         if has_any_errors:
-            response.warnings = {
-                "processing_errors": processing_errors or None,
-                "embedding_errors": embedding_errors or None,
-            }
+            response.warnings = VectorizationWarning(
+                processing_errors=processing_errors or None,
+                embedding_errors=embedding_errors or None,
+            )
 
         log_structured(
             logger,

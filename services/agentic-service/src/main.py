@@ -1,138 +1,45 @@
 import logging
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Any, Dict
 from dotenv import load_dotenv
-from mangum import Mangum
-import os
-
-load_dotenv(override=True)  # Override existing .env variables
 
 from config import config
+from handlers.sqs_handler import process_sqs_event
+from contracts.sqs_contracts import SQSEvent, SQSBatchResponse
 
-# Configure logging
+load_dotenv(override=True)
+
+# Configure logging once for the worker
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Validate configuration
-config_errors = config.validate_config()
-if config_errors:
-    logger.error(f"Configuration errors: {config_errors}")
+# Validate configuration at import for Lambda cold start fast-fail
+_errors = config.validate_config()
+if _errors:
+    # Log only in local, raise in Lambda to surface misconfig
+    logger.error(f"Configuration errors: {_errors}")
     if config.IS_LAMBDA:
-        raise ValueError(f"Configuration errors: {config_errors}")
-    
+        raise ValueError(f"Configuration errors: {_errors}")
 
-from routers.agent_routes import router as agent_router
-from routers.agent_routes import file_controller as shared_file_controller
 
-# Create FastAPI instance
-app = FastAPI(
-    title="Agentic Service - Restructured",
-    description="🚀 Beautifully restructured service for file processing, vectorization, and AI-powered document analysis",
-    version="2.0.0",
-    docs_url="/docs" if not config.IS_LAMBDA else None,  # Disable docs in Lambda
-    redoc_url="/redoc"
-)
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """
+    AWS Lambda entrypoint for SQS-triggered processing.
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=config.ALLOWED_METHODS,
-    allow_headers=config.ALLOWED_HEADERS,
-)
+    The handler delegates to process_sqs_event, which supports the following operations:
+    - VECTORIZE_MATERIAL: build embeddings for documents listed in S3
+    - GENERATE_COURSE: run the multi-agent pipeline to generate a course
+    """
+    # Validate/parse with schema; still return a plain dict for Lambda
+    parsed = SQSEvent(**event)
+    resp: SQSBatchResponse = process_sqs_event(parsed)
+    return resp.model_dump()
 
-# Include routers
-app.include_router(agent_router)
 
-# Health check endpoints
-@app.get("/")
-async def root():
-    return {
-        "message": "Agentic Service is running", 
-        "version": "1.0.0",
-        "environment": "lambda" if config.IS_LAMBDA else "local"
-    }
-
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy", 
-        "service": "agentic-service",
-        "environment": "lambda" if config.IS_LAMBDA else "local"
-    }
-
-@app.get("/debug/config")
-async def debug_config():
-    """Debug endpoint to check configuration (without sensitive data)"""
-    return {
-        "IS_LAMBDA": config.IS_LAMBDA,
-        "MAX_TOKENS_PER_CHUNK": config.MAX_TOKENS_PER_CHUNK,
-        "MAX_FILE_SIZE_BYTES": config.MAX_FILE_SIZE_BYTES,
-        "ALLOWED_FILE_EXTENSIONS": list(config.ALLOWED_FILE_EXTENSIONS),
-        "OPENAI_API_KEY_SET": bool(config.OPENAI_API_KEY),
-        "LOG_LEVEL": config.LOG_LEVEL,
-        "OPENSEARCH_HOST": config.OPENSEARCH_HOST,
-        "OPENSEARCH_PORT": config.OPENSEARCH_PORT,
-        "OPENSEARCH_USER_SET": bool(config.OPENSEARCH_USER),
-        "OPENSEARCH_PASSWORD_SET": bool(config.OPENSEARCH_PASSWORD),
-        "OPENSEARCH_USE_SSL": config.OPENSEARCH_USE_SSL,
-        "OPENSEARCH_VERIFY_CERTS": config.OPENSEARCH_VERIFY_CERTS,
-        "S3_BUCKET_NAME": config.S3_BUCKET_NAME,
-        "REGION": config.REGION
-    }
-
-@app.get("/debug/opensearch")
-async def debug_opensearch():
-    """Debug endpoint to test OpenSearch connection"""
-    try:
-        controller = shared_file_controller
-        if not controller.opensearch_client:
-            return {
-                "status": "error",
-                "message": "OpenSearch client not initialized",
-                "config": {
-                    "host": config.OPENSEARCH_HOST,
-                    "port": config.OPENSEARCH_PORT,
-                    "use_ssl": config.OPENSEARCH_USE_SSL,
-                    "verify_certs": config.OPENSEARCH_VERIFY_CERTS
-                }
-            }
-        
-        # Test connection
-        info = controller.opensearch_client.info()
-        return {
-            "status": "success",
-            "message": "OpenSearch connection successful",
-            "cluster_info": info
-        }
-        
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"OpenSearch connection failed: {str(e)}",
-            "config": {
-                "host": config.OPENSEARCH_HOST,
-                "port": config.OPENSEARCH_PORT,
-                "use_ssl": config.OPENSEARCH_USE_SSL,
-                "verify_certs": config.OPENSEARCH_VERIFY_CERTS
-            }
-        }
-
-# AWS Lambda handler
-handler = Mangum(app, lifespan="off")
-
-# Local development server
+# Optional: local debug runner to invoke with a sample SQS event
 if __name__ == "__main__":
-    import uvicorn
-    logger.info(f"Starting server on port {config.SERVICE_PORT}")
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=config.SERVICE_PORT, 
-        log_level=config.LOG_LEVEL.lower(),
-        timeout_keep_alive=60  # Keep-alive timeout for long-running requests
-    )
+    logger.info("Running in local mode. Provide a sample SQS event to test.")
+    # Minimal no-op
+    print({"status": "ok", "message": "agentic-service ready for SQS events"})
