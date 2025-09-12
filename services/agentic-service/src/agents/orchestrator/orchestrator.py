@@ -1,6 +1,7 @@
 from schemas.context import State
 from core.logging import setup_logger
 from core.tracing import StepTracer
+from core import status_tracker as status
 
 
 class Orchestrator:
@@ -37,6 +38,11 @@ class Orchestrator:
         # 1) Need a plan
         if not title and not description and not roadmap:
             tracer.record("decide", "planner needed (no title/description/roadmap)")
+            # Start tracking in DynamoDB at the very beginning
+            try:
+                status.start(id)
+            except Exception:
+                pass
             return "create_plan"
 
         # 2) Generate lessons iteratively until complete
@@ -44,6 +50,11 @@ class Orchestrator:
         if planned_total is None:
             if len(lessons) == 0:
                 tracer.record("decide", "lesson creator initial (no lessons yet)")
+                # Mark plan ready once we have title/description/roadmap
+                try:
+                    status.mark_plan_ready(id, title, description, len(roadmap))
+                except Exception:
+                    pass
                 return "create_lesson"
         else:
             if len(lessons) < planned_total:
@@ -53,6 +64,10 @@ class Orchestrator:
                     have=len(lessons),
                     planned=planned_total,
                 )
+                try:
+                    status.mark_lessons_progress(id, len(lessons), planned_total)
+                except Exception:
+                    pass
                 return "create_lesson"
 
         # 3) After lessons done, create tests if any lesson lacks tests
@@ -67,4 +82,14 @@ class Orchestrator:
             return "create_final_test"
 
         tracer.record("done", "workflow complete")
+        # Update final readiness statuses
+        try:
+            if title or description or roadmap:
+                status.mark_plan_ready(id, title, description, len(roadmap))
+            if lessons:
+                status.mark_lessons_ready(id, len(lessons))
+            if state.final_test:
+                status.mark_final_ready(id, len(state.final_test))
+        except Exception:
+            pass
         return "done"

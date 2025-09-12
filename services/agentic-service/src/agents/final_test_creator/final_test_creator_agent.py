@@ -12,6 +12,7 @@ from agents.base.llm_manager import LLMManager
 from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
+from core import status_tracker as status
 
 
 class FinalTestCreatorAgent(BaseAgent):
@@ -107,4 +108,8 @@ class FinalTestCreatorAgent(BaseAgent):
         state.final_test = coerced
 
         tracer.record("done", "final test attached", count=len(coerced))
+        try:
+            status.mark_final_ready(state.id, len(coerced))
+        except Exception:
+            pass
         return state

@@ -14,6 +14,7 @@ from agents.base.llm_manager import LLMManager
 from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
+from core import status_tracker as status
 
 
 class LessonCreatorAgent(BaseAgent):
@@ -75,6 +76,11 @@ class LessonCreatorAgent(BaseAgent):
             lessons.extend(new_lessons)
             state.next_lesson_index = (indices[-1] + 1) if indices else (len(lessons) + 1)
             tracer.record("done", "batch lessons appended", count=len(new_lessons), last_index=state.next_lesson_index)
+            try:
+                planned = planned_total or len(state.roadmap or [])
+                status.mark_lessons_progress(state.id, len(lessons), planned)
+            except Exception:
+                pass
             return state
 
         # Fallback to single-lesson path when total is unknown
@@ -87,6 +93,11 @@ class LessonCreatorAgent(BaseAgent):
             lessons.append(result)
         state.next_lesson_index = next_index + 1
         tracer.record("done", "single lesson appended", lesson_id=lessons[-1].lesson_id, next_index=state.next_lesson_index)
+        try:
+            planned = planned_total or len(state.roadmap or []) if 'planned_total' in locals() else len(state.roadmap or [])
+            status.mark_lessons_progress(state.id, len(lessons), planned)
+        except Exception:
+            pass
         return state
 
     async def _generate_single_lesson(self, state: State, index: int, prev_lessons: List[str]) -> Optional[Lesson]:

@@ -14,6 +14,7 @@ from agents.base.llm_manager import LLMManager
 from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
+from core import status_tracker as status
 
 
 class TestCreatorAgent(BaseAgent):
@@ -61,6 +62,12 @@ class TestCreatorAgent(BaseAgent):
                 tracer.record("error", "test generation failed", lesson_id=lesson.lesson_id, error=str(res))
 
         tracer.record("done", "tests generation completed", failures=failures)
+        try:
+            # If all lessons have tests now, mark lessons_ready
+            if all(getattr(l, "tests", None) for l in state.lessons or []):
+                status.mark_lessons_ready(state.id, len(state.lessons or []))
+        except Exception:
+            pass
         return state
 
     async def _generate_single_lesson_tests(self, state: State, lesson) -> None:
