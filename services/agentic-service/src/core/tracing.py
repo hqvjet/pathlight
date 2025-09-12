@@ -61,12 +61,22 @@ class StepTracer:
         self.step = 0
         self.logger = logger
         self.enabled = enabled if enabled is not None else os.environ.get("TRACE_ENABLED", "1") == "1"
-        default_file = os.environ.get("TRACE_FILE") or str(
-            Path(os.getcwd()) / "logs" / "agent_steps.log"
-        )
+
+        # Choose a Lambda-safe default path: /tmp is writable in Lambda
+        is_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+        if is_lambda:
+            default_base = Path(os.environ.get("TRACE_DIR", "/tmp"))
+        else:
+            default_base = Path(os.environ.get("TRACE_DIR")) if os.environ.get("TRACE_DIR") else Path(os.getcwd()) / "logs"
+
+        default_file = os.environ.get("TRACE_FILE") or str(default_base / "agent_steps.log")
         self.log_file = log_file or default_file
         if self.enabled:
-            _ensure_dir(self.log_file)
+            try:
+                _ensure_dir(self.log_file)
+            except Exception:
+                # If we cannot create directory (e.g. read-only fs), disable file logging
+                self.log_file = None
 
     def record(self, phase: str, summary: str, **kwargs: Any) -> None:
         if not self.enabled:
@@ -84,12 +94,13 @@ class StepTracer:
             event["data"] = {k: _preview(v) for k, v in kwargs.items()}
 
         # Write as JSONL for easy tailing/grep
-        try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event, ensure_ascii=False) + "\n")
-        except Exception:
-            # best-effort; don't break runtime
-            pass
+        if self.log_file:
+            try:
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(event, ensure_ascii=False) + "\n")
+            except Exception:
+                # best-effort; if file write fails (e.g. RO fs), stop using file to avoid repeated errors
+                self.log_file = None
 
         # Also emit compact structured line to logger if provided
         if self.logger is not None:
