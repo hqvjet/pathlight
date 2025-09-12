@@ -2,12 +2,10 @@
 """
 Quick SQS producer to test the Agentic Service Lambda trigger.
 
-Usage examples:
+Usage example (combined):
     python test.py --queue-url https://sqs.ap-northeast-1.amazonaws.com/123456789012/pathlight-agentic-queue.fifo \
-        --type generate_course --id course-42 --difficulty medium --duration 1200 --group-id agentic
-
-    python test.py --queue-url https://sqs.ap-northeast-1.amazonaws.com/123456789012/pathlight-agentic-queue.fifo \
-        --type vectorize --material-id course-42 --category 0 --s3-key docs/intro.pdf --s3-key docs/overview.docx --group-id agentic
+        --id course-42 --difficulty medium --duration 1200 \
+        --s3-key docs/intro.pdf --s3-key docs/overview.docx --group-id agentic
 
 Environment:
     - AWS creds via environment/profile
@@ -43,43 +41,26 @@ SRC_PATH = os.path.join(SCRIPT_DIR, "src")
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
-from contracts.sqs_contracts import (
-    MessageType,
-    VectorizeMessage,
-    GenerateCourseMessage,
-)
+# No internal imports required; we build the JSON body directly.
 
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def build_generate_course(args) -> str:
-    msg = GenerateCourseMessage(
-        type=MessageType.GENERATE_COURSE,
-        correlation_id=str(uuid.uuid4()),
-        timestamp=iso_now(),
-        payload={
+def build_generate_course_with_vectorize(args) -> str:
+    body = {
+        "type": "GENERATE_COURSE_WITH_VECTORIZE",
+        "correlation_id": str(uuid.uuid4()),
+        "timestamp": iso_now(),
+        "payload": {
             "id": args.id,
             "difficulty": args.difficulty,
             "duration": args.duration,
-        },
-    )
-    return msg.model_dump_json()
-
-
-def build_vectorize(args) -> str:
-    msg = VectorizeMessage(
-        type=MessageType.VECTORIZE_MATERIAL,
-        correlation_id=str(uuid.uuid4()),
-        timestamp=iso_now(),
-        payload={
-            "material_id": args.material_id,
-            "category": args.category,
             "s3_keys": args.s3_key or [],
         },
-    )
-    return msg.model_dump_json()
+    }
+    return json.dumps(body)
 
 
 def _parse_queue_region(queue_url: str) -> str | None:
@@ -177,16 +158,10 @@ def parse_args():
     p.add_argument("--profile", default=os.getenv("AWS_PROFILE"), help="AWS named profile to use")
     p.add_argument("--skip-sts", action="store_true", help="Skip STS preflight identity check")
     p.add_argument("--dotenv", type=int, choices=[0,1], default=1, help="Load .env (1) or skip (0)")
-    p.add_argument("--type", choices=["generate_course", "vectorize"], default="generate_course")
-
-    # generate_course
-    p.add_argument("--id", help="Course ID (generate_course)")
+    # combined generate+vectorize
+    p.add_argument("--id", help="Course ID", required=True)
     p.add_argument("--difficulty", default="medium", help="Course difficulty")
     p.add_argument("--duration", type=int, default=1200, help="Course duration in seconds")
-
-    # vectorize
-    p.add_argument("--material-id", help="Material ID (vectorize)")
-    p.add_argument("--category", type=int, default=0, help="Category, 0=course, 1=quiz")
     p.add_argument("--s3-key", action="append", help="S3 key to vectorize (repeat flag)")
     return p.parse_args()
 
@@ -208,16 +183,10 @@ def main():
         print(f"Warning: --region {args.region} != URL region {url_region}; using {url_region}")
         effective_region = url_region
 
-    if args.type == "generate_course":
-        if not args.id:
-            print("--id is required for generate_course")
-            sys.exit(2)
-        body = build_generate_course(args)
-    else:
-        if not args.material_id or not args.s3_key:
-            print("--material-id and at least one --s3-key are required for vectorize")
-            sys.exit(2)
-        body = build_vectorize(args)
+    if not args.s3_key:
+        print("At least one --s3-key is required")
+        sys.exit(2)
+    body = build_generate_course_with_vectorize(args)
 
     resp = send_message(args.queue_url, effective_region, body, args.group_id, args.profile, skip_sts=args.skip_sts)
     print("Sent message:\n", json.dumps(json.loads(body), indent=2))
