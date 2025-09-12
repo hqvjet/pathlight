@@ -91,7 +91,7 @@ class CourseAgentFactory:
 
 graph = CourseAgentFactory().graph
 course_agent = graph.compile()
-save_architecture(course_agent, filename="course_architecture.png")
+# save_architecture(course_agent, filename="course_architecture.png")
 
 async def invoke_course_agent(payload):
     results = await course_agent.ainvoke(payload)
