@@ -5,6 +5,7 @@ from schemas.agent_schemas import AgentRequest, AgentResponse
 from schemas.context import State
 from core.logging import setup_logger
 from core.exceptions import InternalServerError
+from persistence import save_course_state, init_database
 
 class AgentController:
     def __init__(self):
@@ -35,6 +36,16 @@ class AgentController:
             )
         except Exception:
             pass
+
+        # Persist to database (best effort; don't fail main flow if DB missing)
+        try:
+            init_database()
+            if isinstance(result, State):
+                save_course_state(result)
+            else:
+                save_course_state(State(**result))  # type: ignore[arg-type]
+        except Exception:
+            self.logger.exception("Course persistence step failed for %s", request.id)
 
         # Ensure we return a Pydantic model or plain JSON serializable dict
         if isinstance(result, State):
