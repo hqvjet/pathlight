@@ -12,6 +12,14 @@ from src.schemas.course_schemas import CreateCourseRequest
 from src.schemas.course_schemas import CourseFullInfoResponse, CourseFullInfo, LessonInfo, CourseListResponse, CourseSummary
 import os
 
+"""Course routes.
+
+The FastAPI application mounts this router with prefix="/course" (see src.main). To avoid
+duplicated path segments like /course/course/all we define the endpoints here WITHOUT the
+leading /course portion. If the application ever changes the include prefix, update
+`src.main:app.include_router` rather than modifying every route here.
+"""
+
 router = APIRouter(prefix="", tags=["Course"])
 
 
@@ -116,7 +124,7 @@ async def request_create_course(
         return {"status": 500, "message": f"Failed to submit job: {e}"}
 
 
-@router.get("/course/{course_id}", response_model=CourseFullInfoResponse)
+@router.get("/{course_id}", response_model=CourseFullInfoResponse)
 async def get_course_full_info(course_id: str, request: Request, _auth=Depends(require_bearer)):
     """Return full information for one course (title, description, duration, roadmap, lessons, updated_at).
 
@@ -160,7 +168,7 @@ async def get_course_full_info(course_id: str, request: Request, _auth=Depends(r
         session.close()
 
 
-@router.get("/course/all", response_model=CourseListResponse)
+@router.get("/all", response_model=CourseListResponse)
 async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
     """Return summary list of all courses for the authenticated user.
 
