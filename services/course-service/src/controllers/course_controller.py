@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import hashlib
 import secrets
@@ -7,11 +7,26 @@ import logging
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
-from fastapi import Request, UploadFile
+from fastapi import Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from jose import jwt
 
 from src.config import config
+from src.schemas.course_schemas import (
+	CourseFullInfo,
+	CourseFullInfoResponse,
+	LessonInfo,
+	CourseListResponse,
+	CourseSummary,
+	LessonListResponse,
+	LessonDetail,
+	LessonTestResponse,
+	LessonTest,
+	LessonTestQA,
+	FinalTestResponse,
+	FinalTestDetail,
+	FinalTestQA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,5 +228,239 @@ async def delete_all_courses(request: Request):
 		logger.error("delete_all_courses error user=%s err=%s", user_id, e)
 		session.rollback()
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
+	finally:
+		session.close()
+
+
+# ---------------- Retrieval Controllers ----------------
+
+def get_course_full_info_controller(request: Request, course_id: str) -> CourseFullInfoResponse:
+	from src.database import SessionLocal
+	from src.models import Course, CourseInfo, Lesson
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+	session = SessionLocal()
+	try:
+		course = (
+			session.query(Course)
+			.filter(Course.course_id == course_id, Course.user_id == user_id)
+			.first()
+		)
+		if not course:
+			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		info = session.query(CourseInfo).filter(CourseInfo.course_info_id == course.course_info_id).first()
+		lessons = (
+			session.query(Lesson.lesson_id, Lesson.title, Lesson.finish)
+			.filter(Lesson.course_id == course.course_id)
+			.order_by(Lesson.created_at.asc())
+			.all()
+		)
+		lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
+		course_full = CourseFullInfo(
+			title=info.title if info else "",
+			description=info.description if info else "",
+			duration=info.duration if info else 0,
+			roadmap=info.roadmap if info else None,
+			lesson=lesson_models,
+			updated_at=course.updated_at.isoformat() if course.updated_at else "",
+		)
+		return CourseFullInfoResponse(status=200, info=course_full)
+	finally:
+		session.close()
+
+
+def get_all_courses_controller(request: Request) -> CourseListResponse:
+	from src.database import SessionLocal
+	from src.models import Course, CourseInfo, Lesson
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không thể truy cập khóa học của người khác")
+	session = SessionLocal()
+	try:
+		rows = (
+			session.query(
+				Course.course_id,
+				Course.updated_at,
+				CourseInfo.title,
+				CourseInfo.description,
+				CourseInfo.duration,
+			)
+			.join(CourseInfo, Course.course_info_id == CourseInfo.course_info_id)
+			.filter(Course.user_id == user_id)
+			.all()
+		)
+		course_ids = [r.course_id for r in rows]
+		lesson_counts = {cid: 0 for cid in course_ids}
+		finish_counts = {cid: 0 for cid in course_ids}
+		if course_ids:
+			lessons = (
+				session.query(Lesson.course_id, Lesson.finish)
+				.filter(Lesson.course_id.in_(course_ids))
+				.all()
+			)
+			for cid, fin in lessons:
+				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+				if fin:
+					finish_counts[cid] = finish_counts.get(cid, 0) + 1
+		summaries = [
+			CourseSummary(
+				course_id=r.course_id,
+				title=r.title or "",
+				description=r.description or "",
+				duration=r.duration or 0,
+				lesson_num=lesson_counts.get(r.course_id, 0),
+				finish_lesson_num=finish_counts.get(r.course_id, 0),
+				updated_at=r.updated_at.isoformat() if r.updated_at else "",
+			)
+			for r in rows
+		]
+		return CourseListResponse(status=200, courses=summaries)
+	finally:
+		session.close()
+
+
+def list_course_lessons_controller(request: Request, course_id: str) -> LessonListResponse:
+	from src.database import SessionLocal
+	from src.models import Course, Lesson
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+	session = SessionLocal()
+	try:
+		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not owned:
+			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		lessons = (
+			session.query(Lesson).filter(Lesson.course_id == course_id).order_by(Lesson.created_at.asc()).all()
+		)
+		lesson_models = [
+			LessonDetail(
+				lesson_id=l.lesson_id,
+				course_id=l.course_id,
+				title=l.title,
+				description=l.description,
+				content=l.content,
+				finish=l.finish,
+			)
+			for l in lessons
+		]
+		return LessonListResponse(status=200, lessons=lesson_models)
+	finally:
+		session.close()
+
+
+def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: str) -> LessonDetail:
+	from src.database import SessionLocal
+	from src.models import Course, Lesson
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+	session = SessionLocal()
+	try:
+		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not owned:
+			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
+		if not lesson:
+			raise HTTPException(status_code=404, detail="Lesson not found")
+		return LessonDetail(
+			lesson_id=lesson.lesson_id,
+			course_id=lesson.course_id,
+			title=lesson.title,
+			description=lesson.description,
+			content=lesson.content,
+			finish=lesson.finish,
+		)
+	finally:
+		session.close()
+
+
+def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str) -> LessonTestResponse:
+	from src.database import SessionLocal
+	from src.models import Course, Test, LessonQA
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+	session = SessionLocal()
+	try:
+		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not owned:
+			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		test = (
+			session.query(Test)
+			.filter(Test.lesson_id == lesson_id)
+			.order_by(Test.created_at.asc())
+			.first()
+		)
+		if not test:
+			raise HTTPException(status_code=404, detail="Test not found")
+		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
+		qa_models = [
+			LessonTestQA(
+				qa_id=qa.qa_id,
+				question=qa.question,
+				option1=qa.option1,
+				option2=qa.option2,
+				option3=qa.option3,
+				option4=qa.option4,
+			)
+			for qa in qas
+		]
+		test_model = LessonTest(
+			test_id=test.test_id,
+			title=test.title,
+			description=test.description,
+			duration=test.duration,
+			exp=test.exp,
+			finish=test.finish,
+			qas=qa_models,
+		)
+		return LessonTestResponse(status=200, test=test_model)
+	finally:
+		session.close()
+
+
+def get_final_test_controller(request: Request, course_id: str) -> FinalTestResponse:
+	from src.database import SessionLocal
+	from src.models import Course, FinalTest, FinalQA
+
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+	session = SessionLocal()
+	try:
+		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not owned:
+			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		final_test = session.query(FinalTest).filter(FinalTest.course_id == course_id).first()
+		if not final_test:
+			raise HTTPException(status_code=404, detail="Final test not found")
+		qas = session.query(FinalQA).filter(FinalQA.final_test_id == final_test.final_test_id).all()
+		qa_models = [
+			FinalTestQA(
+				final_qa_id=qa.final_qa_id,
+				question=qa.question,
+				option1=qa.option1,
+				option2=qa.option2,
+				option3=qa.option3,
+				option4=qa.option4,
+			)
+			for qa in qas
+		]
+		final_test_model = FinalTestDetail(
+			final_test_id=final_test.final_test_id,
+			title=final_test.title,
+			description=final_test.description,
+			duration=final_test.duration,
+			exp=final_test.exp,
+			qas=qa_models,
+		)
+		return FinalTestResponse(status=200, final_test=final_test_model)
 	finally:
 		session.close()

@@ -4,7 +4,17 @@ from pydantic import BaseModel, Field
 import boto3
 from botocore.exceptions import ClientError
 from src.config import config
-from src.controllers.course_controller import upload_files_docs, delete_single_course, delete_all_courses
+from src.controllers.course_controller import (
+    upload_files_docs,
+    delete_single_course,
+    delete_all_courses,
+    get_course_full_info_controller,
+    get_all_courses_controller,
+    list_course_lessons_controller,
+    get_lesson_detail_controller,
+    get_lesson_test_controller,
+    get_final_test_controller,
+)
 from src.services.course_auth import require_bearer
 from src.services.status_service import fetch_generation_status
 from src.services.sqs_publisher import send_generate_with_vectorize
@@ -15,6 +25,14 @@ from src.schemas.course_schemas import (
     LessonInfo,
     CourseListResponse,
     CourseSummary,
+    LessonListResponse,
+    LessonDetail,
+    LessonTestResponse,
+    LessonTest,
+    LessonTestQA,
+    FinalTestResponse,
+    FinalTestDetail,
+    FinalTestQA,
 )
 import os
 
@@ -128,103 +146,29 @@ async def request_create_course(
 
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)
 async def get_course_full_info(course_id: str, request: Request, _auth=Depends(require_bearer)):
-    """Return full information for a single course.
-
-    Uses response_model for 200 only; on unauthorized/not found raises HTTPException to avoid
-    FastAPI response validation errors when schema mismatch occurs.
-    """
-    from src.controllers.course_controller import _verify_token
-    user_id = _verify_token(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-
-    from src.database import SessionLocal
-    from src.models import Course, CourseInfo, Lesson
-
-    session = SessionLocal()
-    try:
-        course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
-        if not course:
-            raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-        info = session.query(CourseInfo).filter(CourseInfo.course_info_id == course.course_info_id).first()
-        lessons = (
-            session.query(Lesson.lesson_id, Lesson.title, Lesson.finish)
-            .filter(Lesson.course_id == course.course_id)
-            .order_by(Lesson.created_at.asc())
-            .all()
-        )
-        lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
-
-        course_full = CourseFullInfo(
-            title=info.title if info else "",
-            description=info.description if info else "",
-            duration=info.duration if info else 0,
-            roadmap=info.roadmap if info else None,
-            lesson=lesson_models,
-            updated_at=course.updated_at.isoformat() if course.updated_at else "",
-        )
-        return CourseFullInfoResponse(status=200, info=course_full)
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal error fetching course")
-    finally:
-        session.close()
+    return get_course_full_info_controller(request, course_id)
 
 
 @router.get("/all", response_model=CourseListResponse)
 async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
-    """Return summary list of all courses for the authenticated user."""
-    from src.controllers.course_controller import _verify_token
-    user_id = _verify_token(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Bạn không thể truy cập khóa học của người khác")
+    return get_all_courses_controller(request)
 
-    from src.database import SessionLocal
-    from src.models import Course, CourseInfo, Lesson
 
-    session = SessionLocal()
-    try:
-        rows = (
-            session.query(
-                Course.course_id,
-                Course.updated_at,
-                CourseInfo.title,
-                CourseInfo.description,
-                CourseInfo.duration,
-            )
-            .join(CourseInfo, Course.course_info_id == CourseInfo.course_info_id)
-            .filter(Course.user_id == user_id)
-            .all()
-        )
-        course_ids = [r.course_id for r in rows]
-        lesson_counts = {cid: 0 for cid in course_ids}
-        finish_counts = {cid: 0 for cid in course_ids}
-        if course_ids:
-            lessons = (
-                session.query(Lesson.course_id, Lesson.finish).filter(Lesson.course_id.in_(course_ids)).all()
-            )
-            for cid, fin in lessons:
-                lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
-                if fin:
-                    finish_counts[cid] = finish_counts.get(cid, 0) + 1
+@router.get("/{course_id}/lessons", response_model=LessonListResponse)
+async def list_course_lessons(course_id: str, request: Request, _auth=Depends(require_bearer)):
+    return list_course_lessons_controller(request, course_id)
 
-        summaries = [
-            CourseSummary(
-                course_id=r.course_id,
-                title=r.title or "",
-                description=r.description or "",
-                duration=r.duration or 0,
-                lesson_num=lesson_counts.get(r.course_id, 0),
-                finish_lesson_num=finish_counts.get(r.course_id, 0),
-                updated_at=r.updated_at.isoformat() if r.updated_at else "",
-            )
-            for r in rows
-        ]
-        return CourseListResponse(status=200, courses=summaries)
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal error fetching courses")
-    finally:
-        session.close()
+
+@router.get("/{course_id}/lessons/{lesson_id}", response_model=LessonDetail)
+async def get_lesson_detail(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
+    return get_lesson_detail_controller(request, course_id, lesson_id)
+
+
+@router.get("/{course_id}/lessons/{lesson_id}/test", response_model=LessonTestResponse)
+async def get_lesson_test(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
+    return get_lesson_test_controller(request, course_id, lesson_id)
+
+
+@router.get("/{course_id}/final-test", response_model=FinalTestResponse)
+async def get_final_test(course_id: str, request: Request, _auth=Depends(require_bearer)):
+    return get_final_test_controller(request, course_id)
