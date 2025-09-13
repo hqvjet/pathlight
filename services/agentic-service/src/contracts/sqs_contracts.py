@@ -44,6 +44,7 @@ class GenerateCourseWithVectorizePayload(BaseModel):
   difficulty: str
   duration: int
   s3_keys: List[str]
+  user_id: str
 
 
 class GenerateCourseWithVectorizeMessage(BaseMessage):
