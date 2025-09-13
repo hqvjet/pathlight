@@ -30,6 +30,7 @@ def send_generate_with_vectorize(
     difficulty: str,
     duration: int,
     *,
+    user_id: str,
     region: Optional[str] = None,
     group_id: Optional[str] = None,
 ) -> dict:
@@ -48,6 +49,7 @@ def send_generate_with_vectorize(
                 "difficulty": difficulty,
                 "duration": duration,
                 "s3_keys": s3_keys,
+                "user_id": user_id,
             },
         }
     )
