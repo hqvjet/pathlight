@@ -27,6 +27,7 @@ class State(BaseModel):
     description: Optional[str] = None
     roadmap: Optional[List[Roadmap]] = None
     lessons: Optional[List[Lesson]] = None
+    user_id: Optional[str] = None
     # Final test content for the whole course
     final_test: Optional[List[TestQA]] = None
     s3_bucket: Optional[str] = None

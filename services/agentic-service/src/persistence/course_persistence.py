@@ -72,7 +72,7 @@ def save_course_state(state: State) -> None:
 
     create_all()
 
-    user_id = os.getenv("DEFAULT_USER_ID", "system")
+    user_id = getattr(state, "user_id", None) or os.getenv("DEFAULT_USER_ID", "system")
 
     with next(get_db()) as db:  # type: ignore[misc]
         try:

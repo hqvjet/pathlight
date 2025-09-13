@@ -25,7 +25,7 @@ class CombinedController:
         self.files = FileController()
         self.agent = AgentController()
 
-    async def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int) -> None:
+    async def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int, user_id: str) -> None:
         # Start status row early
         try:
             status.start(course_id)
@@ -46,5 +46,5 @@ class CombinedController:
 
         # 2) Generate course
         await self.agent.generate_course(
-            AgentRequest(id=course_id, difficulty=difficulty, duration=duration)
+            AgentRequest(id=course_id, difficulty=difficulty, duration=duration, user_id=user_id)
         )
