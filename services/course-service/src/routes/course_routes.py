@@ -9,6 +9,7 @@ from src.services.course_auth import require_bearer
 from src.services.status_service import fetch_generation_status
 from src.services.sqs_publisher import send_generate_with_vectorize
 from src.schemas.course_schemas import CreateCourseRequest
+from src.schemas.course_schemas import CourseFullInfoResponse, CourseFullInfo, LessonInfo, CourseListResponse, CourseSummary
 import os
 
 router = APIRouter(prefix="", tags=["Course"])
@@ -113,3 +114,110 @@ async def request_create_course(
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId")}
     except Exception as e:
         return {"status": 500, "message": f"Failed to submit job: {e}"}
+
+
+@router.get("/course/{course_id}", response_model=CourseFullInfoResponse)
+async def get_course_full_info(course_id: str, request: Request, _auth=Depends(require_bearer)):
+    """Return full information for one course (title, description, duration, roadmap, lessons, updated_at).
+
+    Ownership: only the owner (user_id from JWT) can access. Returns 401 style message if unauthorized.
+    """
+    # Auth already enforced; derive user id again to confirm ownership
+    from src.controllers.course_controller import _verify_token  # reuse internal helper
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Bạn không có quyền truy cập vào khóa học này"}
+
+    from src.database import SessionLocal
+    from src.models import Course, CourseInfo, Lesson
+
+    session = SessionLocal()
+    try:
+        course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+        if not course:
+            return {"status": 401, "message": "Bạn không có quyền truy cập vào khóa học này"}
+        info = session.query(CourseInfo).filter(CourseInfo.course_info_id == course.course_info_id).first()
+        lessons = (
+            session.query(Lesson.lesson_id, Lesson.title, Lesson.finish)
+            .filter(Lesson.course_id == course.course_id)
+            .order_by(Lesson.created_at.asc())
+            .all()
+        )
+        lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
+
+        course_full = CourseFullInfo(
+            title=info.title if info else "",
+            description=info.description if info else "",
+            duration=info.duration if info else 0,
+            roadmap=info.roadmap if info else None,
+            lesson=lesson_models,
+            updated_at=course.updated_at.isoformat() if course.updated_at else "",
+        )
+        return CourseFullInfoResponse(status=200, info=course_full)
+    except Exception:
+        return {"status": 500, "message": "Internal error fetching course"}
+    finally:
+        session.close()
+
+
+@router.get("/course/all", response_model=CourseListResponse)
+async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
+    """Return summary list of all courses for the authenticated user.
+
+    Each element: course_id, title, description, duration, lesson_num, finish_lesson_num, updated_at.
+    Unauthorized access returns 401 style message matching spec.
+    """
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Bạn không thể truy cập khóa học của người khác"}
+
+    from src.database import SessionLocal
+    from src.models import Course, CourseInfo, Lesson
+
+    session = SessionLocal()
+    try:
+        # Join Course -> CourseInfo
+        rows = (
+            session.query(
+                Course.course_id,
+                Course.updated_at,
+                CourseInfo.title,
+                CourseInfo.description,
+                CourseInfo.duration,
+            )
+            .join(CourseInfo, Course.course_info_id == CourseInfo.course_info_id)
+            .filter(Course.user_id == user_id)
+            .all()
+        )
+        course_ids = [r.course_id for r in rows]
+        lesson_counts = {cid: 0 for cid in course_ids}
+        finish_counts = {cid: 0 for cid in course_ids}
+        if course_ids:
+            lessons = (
+                session.query(Lesson.course_id, Lesson.finish)
+                .filter(Lesson.course_id.in_(course_ids))
+                .all()
+            )
+            for cid, fin in lessons:
+                lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+                if fin:
+                    finish_counts[cid] = finish_counts.get(cid, 0) + 1
+
+        summaries = [
+            CourseSummary(
+                course_id=r.course_id,
+                title=r.title or "",
+                description=r.description or "",
+                duration=r.duration or 0,
+                lesson_num=lesson_counts.get(r.course_id, 0),
+                finish_lesson_num=finish_counts.get(r.course_id, 0),
+                updated_at=r.updated_at.isoformat() if r.updated_at else "",
+            )
+            for r in rows
+        ]
+        return CourseListResponse(status=200, courses=summaries)
+    except Exception:
+        return {"status": 500, "message": "Internal error fetching courses"}
+    finally:
+        session.close()
