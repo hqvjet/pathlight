@@ -25,6 +25,8 @@ class CreateCourseRequest(BaseModel):
     duration: int = Field(default=1200)
 
 
+# ---- Course detail/list response schemas ----
+
 class LessonInfo(BaseModel):
     lesson_id: str
     title: str
