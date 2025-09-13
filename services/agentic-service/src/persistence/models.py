@@ -90,6 +90,8 @@ class LessonQA(Base):
     option2 = Column(String, nullable=False)
     option3 = Column(String, nullable=False)
     option4 = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+    explanation = Column(String, nullable=False)
 
     test = relationship("Test", back_populates="lesson_qas")
     difficult_level = relationship("DifficultLevel", back_populates="lesson_qas")
@@ -129,5 +131,7 @@ class FinalQA(Base):
     option2 = Column(String, nullable=False)
     option3 = Column(String, nullable=False)
     option4 = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+    explanation = Column(String, nullable=False)
 
     final_test = relationship("FinalTest", back_populates="final_qas")

@@ -192,6 +192,8 @@ def _insert_lesson_qa(db: Session, test_id: str, qa: TestQA) -> None:
         option2=opts[1],
         option3=opts[2],
         option4=opts[3],
+    answer=qa.answer,
+    explanation=getattr(qa, "explaination", None) or getattr(qa, "explanation", ""),
     )
     db.add(item)
 
@@ -208,5 +210,7 @@ def _insert_final_qa(db: Session, final_test_id: str, qa: TestQA) -> None:
         option2=opts[1],
         option3=opts[2],
         option4=opts[3],
+    answer=qa.answer,
+    explanation=getattr(qa, "explaination", None) or getattr(qa, "explanation", ""),
     )
     db.add(item)
