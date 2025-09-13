@@ -60,3 +60,66 @@ class CourseSummary(BaseModel):
 class CourseListResponse(BaseModel):
     status: int
     courses: List[CourseSummary]
+
+
+# ---- Lesson / Test / Final Test detail schemas ----
+
+class LessonDetail(BaseModel):
+    lesson_id: str
+    course_id: str
+    title: str
+    description: str
+    content: str
+    finish: bool
+
+
+class LessonListResponse(BaseModel):
+    status: int
+    lessons: List[LessonDetail]
+
+
+class LessonTestQA(BaseModel):
+    qa_id: str
+    question: str
+    option1: str
+    option2: str
+    option3: str
+    option4: str
+
+
+class LessonTest(BaseModel):
+    test_id: str
+    title: str
+    description: str
+    duration: int
+    exp: int
+    finish: bool
+    qas: List[LessonTestQA]
+
+
+class LessonTestResponse(BaseModel):
+    status: int
+    test: LessonTest
+
+
+class FinalTestQA(BaseModel):
+    final_qa_id: str
+    question: str
+    option1: str
+    option2: str
+    option3: str
+    option4: str
+
+
+class FinalTestDetail(BaseModel):
+    final_test_id: str
+    title: str
+    description: str
+    duration: int
+    exp: int
+    qas: List[FinalTestQA]
+
+
+class FinalTestResponse(BaseModel):
+    status: int
+    final_test: FinalTestDetail
