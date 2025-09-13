@@ -5,6 +5,7 @@ class AgentRequest(BaseModel):
     id: str = Field(..., description="ID of the Course/Quiz for retrieval and saving")
     difficulty: str = Field(..., description="Difficulty level for course planning (e.g., easy, medium, hard)")
     duration: int = Field(..., description="Target duration in seconds (e.g., 1200 for 20 minutes)")
+    user_id: str | None = Field(None, description="Owner user id for persistence and authorization")
 
 class TestResponse(BaseModel):
     source_uri: str = Field(..., description="ID of the generated test")

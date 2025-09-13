@@ -34,6 +34,7 @@ def _handle_generate_course_with_vectorize(msg: GenerateCourseWithVectorizeMessa
             s3_keys=msg.payload.s3_keys,
             difficulty=msg.payload.difficulty,
             duration=msg.payload.duration,
+            user_id=msg.payload.user_id,
         )
 
     asyncio.run(_run())
