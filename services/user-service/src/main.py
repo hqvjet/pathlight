@@ -1,6 +1,6 @@
 
 from fastapi import FastAPI
-from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -35,27 +35,20 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("User Service shutting down")
 
-"""
-NOTE ABOUT DOCS BEHIND API GATEWAY STAGE
-----------------------------------------
-When deployed behind API Gateway with a stage (e.g. /api) and an additional
-service base path (/user) provided via a greedy proxy, the default FastAPI
-Swagger UI (docs_url="/docs") points to an absolute OpenAPI schema URL
-"/openapi.json". The browser then requests https://<domain>/openapi.json
-which bypasses the stage + service prefix and API Gateway returns 403.
-
-Solution: disable the built-in docs and serve a custom Swagger UI whose
-openapi_url is RELATIVE ("openapi.json" – no leading slash). This makes the
-browser request the schema at the current path base, ending up correctly at
-<domain>/api/user/openapi.json.
+"""API Docs Strategy (ReDoc Only)
+---------------------------------
+We expose ONLY ReDoc docs to avoid Swagger UI and its absolute schema fetch.
+We serve ReDoc at /redoc with a RELATIVE schema reference (openapi.json), so
+in API Gateway stage + service prefix context the browser requests:
+<domain>/<stage>/user/openapi.json successfully.
 """
 
 app = FastAPI(
     title="Pathlight User Service",
     description="Standalone User Management Service for Pathlight Platform",
     version="1.0.0",
-    docs_url=None,  # We'll provide a custom /docs endpoint with relative schema path
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,  # We'll add custom ReDoc route with relative schema
     lifespan=lifespan
 )
 
@@ -108,15 +101,10 @@ async def debug_config():
 mangum_handler = Mangum(app, lifespan="off")
 
 
-@app.get("/docs", include_in_schema=False)
-async def custom_swagger_docs():
-    """Custom Swagger UI with relative OpenAPI schema path.
-
-    Using a relative path avoids losing the API Gateway stage (/api) and the
-    service base path (/user) when the browser fetches the schema.
-    """
-    return get_swagger_ui_html(
-        openapi_url="openapi.json",  # relative path (no leading slash!)
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc():
+    return get_redoc_html(
+        openapi_url="openapi.json",  # relative path
         title="Pathlight User Service - API Docs",
     )
 

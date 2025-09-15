@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -50,8 +51,8 @@ app = FastAPI(
     title="Pathlight Course Service",
     description="Standalone Course Service for Pathlight Platform",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,
     lifespan=lifespan,
 )
 
@@ -71,12 +72,8 @@ def handler(event, context):
     logger.info("Lambda Event:")
     logger.info(json.dumps(event))
 
-    if "path" in event and "docs" in event["path"]:
-        logger.info(f"Docs path detected: {event['path']} -> /docs")
-        event["path"] = "/docs"
-
     if "path" in event and "redoc" in event["path"]:
-        logger.info(f"Redoc path detected: {event['path']} -> /redoc")
+        logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
         event["path"] = "/redoc"
 
     try:
@@ -102,3 +99,8 @@ if __name__ == "__main__":
     port = int(os.getenv("COURSE_SERVICE_PORT", config.SERVICE_PORT))
     logger.info("Starting Pathlight Course Service...")
     uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=True)
+
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc():
+    return get_redoc_html(openapi_url="openapi.json", title="Course Service - API Docs")
