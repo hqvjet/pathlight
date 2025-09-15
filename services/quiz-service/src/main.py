@@ -1,6 +1,7 @@
 
 
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -12,7 +13,7 @@ from src.routes.quiz_routes import router as quiz_router
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Quiz Service", version="1.0.0")
+app = FastAPI(title="Quiz Service", version="1.0.0", docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,3 +55,8 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("SERVICE_PORT", str(config.SERVICE_PORT)))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc():
+    return get_redoc_html(openapi_url="openapi.json", title="Quiz Service - API Docs")

@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -34,12 +35,20 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("User Service shutting down")
 
+"""API Docs Strategy (ReDoc Only)
+---------------------------------
+We expose ONLY ReDoc docs to avoid Swagger UI and its absolute schema fetch.
+We serve ReDoc at /redoc with a RELATIVE schema reference (openapi.json), so
+in API Gateway stage + service prefix context the browser requests:
+<domain>/<stage>/user/openapi.json successfully.
+"""
+
 app = FastAPI(
     title="Pathlight User Service",
     description="Standalone User Management Service for Pathlight Platform",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,  # We'll add custom ReDoc route with relative schema
     lifespan=lifespan
 )
 
@@ -91,6 +100,14 @@ async def debug_config():
 # AWS Lambda handler
 mangum_handler = Mangum(app, lifespan="off")
 
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc():
+    return get_redoc_html(
+        openapi_url="openapi.json",  # relative path
+        title="Pathlight User Service - API Docs",
+    )
+
 def handler(event, context):
     """
     Custom Lambda handler for debugging and processing API Gateway events
@@ -108,6 +125,10 @@ def handler(event, context):
     if "path" in event and "redoc" in event["path"]:
         logger.info(f"Redoc path detected: {event['path']} -> /redoc")
         event["path"] = "/redoc"
+        
+    if "path" in event and "openapi.json" in event["path"]:
+        logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
+        event["path"] = "/openapi.json"
     
     try:
         # Process the request through Mangum

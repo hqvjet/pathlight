@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -52,7 +53,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Auth Service shutting down")
 
-app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Auth Service", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,14 +99,15 @@ def handler(event, context):
     logger.info(json.dumps(event))
     
     # Check if path contains "docs" and modify the path
-    if "path" in event and "docs" in event["path"]:
-        logger.info(f"Docs path detected: {event['path']} -> /docs")
-        event["path"] = "/docs"
-    
-    # Check if path contains "redoc" and modify the path
+    # Only expose ReDoc (no Swagger) - normalize any redoc path variant
     if "path" in event and "redoc" in event["path"]:
-        logger.info(f"Redoc path detected: {event['path']} -> /redoc")
+        logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
         event["path"] = "/redoc"
+
+    # Normalize schema path (stage + service prefixes get stripped otherwise)
+    if "path" in event and "openapi.json" in event["path"]:
+        logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
+        event["path"] = "/openapi.json"
     
     try:
         # Process the request through Mangum
@@ -129,3 +131,8 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("SERVICE_PORT", "8001"))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc():
+    return get_redoc_html(openapi_url="openapi.json", title="Auth Service - API Docs")
