@@ -103,6 +103,11 @@ def handler(event, context):
     if "path" in event and "redoc" in event["path"]:
         logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
         event["path"] = "/redoc"
+
+    # Normalize schema path (stage + service prefixes get stripped otherwise)
+    if "path" in event and "openapi.json" in event["path"]:
+        logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
+        event["path"] = "/openapi.json"
     
     try:
         # Process the request through Mangum

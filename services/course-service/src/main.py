@@ -76,6 +76,10 @@ def handler(event, context):
         logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
         event["path"] = "/redoc"
 
+    if "path" in event and "openapi.json" in event["path"]:
+        logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
+        event["path"] = "/openapi.json"
+
     try:
         response = mangum_handler(event, context)
         logger.info(f"Response Status: {response.get('statusCode', 'Unknown')}")
