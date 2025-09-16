@@ -5,6 +5,7 @@ import { showToast } from '@/utils/toast';
 import { AuthResponse } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
+import { useAuthContext } from '@/context/AuthContext';
 
 function jwtExpired(token: string | null) {
   if (!token) return true;
@@ -19,6 +20,7 @@ export function useSignIn() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [redirectTarget, setRedirectTarget] = useState<string>('/user/dashboard');
+  const { login } = useAuthContext();
 
   useEffect(() => { setRememberMe(storage.isRemembered()); }, []);
   useEffect(() => {
@@ -51,7 +53,7 @@ export function useSignIn() {
       if (response.status !== 200) { handleAuthError(response.status, response.error); return; }
       const result = response.data as AuthResponse & { message?: string };
       if (result?.access_token) {
-        storage.setToken(result.access_token, rememberMe);
+        await login(result.access_token, rememberMe);
         finalizeLogin();
       } else if (result?.message === 'Email chưa được xác thực') {
         showToast.warning('Email chưa được xác thực. Chuyển đến trang xác thực...'); storage.setPendingEmail(formData.email); setTimeout(()=> router.push('/auth/verify-email'), 1500);
@@ -66,7 +68,7 @@ export function useSignIn() {
       const response = await api.auth.oauthSignin(googleUser);
       if (response.status !== 200) { handleOAuthError(response.status, response.error); return; }
       const result = response.data as AuthResponse & { message?: string };
-      if (result?.access_token) { storage.setToken(result.access_token, rememberMe); finalizeLogin(); }
+  if (result?.access_token) { await login(result.access_token, rememberMe); finalizeLogin(); }
       else showToast.authError(result?.message || 'Đăng nhập Google thất bại');
     } catch { showToast.authError('Lỗi kết nối. Vui lòng thử lại.'); }
     finally { setLoading(false); }

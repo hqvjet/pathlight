@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import CookieWarning from '@/components/common/CookieWarning';
 import React from 'react';
 import GlobalNavWrapper from '@/components/layout/GlobalNavWrapper';
+import { AuthProvider } from '@/context/AuthContext';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -57,11 +58,13 @@ export default function RootLayout({
       <body
         className={`${montserrat.variable} font-sans antialiased`}
       >        
-        <CookieWarning />
-        <GlobalNavWrapper />
-        <div className="pt-[var(--global-nav-offset,0px)]">
-          {children}
-        </div>
+        <AuthProvider>
+          <CookieWarning />
+          <GlobalNavWrapper />
+          <div className="pt-[var(--global-nav-offset,0px)]">
+            {children}
+          </div>
+        </AuthProvider>
         <ToastContainer
           position="top-right"
           autoClose={5000}

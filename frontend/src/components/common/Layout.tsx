@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuthContext } from '@/context/AuthContext';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -35,6 +36,9 @@ const menuItems = [
 ];
 
 export default function Layout({ children, title, user }: LayoutProps) {
+  const { user: ctxUser } = useAuthContext();
+  // Prefer explicit user prop; fallback to context
+  const effectiveUser = user || (ctxUser ? { name: ctxUser.name, email: ctxUser.email, avatar_url: ctxUser.avatar_url } : undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -202,16 +206,16 @@ export default function Layout({ children, title, user }: LayoutProps) {
                     className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500/40 ${userMenuOpen ? 'bg-gray-100' : ''}`}
                   >
                     <Avatar
-                      user={user || {}}
+                      user={effectiveUser || {}}
                       size={28}
                       className="w-7 h-7"
-                      displayName={user?.name || user?.email || 'User'}
+                      displayName={effectiveUser?.name || effectiveUser?.email || 'User'}
                       showInitialsFallback={true}
-                      cacheKey={user?.avatarKey}
+                      cacheKey={effectiveUser?.avatarKey}
                     />
                     <div className="hidden sm:block text-left max-w-28 lg:max-w-36">
-                      <div className="text-xs font-medium text-gray-500 leading-none truncate">{user?.email || ''}</div>
-                      <div className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'User'}</div>
+                      <div className="text-xs font-medium text-gray-500 leading-none truncate">{effectiveUser?.email || ''}</div>
+                      <div className="text-sm font-semibold text-gray-900 truncate">{effectiveUser?.name || 'User'}</div>
                     </div>
                     <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -220,8 +224,8 @@ export default function Layout({ children, title, user }: LayoutProps) {
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 origin-top-right animate-in fade-in-0 zoom-in-95">
                       <div className="px-4 pb-2 mb-2 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'User'}</p>
-                        <p className="text-xs text-gray-500 truncate">{user?.email || 'Email'}</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">{effectiveUser?.name || 'User'}</p>
+                        <p className="text-xs text-gray-500 truncate">{effectiveUser?.email || 'Email'}</p>
                       </div>
                       <Link
                         href="/user/profile"

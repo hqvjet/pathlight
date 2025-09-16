@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import Layout from '@/components/common/Layout';
+import { useAuthContext } from '@/context/AuthContext';
 
 // Root layout now injects a top NavBar; this layout focuses on sidebar + page framing.
 // Simple title mapping based on current pathname. Extend if new pages are added.
@@ -26,15 +27,15 @@ export default function UserSectionLayout({ children }: UserSectionLayoutProps) 
   // Derive the title from the current path (fallback generic)
   const title = titleMap[pathname] || 'PathLight';
 
-  // TODO: Replace with real user fetching logic (hook or context) once available.
-  const user = useMemo(
-    () => ({
-      name: 'Nguyễn Văn A',
-      email: 'user@example.com',
-      avatar_url: '',
-    }),
-    []
-  );
+  const { user: authUser } = useAuthContext();
+  const user = useMemo(() => {
+    if (!authUser) return undefined;
+    return {
+      name: authUser.name,
+      email: authUser.email,
+      avatar_url: authUser.avatar_url,
+    };
+  }, [authUser]);
 
   return <Layout title={title} user={user}>{children}</Layout>;
 }

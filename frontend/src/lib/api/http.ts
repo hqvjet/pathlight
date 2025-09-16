@@ -3,6 +3,7 @@
  * Extracted from legacy api-client.ts for modular structure
  */
 import { API_CONFIG } from '../../config/env';
+import { storage } from '@/utils/api';
 import { API_CONSTANTS, ERROR_CONSTANTS, STORAGE_KEYS } from '../../constants';
 
 // =============================
@@ -53,8 +54,20 @@ class TokenManager {
     if (!TokenManager.instance) TokenManager.instance = new TokenManager();
     return TokenManager.instance;
   }
-  getToken() { return typeof window === 'undefined' ? null : localStorage.getItem(STORAGE_KEYS.TOKEN); }
-  setToken(token: string) { if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.TOKEN, token); }
+  getToken() {
+    if (typeof window === 'undefined') return null;
+    // Prefer cookie-based token via unified storage util (auth_token or session_token)
+    const cookieToken = storage.getToken();
+    if (cookieToken) return cookieToken;
+    // Fallback to legacy localStorage for backward compatibility
+    return localStorage.getItem(STORAGE_KEYS.TOKEN);
+  }
+  setToken(token: string) {
+    if (typeof window === 'undefined') return;
+    // Write to cookies (session) for consistency; localStorage kept for backward compat.
+    storage.setToken(token, true);
+    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+  }
   removeToken() {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
