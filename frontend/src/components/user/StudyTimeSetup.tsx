@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { showToast } from '@/utils/toast';
-import { api, storage } from '@/utils/api';
+import { storage } from '@/utils/api';
+import { ApiPool } from '@/lib/api/pool';
 import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
@@ -16,6 +17,8 @@ interface StudyTimeSetupProps {
   onComplete: () => void;
   onSkip?: () => void;
 }
+
+interface NotifyTimeResponse { status: number; message?: string; error?: string; }
 
 export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupProps) {
   const [selectedHour, setSelectedHour] = useState('18');
@@ -48,9 +51,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
 
       console.log('Setting reminder time:', selectedTime);
 
-      const response = await api.user.setNotifyTime({
-        remind_time: selectedTime
-      });
+      const response = await ApiPool.user.notifyTime({ remind_time: selectedTime }) as NotifyTimeResponse;
 
       console.log('Response:', response);
 

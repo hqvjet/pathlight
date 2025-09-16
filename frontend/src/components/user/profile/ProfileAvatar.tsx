@@ -3,7 +3,8 @@ import Avatar from '@/components/common/Avatar';
 import { UserProfile } from './types';
 
 interface Props {
-  user: UserProfile;
+  // user may be temporarily null before data loads
+  user: UserProfile | null;
   uploading: boolean;
   avatarLoading: boolean;
   avatarKey: number;
@@ -20,15 +21,17 @@ export const ProfileAvatar: React.FC<Props> = ({ user, uploading, avatarLoading,
             <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        <Avatar
-          key={`profile-avatar-${avatarKey}-${user?.avatar_id || user?.avatar_url || 'default'}`}
-          user={user}
-          size={240}
-          className="w-full h-full object-cover !rounded-none"
-          displayName={user.family_name && user.given_name ? `${user.family_name} ${user.given_name}` : (user.name || user.email?.split('@')[0] || 'User')}
-          showInitialsFallback
-          cacheKey={avatarKey}
-        />
+        {user && (
+          <Avatar
+            key={`profile-avatar-${avatarKey}-${user?.avatar_id || user?.avatar_url || 'default'}`}
+            user={user}
+            size={240}
+            className="w-full h-full object-cover !rounded-none"
+            displayName={user?.family_name && user?.given_name ? `${user.family_name} ${user.given_name}` : (user?.name || user?.email?.split('@')[0] || 'User')}
+            showInitialsFallback
+            cacheKey={avatarKey}
+          />
+        )}
         <button
           type="button"
             onClick={() => fileInputRef.current?.click()}

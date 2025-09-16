@@ -87,7 +87,8 @@ class ServiceRouter {
   getServiceUrl(): string { return API_CONFIG.BASE_URL; }
   buildEndpointWithPrefix(endpoint: string): string {
     const cleanEndpoint = endpoint.toLowerCase();
-    if (cleanEndpoint.startsWith('/api/user/')) return endpoint;
+    // If DIRECT_BACKEND is true, we treat /api/user/* as backend paths and keep them as-is (will be prefixed externally by buildUrl)
+    if (!API_CONFIG.DIRECT_BACKEND && cleanEndpoint.startsWith('/api/user/')) return endpoint;
     if (cleanEndpoint.includes('/signin') || cleanEndpoint.includes('/signup') || cleanEndpoint.includes('/login') || cleanEndpoint.includes('/register') || cleanEndpoint.includes('/signout') || cleanEndpoint.includes('/refresh') || cleanEndpoint.includes('/verify') || cleanEndpoint.includes('/forgot-password') || cleanEndpoint.includes('/reset-password') || cleanEndpoint.includes('/change-password') || cleanEndpoint.includes('/oauth') || cleanEndpoint.includes('/resend-verification') || cleanEndpoint.includes('/forget-password') || cleanEndpoint.includes('/validate-reset-token') || cleanEndpoint.startsWith('/auth/')) {
       if (endpoint.startsWith('/auth/')) return endpoint;
       const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;

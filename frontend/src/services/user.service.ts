@@ -76,79 +76,70 @@ export const userService = {
   /**
    * Get current user profile
    */
-  async getProfile() {
-    return api.get('/api/user/profile');
-  },
+  // Spec uses GET /user/info for retrieval and PUT /user/change-info for updates
+  async getInfo() { return api.get('/user/info'); },
 
   /**
    * Get user information (with optional id parameter)
    */
-  async getUserInfo() {
-    return api.get('/api/user/info');
-  },
+  // Deprecated getUserInfo alias removed
 
   /**
    * Update user profile (change-info endpoint)
    */
-  async updateProfile(data: UpdateProfileRequest) {
-    return api.put('/api/user/profile', data);
-  },
+  async updateProfile(data: UpdateProfileRequest) { return api.put('/user/change-info', data); },
 
   /**
    * Get current user basic info
    */
-  async getMe() {
-    return api.get('/api/user/me');
-  },
+  // Removed unsupported /user/me
 
   /**
    * Get user dashboard data
    */
   async getDashboard() {
-    return api.get('/api/user/dashboard');
+  return api.get('/user/dashboard');
   },
 
   /**
    * Upload user avatar
    */
   async uploadAvatar(file: File) {
-    return api.uploadFile('/api/user/avatar', file);
+  return api.uploadFile('/user/avatar', file);
   },
 
   /**
    * Get user avatar by user ID
    */
   async getAvatar() {
-    return api.get('/api/user/avatar');
+  return api.get('/user/avatar');
   },
 
   /**
    * Set notification time for daily reminders
    */
   async setNotifyTime(data: { remind_time: string }) {
-    return api.put('/api/user/notify-time', data);
+  return api.put('/user/notify-time', data);
   },
 
   /**
    * Save user activity milestone
    */
   async saveActivity() {
-    return api.post('/api/user/activity');
+  return api.post('/user/activity');
   },
 
   /**
    * Get user activity data
    */
   async getActivity() {
-    return api.get('/api/user/activity');
+  return api.get('/user/activity');
   },
 
   /**
    * Get users by IDs (for leaderboard avatars, etc.)
    */
-  async getUsersByIds(userIds: string[]) {
-    return api.post('/api/user/users-by-ids', userIds);
-  },
+  // Removed unsupported users-by-ids endpoint
 
   // =============================================================================
   // 👥 ADMIN USER MANAGEMENT
@@ -167,50 +158,17 @@ export const userService = {
       params.append('search', search);
     }
 
-    return api.get(`/api/user?${params.toString()}`);
+  return api.get(`/user/all?${params.toString()}`);
   },
 
   /**
    * Get user by ID (admin only)
    */
-  async getUserById(id: string) {
-    return api.get(`/api/user/${id}`);
-  },
+  // Removed admin-specific endpoints not present in spec (getUserById, updateUser, deleteUser, toggleUserBan, resetUserPassword, getUserStats)
 
   /**
    * Update user (admin only)
    */
-  async updateUser(id: string, data: Partial<User>) {
-    return api.put(`/api/user/${id}`, data);
-  },
-
-  /**
-   * Delete user (admin only)
-   */
-  async deleteUser(id: string) {
-    return api.delete(`/api/user/${id}`);
-  },
-
-  /**
-   * Ban/unban user (admin only)
-   */
-  async toggleUserBan(id: string, banned: boolean) {
-    return api.post(`/api/user/${id}/ban`, { banned });
-  },
-
-  /**
-   * Reset user password (admin only)
-   */
-  async resetUserPassword(id: string) {
-    return api.post(`/api/user/${id}/reset-password`);
-  },
-
-  /**
-   * Get user statistics (admin only)
-   */
-  async getUserStats(id: string) {
-    return api.get(`/api/user/${id}/stats`);
-  },
 };
 
 export default userService;

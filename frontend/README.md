@@ -34,3 +34,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Global Navigation Bar
+
+A shared `NavBar` (`src/components/layout/NavBar.tsx`) is now mounted in `src/app/layout.tsx` so it appears on every page. Individual section layouts (e.g. `src/app/user/layout.tsx`) should not render their own top nav; they only handle sidebars or contextual framing. Adjust padding with `pt-20` in the root layout if NavBar height changes.

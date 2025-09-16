@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { showToast } from '@/utils/toast';
 import { api, storage } from '@/utils/api';
+import { ApiPool } from '@/lib/api/pool';
 import { useRouter } from 'next/navigation';
 import { ProfileFormData, UserProfile } from './types';
 
@@ -17,9 +18,10 @@ export function useProfileData() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-      let response = await api.user.getInfo();
+  // Use unified pool first (info), fallback to legacy sequence
+  let response = await ApiPool.user.info() as unknown as { status: number; data?: unknown; error?: string };
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
-      if (response.status !== 200) { response = await api.user.getDashboard(); if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
+  if (response.status !== 200) { response = await api.user.getDashboard() as { status: number; data?: unknown; error?: string }; if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
       if (response.status === 200) {
         const responseData = response.data as unknown;
         let userData: unknown = responseData;
@@ -31,9 +33,9 @@ export function useProfileData() {
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
         // Normalize avatar_url for profile page
         if (userObj.id && !userObj.avatar_url) {
-          userObj.avatar_url = `/api/user/avatar?user-id=${userObj.id}`;
+          userObj.avatar_url = `/user/avatar?user-id=${userObj.id}`;
         } else if (!userObj.avatar_url) {
-          userObj.avatar_url = '/api/user/avatar';
+          userObj.avatar_url = '/user/avatar';
         }
         setUser(userObj);
         setFormData({
@@ -52,15 +54,8 @@ export function useProfileData() {
   const updateProfile = async (form: ProfileFormData) => {
     setSaving(true);
     try {
-      const updateData: Record<string, unknown> = {
-        family_name: form.family_name || undefined,
-        given_name: form.given_name || undefined,
-        dob: form.birth_date ? convertDateToISO(form.birth_date) : undefined,
-        sex: form.sex || undefined,
-        bio: form.bio || undefined,
-      };
-      Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
-      const response = await api.user.updateProfile(updateData);
+      const payload = buildProfilePayload(form);
+  const response = await ApiPool.user.changeInfo(payload);
       if (response.status === 200) { showToast.authSuccess('Cập nhật hồ sơ thành công!'); setEditMode(false); await loadUserProfile(); }
       else {
         const data = response.data as { message?: string } | undefined;
@@ -123,4 +118,15 @@ function convertDateToISO(ddmmyyyy?: string) {
     if (day && month && year) return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T12:00:00.000Z`;
   }
   return undefined;
+}
+
+// Build payload to match new change-info API: always include keys, send null when empty
+function buildProfilePayload(form: ProfileFormData) {
+  return {
+    family_name: form.family_name.trim() === '' ? null : form.family_name.trim(),
+    given_name: form.given_name.trim() === '' ? null : form.given_name.trim(),
+    dob: form.birth_date ? convertDateToISO(form.birth_date) || null : null,
+    sex: form.sex.trim() === '' ? null : form.sex.trim(),
+    bio: form.bio.trim() === '' ? null : form.bio.trim(),
+  };
 }

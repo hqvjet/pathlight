@@ -4,19 +4,13 @@ import Image from 'next/image';
 import { LogoutIcon } from '@/components/icons';
 import Avatar from '@/components/common/Avatar';
 
-interface NavBarProps {
-  user: {
-    name: string;
-    avatar_url?: string;
-    avatarKey?: number;
-  };
-  onLogout: () => void;
-  showLogoutButton?: boolean;
-}
+interface AvatarUser { name?: string; avatar_url?: string; avatarKey?: number }
+interface NavBarProps { user?: AvatarUser | null; onLogout?: () => void; showLogoutButton?: boolean }
 
 export default function NavBar({ user, onLogout, showLogoutButton = false }: NavBarProps) {
+  const avatarUser: AvatarUser = user || {};
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-white shadow-sm border-b w-full z-50">
+    <nav data-global-nav className="fixed top-0 left-0 right-0 bg-white shadow-sm border-b w-full z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 sm:h-20">
           {/* Logo */}
@@ -36,34 +30,31 @@ export default function NavBar({ user, onLogout, showLogoutButton = false }: Nav
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="hidden sm:flex items-center gap-3">
                 <Avatar 
-                  user={user} 
+                  user={avatarUser} 
                   size={40} 
                   className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-gray-200"
-                  displayName={user?.name || 'User'}
-                  showInitialsFallback={true}
-                  cacheKey={user?.avatarKey}
+                  displayName={avatarUser.name || 'User'}
+                  showInitialsFallback
+                  cacheKey={avatarUser.avatarKey}
                 />
                 <div className="hidden md:block">
                   <div className="text-sm text-gray-600">Xin chào,</div>
                   <div className="text-sm font-semibold text-gray-800 truncate max-w-32 lg:max-w-48">
-                    {user.name}
+                    {avatarUser.name}
                   </div>
                 </div>
               </div>
-              
-              {/* Mobile Avatar */}
               <div className="sm:hidden">
                 <Avatar 
-                  user={user} 
+                  user={avatarUser} 
                   size={32} 
                   className="w-8 h-8 border-2 border-gray-200"
-                  displayName={user?.name || 'User'}
-                  showInitialsFallback={true}
-                  cacheKey={user?.avatarKey}
+                  displayName={avatarUser.name || 'User'}
+                  showInitialsFallback
+                  cacheKey={avatarUser.avatarKey}
                 />
               </div>
-              
-              {showLogoutButton && (
+              {showLogoutButton && onLogout && (
                 <button
                   onClick={onLogout}
                   className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
@@ -74,9 +65,7 @@ export default function NavBar({ user, onLogout, showLogoutButton = false }: Nav
               )}
             </div>
           )}
-          
-          {/* No user - show nothing or login button */}
-          {!user && showLogoutButton && (
+          {!user && showLogoutButton && onLogout && (
             <div className="flex items-center">
               <button
                 onClick={onLogout}

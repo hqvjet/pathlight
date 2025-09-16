@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useProfileData } from './profile/hooks';
-import Layout from '@/components/common/Layout';
 import { ProfileAvatar } from './profile/ProfileAvatar';
 import { ProfileFormData } from './profile/types';
-
-// Simple date picker using native input[type=date] overlay triggered by icon button
 
 export default function ProfilePage() {
   const { loading, saving, user, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar } = useProfileData();
@@ -36,8 +33,6 @@ export default function ProfilePage() {
     );
   }
 
-  const displayName = user?.family_name && user?.given_name ? `${user.family_name} ${user.given_name}` : (user?.name || user?.email?.split('@')[0] || 'User');
-
   const openDatePicker = () => {
     setShowNativeDate(true);
     setTimeout(() => {
@@ -54,69 +49,61 @@ export default function ProfilePage() {
     setFormData({ ...formData, birth_date: display });
   };
 
-  interface LayoutUserProp {
-    avatar_url: string;
-    name: string;
-    email: string;
-    avatarKey?: number;
-  }
-
-  const layoutUser: LayoutUserProp = user ? { avatar_url: (user.avatar_url || `/api/user/avatar?user-id=${user.id}`), name: displayName, email: user.email, avatarKey } : { avatar_url: '', name: '', email: '' };
-
   return (
-    <Layout title="Hồ Sơ Của Tôi" user={layoutUser}>
-      <div className="px-8 pt-10 pb-16 bg-[#f7f9fc] min-h-screen">
-        <div className="max-w-[1330px] mx-auto">
-          <div className="bg-white rounded-md shadow-sm shadow-black/[0.02] p-10">
-            <h1 className="text-[26px] font-semibold mb-8">Thông Tin Hồ Sơ</h1>
-            <div className="flex flex-col xl:flex-row gap-12">
-              <div className="flex-1">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-2">Họ Và Tên (*)</label>
-                      <input name="family_name" value={formData.family_name} onChange={(e)=> setFormData({ ...formData, family_name: e.target.value })} placeholder="Nhập họ và tên đệm của bạn" className="w-full h-11 px-4 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-800 mb-2">&nbsp;</label>
-                      <input name="given_name" value={formData.given_name} onChange={(e)=> setFormData({ ...formData, given_name: e.target.value })} placeholder="Nhập tên của bạn" className="w-full h-11 px-4 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
-                    </div>
+    <div className="px-8 pt-10 pb-16 bg-[#f7f9fc] min-h-screen">
+      <div className="max-w-[1330px] mx-auto">
+        <div className="bg-white rounded-md shadow-sm shadow-black/[0.02] p-10">
+          <h1 className="text-[26px] font-semibold mb-8">Thông Tin Hồ Sơ</h1>
+          <div className="flex flex-col xl:flex-row gap-12">
+            <div className="flex-1">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-800 mb-2">Họ Và Tên (*)</label>
+                    <input name="family_name" value={formData.family_name} onChange={(e)=> setFormData({ ...formData, family_name: e.target.value })} placeholder="Nhập họ và tên đệm của bạn" className="w-full h-11 px-4 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-2">Email (*)</label>
-                    <input value={user?.email || ''} disabled className="w-full h-11 px-4 border border-transparent bg-[#f0f1f2] text-sm text-gray-600 rounded-sm" />
+                    <label className="block text-sm font-medium text-gray-800 mb-2">&nbsp;</label>
+                    <input name="given_name" value={formData.given_name} onChange={(e)=> setFormData({ ...formData, given_name: e.target.value })} placeholder="Nhập tên của bạn" className="w-full h-11 px-4 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-2">Ngày Sinh</label>
-                    <div className="relative">
-                      <input name="birth_date" value={formData.birth_date} onChange={(e)=> setFormData({ ...formData, birth_date: e.target.value })} placeholder="DD / MM / YYYY" className="w-full h-11 px-4 pr-10 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
-                      <button type="button" onClick={openDatePicker} className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-gray-500 hover:text-gray-700">
-                        <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
-                      </button>
-                      {showNativeDate && (
-                        <input id="hidden-native-date" type="date" value={nativeDateValue} onChange={handleNativeDateChange} onBlur={()=> setShowNativeDate(false)} className="absolute opacity-0 pointer-events-none" />
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-2">Tiểu Sử</label>
-                    <textarea name="bio" value={formData.bio} onChange={(e)=> setFormData({ ...formData, bio: e.target.value })} placeholder="Nhập tiểu sử của bạn tại đây" className="w-full h-[180px] px-4 py-3 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition resize-none" />
-                  </div>
-                  <button type="submit" disabled={saving} className="mt-2 px-8 h-11 bg-orange-500 hover:bg-orange-600 text-white rounded-sm text-sm font-semibold tracking-wide disabled:opacity-60 shadow-sm shadow-orange-500/20">{saving ? 'Đang lưu...' : 'LƯU'}</button>
-                </form>
-              </div>
-              <div className="w-full max-w-[255px]">
-                <div className="bg-[#f5f6f8] rounded-sm pt-8 pb-6 px-6 flex flex-col items-center shadow-sm shadow-black/[0.04]">
-                  <div className="w-full aspect-[1/1.05] min-h-[240px] mb-6 relative">
-                    <ProfileAvatar user={user!} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-center text-gray-600">Ảnh tải lên không được quá 3MB<br/>Nên chọn ảnh có tỉ lệ 1:1</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-800 mb-2">Email (*)</label>
+                  <input value={user?.email || ''} disabled className="w-full h-11 px-4 border border-transparent bg-[#f0f1f2] text-sm text-gray-600 rounded-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-800 mb-2">Ngày Sinh</label>
+                  <div className="relative">
+                    <input name="birth_date" value={formData.birth_date} onChange={(e)=> setFormData({ ...formData, birth_date: e.target.value })} placeholder="DD / MM / YYYY" className="w-full h-11 px-4 pr-10 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition" />
+                    <button type="button" onClick={openDatePicker} className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-gray-500 hover:text-gray-700">
+                      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
+                    </button>
+                    {showNativeDate && (
+                      <input id="hidden-native-date" type="date" value={nativeDateValue} onChange={handleNativeDateChange} onBlur={()=> setShowNativeDate(false)} className="absolute opacity-0 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-800 mb-2">Tiểu Sử</label>
+                  <textarea name="bio" value={formData.bio} onChange={(e)=> setFormData({ ...formData, bio: e.target.value })} placeholder="Nhập tiểu sử của bạn tại đây" className="w-full h-[180px] px-4 py-3 border border-transparent focus:border-gray-300 focus:ring-0 bg-[#f9fafb] hover:bg-white rounded-sm text-sm transition resize-none" />
+                </div>
+                <button type="submit" disabled={saving} className="mt-2 px-8 h-11 bg-orange-500 hover:bg-orange-600 text-white rounded-sm text-sm font-semibold tracking-wide disabled:opacity-60 shadow-sm shadow-orange-500/20">{saving ? 'Đang lưu...' : 'LƯU'}</button>
+              </form>
+            </div>
+            <div className="w-full max-w-[255px]">
+              <div className="bg-[#f5f6f8] rounded-sm pt-8 pb-6 px-6 flex flex-col items-center shadow-sm shadow-black/[0.04]">
+                <div className="w-full aspect-[1/1.05] min-h-[240px] mb-6 relative">
+                  <ProfileAvatar user={user} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
+                  {!user && (
+                    <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">Đang tải ảnh...</div>
+                  )}
+                </div>
+                <p className="text-[11px] leading-relaxed text-center text-gray-600">Ảnh tải lên không được quá 3MB<br/>Nên chọn ảnh có tỉ lệ 1:1</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }
