@@ -6,8 +6,6 @@ import { UploadStep } from './UploadStep';
 import { MetaStep } from './MetaStep';
 import { ReviewStep } from './ReviewStep';
 import { SuccessStep } from './SuccessStep';
-import Layout from '@/components/common/Layout';
-import { useAuthContext } from '@/context/AuthContext';
 import { v4 as uuid } from 'uuid';
 import { showToast } from '@/utils/toast';
 
@@ -57,11 +55,7 @@ export function CreateCourseWizard() {
     setDraft(d => ({ ...d, step: 4 }));
   };
 
-  const { user: authUser } = useAuthContext();
-  const user = authUser ? { name: authUser.name, email: authUser.email, avatar_url: authUser.avatar_url } : undefined;
-
   return (
-  <Layout user={user} title="Tạo Khóa Học">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mt-2">
           <Stepper current={draft.step > 3 ? 3 : draft.step} onStepChange={setStep} />
@@ -105,7 +99,6 @@ export function CreateCourseWizard() {
             <span>Privacy Policy</span>
             <span>Terms & Condition</span>
         </footer>
-      </div>
-    </Layout>
+  </div>
   );
 }
