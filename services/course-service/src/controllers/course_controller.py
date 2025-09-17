@@ -27,6 +27,8 @@ from src.schemas.course_schemas import (
 	FinalTestResponse,
 	FinalTestDetail,
 	FinalTestQA,
+	FinishCourseRequest,
+	FinishLessonRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -496,5 +498,88 @@ def get_final_test_controller(request: Request, course_id: str) -> FinalTestResp
 			qas=qa_models,
 		)
 		return FinalTestResponse(status=200, final_test=final_test_model)
+	finally:
+		session.close()
+
+
+# ---------------- Mutation Controllers ----------------
+
+def finish_course_controller(request: Request, payload: FinishCourseRequest):
+	"""Mark a course as finished if all its lessons and tests/final test are finished.
+
+	Business rule (current inferred):
+	- User must own course
+	- All lessons.finish == True
+	- (Optional) final tests existence not strictly enforced; if exists must have all qas done? Currently only have finish flag on Course, Lesson, Test. We'll require all Lessons.finish AND any Test / FinalTest under it have finish=True if present.
+	"""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter_by(course_id=payload.course_id, user_id=user_id).first()
+		if not course:
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Check lessons
+		lessons = session.query(Lesson.lesson_id, Lesson.finish).filter(Lesson.course_id == course.course_id).all()
+		if not lessons or any(not l.finish for l in lessons):
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Check tests
+		tests = session.query(Test.finish).join(Lesson, Test.lesson_id == Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()
+		if any(not t.finish for t in tests):
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Mark course finished
+		setattr(course, "finish", True)
+		session.commit()
+		return {"status": 200, "message": "Đã cập nhật thành công"}
+	except Exception as e:
+		logger.error("finish_course_controller error user=%s course=%s err=%s", user_id, payload.course_id, e)
+		session.rollback()
+		return JSONResponse(status_code=500, content={"status": 500, "message": "Internal error"})
+	finally:
+		session.close()
+
+
+def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
+	"""Mark a single lesson (and optionally its test) as finished.
+
+	Rules (inferred):
+	- User must own the course containing the lesson.
+	- We assume caller only invokes after passing its test. We'll just flip finish flag.
+	- If related Test exists we also mark its finish=True (since spec says triggered after passing test).
+	"""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
+
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter_by(course_id=payload.course_id, user_id=user_id).first()
+		if not course:
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
+		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
+		if not lesson:
+			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
+		setattr(lesson, "finish", True)
+		# Mark related tests finished (if any)
+		tests = session.query(Test).filter(Test.lesson_id == lesson.lesson_id).all()
+		for t in tests:
+			setattr(t, "finish", True)
+		session.commit()
+		return {"status": 200, "message": "Đã cập nhật thành công"}
+	except Exception as e:
+		logger.error("finish_lesson_controller error user=%s course=%s lesson=%s err=%s", user_id, payload.course_id, payload.lesson_id, e)
+		session.rollback()
+		return JSONResponse(status_code=500, content={"status": 500, "message": "Internal error"})
 	finally:
 		session.close()

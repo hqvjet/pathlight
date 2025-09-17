@@ -123,3 +123,14 @@ class FinalTestDetail(BaseModel):
 class FinalTestResponse(BaseModel):
     status: int
     final_test: FinalTestDetail
+
+
+# ---- Mutation request schemas ----
+
+class FinishCourseRequest(BaseModel):
+    course_id: str
+
+
+class FinishLessonRequest(BaseModel):
+    course_id: str
+    lesson_id: str

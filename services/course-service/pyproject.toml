@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "course-service"
 version = "0.1.0" 
 description = "Course management service for PathLight"
-requires-python = ">=3.12"
+requires-python = ">=3.11.9,<3.12"
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
