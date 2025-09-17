@@ -4,7 +4,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { Montserrat } from 'next/font/google';
-import Header from '../layout/Header';
 import { Button } from '@/components/ui/button';
 import { useSignIn } from './signin/hooks';
 
@@ -17,31 +16,18 @@ export default function SignInForm() {
   const { formData, setFormData, rememberMe, setRememberMe, loading, handleSubmit, signInWithPopup } = useSignIn();
 
   return (
-    <div className={cn('h-screen bg-background flex flex-col overflow-hidden', montserrat.className)}>
-      <Header 
-        variant="auth" 
-        showSocialLinks={false}
-        backgroundColor="white"
-        authNavigation={
-          <div className="text-sm flex items-center">
-            <span className="text-muted-foreground mr-4">Chưa có tài khoản?</span>
-            <Button asChild variant="secondary" className="bg-[#FFF7ED] text-[#F97316] hover:opacity-90">
-              <Link href="/auth/signup">Đăng Ký Ngay</Link>
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="flex flex-1 h-[calc(100vh-80px)]">
+  <div className={cn('min-h-screen bg-background flex flex-col pt-16 sm:pt-20', montserrat.className)}>
+      {/* Global nav is rendered by GlobalNavWrapper; removed local Header to avoid duplication */}
+      <div className="flex flex-1">
         <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-4 xl:p-6 bg-gray-50">
           <div className="w-full max-w-2xl">
             <Image src="/assets/images/login.png" alt="Login illustration" width={700} height={700} className="object-contain w-full h-auto" />
           </div>
         </div>
 
-        <div className="w-full lg:w-1/2 flex items-center justify-center bg-white px-4 sm:px-6 lg:px-8 py-4">
+  <div className="w-full lg:w-1/2 flex bg-white px-4 sm:px-6 lg:px-10 py-4 items-start">
           <div className="w-full max-w-lg">
-            <h2 className="text-3xl sm:text-4xl font-bold text-center text-red-900 mb-6 sm:mb-8">Chào Mừng Trở Lại</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold text-red-900 mb-6 sm:mb-8">Chào Mừng Trở Lại</h2>
 
             <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-2">

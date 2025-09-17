@@ -14,7 +14,7 @@ export const getAvatarUrl = (user: AvatarUser): string => {
 
   // 2. Fallback build canonical endpoint from id
   if (user.id) {
-    return `/api/user/avatar?user-id=${user.id}`;
+  return `/api/users/avatar?user-id=${user.id}`;
   }
 
   // 3. Default placeholder

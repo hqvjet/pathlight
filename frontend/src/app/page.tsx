@@ -1,44 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Rocket, Clock, BookOpen, Gamepad2, Search, Sparkles } from 'lucide-react';
+import { Rocket, Clock, BookOpen, Gamepad2, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-emerald-50">
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-              <Image src="/assets/icons/logo.png" alt="PathLight logo" width={120} height={32} className="h-8 w-auto" />
-            </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-              <Link href="#features" className="hover:text-foreground transition">Tính năng</Link>
-              <Link href="#solutions" className="hover:text-foreground transition">Giải pháp</Link>
-              <Link href="#testimonials" className="hover:text-foreground transition">Chứng thực</Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block relative w-64">
-              <Search className="absolute left-2.5 top-2.5 h-5 w-5 text-muted-foreground" />
-              <Input placeholder="Bạn muốn tìm kiếm gì...?" className="pl-9" />
-            </div>
-            <Button variant="ghost" asChild>
-              <Link href="/auth/signin">Đăng nhập</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/auth/signup">Bắt đầu</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-emerald-50 pt-16 sm:pt-20">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-orange-100/40 to-transparent" />
@@ -65,23 +35,12 @@ export default function HomePage() {
           <div className="flex-1 relative">
             <div className="absolute -inset-6 bg-gradient-to-tr from-orange-200/40 via-white to-emerald-200/40 rounded-3xl blur-2xl" />
             <div className="relative h-[360px] w-full flex items-center justify-center">
-              <div className="relative">
-                <div className="w-80 h-60 bg-gray-900 rounded-xl shadow-2xl rotate-2 ring-8 ring-white/40">
-                  <div className="w-full h-44 bg-white rounded-t-xl p-4 m-2">
-                    <div className="w-full h-full bg-gradient-to-br from-orange-50 to-emerald-50 rounded flex items-center justify-center text-sm font-semibold text-gray-600 tracking-wide">
-                      STUDY FLOW
-                    </div>
-                  </div>
-                  <div className="w-full h-12 bg-gray-800 rounded-b-xl flex items-center justify-center text-xs text-gray-400">AI ENGINE</div>
+              {/* Placeholder visual kept */}
+              <div className="w-80 h-60 bg-gray-900 rounded-xl shadow-2xl rotate-2 ring-8 ring-white/40 flex flex-col">
+                <div className="w-full h-44 bg-white rounded-t-xl p-4 m-2 flex items-center justify-center text-sm font-semibold text-gray-600 tracking-wide bg-gradient-to-br from-orange-50 to-emerald-50">
+                  STUDY FLOW
                 </div>
-                <div className="absolute -right-16 top-8 w-24 h-32 bg-white/80 backdrop-blur rounded-lg shadow-lg -rotate-6 border border-orange-200 p-2">
-                  <div className="space-y-1">
-                    <div className="h-1.5 bg-orange-200 rounded" />
-                    <div className="h-1.5 bg-emerald-200 rounded w-3/4" />
-                    <div className="h-1.5 bg-orange-200 rounded w-1/2" />
-                  </div>
-                </div>
-                <div className="absolute -right-10 top-24 w-20 h-20 bg-gradient-to-br from-orange-500 to-emerald-500 rounded-full shadow-xl animate-pulse" />
+                <div className="w-full h-12 bg-gray-800 rounded-b-xl flex items-center justify-center text-xs text-gray-400">AI ENGINE</div>
               </div>
             </div>
           </div>

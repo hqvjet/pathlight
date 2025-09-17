@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getAvatarUrl, getUserInitials, type AvatarUser } from '@/utils/avatar';
 
 interface AvatarProps {
@@ -25,6 +25,7 @@ export default function Avatar({
   cacheKey
 }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
+  const loadedRef = useRef(false);
   
   const avatarUrl = getAvatarUrl(user);
   // Append version param if cacheKey provided (stable between renders until changed)
@@ -36,7 +37,21 @@ export default function Avatar({
   
   useEffect(() => {
     setHasError(false);
+    loadedRef.current = false;
   }, [user?.id, user?.avatar_url, user?.avatar_id]);
+
+  // Client-side timeout safety: if avatar takes too long, fallback gracefully
+  useEffect(() => {
+    if (!versionedAvatarUrl || hasError) return;
+    const timeoutMs = 5000; // 5s timeout for avatars
+    const timer = window.setTimeout(() => {
+      if (!loadedRef.current) {
+        setHasError(true);
+      }
+    }, timeoutMs);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionedAvatarUrl]);
   
   const handleImageError = () => {
     setHasError(true);
@@ -72,7 +87,13 @@ export default function Avatar({
       height={size}
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
-      priority={size > 64}
+  onLoadingComplete={() => { loadedRef.current = true; }}
+  priority={size > 64}
+  // Avoid Next.js image optimization proxy to prevent upstream timeouts (504)
+  // when the avatar endpoint is slow. Let the browser fetch directly and
+  // fall back via onError to a local placeholder.
+  unoptimized
+  loading={size > 64 ? undefined : 'lazy'}
     />
   );
 }

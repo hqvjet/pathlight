@@ -10,7 +10,6 @@ import { storage } from '@/utils/api';
 import { AuthResponse } from '@/utils/types';
 import { useGoogleOAuth } from '@/hooks/useGoogleOAuth';
 import { Montserrat } from 'next/font/google';
-import Header from '../layout/Header';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -123,27 +122,9 @@ export default function SignUpForm() {
   });
 
   return (
-    <div className={`h-screen bg-white flex flex-col overflow-hidden ${montserrat.className}`}>
-      {/* Header */}
-      <Header 
-        variant="auth" 
-        showSocialLinks={false}
-        backgroundColor="white"
-        authNavigation={
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="text-gray-500 text-sm hidden sm:inline">Đã có tài khoản?</span>
-            <Link
-              href="/auth/signin"
-              className="bg-orange-500 text-white font-medium px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-orange-600 transition-colors text-sm"
-            >
-              Đăng Nhập Ngay
-            </Link>
-          </div>
-        }
-      />
-
-      {/* Main Content */}
-      <div className="flex flex-1 h-[calc(100vh-80px)]">
+  <div className={`min-h-screen bg-white flex flex-col pt-16 sm:pt-20 ${montserrat.className}`}>
+      {/* Global nav provided separately; removed local Header to avoid duplication */}
+      <div className="flex flex-1">
         {/* Left: Image - hidden on mobile */}
         <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-4 xl:p-6 bg-gray-50">
           <div className="w-full max-w-2xl">
@@ -157,10 +138,10 @@ export default function SignUpForm() {
           </div>
         </div>
 
-        {/* Right side form */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center bg-white px-4 sm:px-6 lg:px-8 py-4">
+  {/* Right side form */}
+  <div className="w-full lg:w-1/2 flex bg-white px-4 sm:px-6 lg:px-10 py-4 items-start">
           <div className="w-full max-w-lg">
-            <h2 className="text-3xl sm:text-4xl font-bold text-center text-gray-900 mb-6 sm:mb-8">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6 sm:mb-8">
               Tạo Tài Khoản Mới
             </h2>
 

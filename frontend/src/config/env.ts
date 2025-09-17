@@ -3,7 +3,12 @@
 // =============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api',
+  // Primary backend base. Support legacy env name NEXT_PUBLIC_API_URL for backward compatibility.
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://xmicux090i.execute-api.ap-northeast-1.amazonaws.com/api',
+  // If true we always call backend directly (not via Next.js route handlers) even for /api/user/* endpoints.
+  DIRECT_BACKEND: (process.env.NEXT_PUBLIC_DIRECT_BACKEND || '').toLowerCase() === 'true',
+  // Helpful for debugging which origin is actually used.
+  get BACKEND_ORIGIN() { return this.BASE_URL; },
   get API_URL() {
     return this.BASE_URL;
   },

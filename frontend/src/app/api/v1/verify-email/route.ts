@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { API_CONFIG } from '@/config/env';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,8 +12,11 @@ export async function GET(request: NextRequest) {
 
   try {
     // Gọi trực tiếp backend để verify email
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-    const response = await fetch(`${backendUrl}/verify-email?token=${token}`, {
+  // Always use unified backend base URL (no localhost fallback)
+  const base = API_CONFIG.BASE_URL.replace(/\/$/, '');
+  // Avoid double /api when BASE_URL already ends with /api
+  const verifyPath = base.match(/\/api$/) ? '/verify-email' : '/api/verify-email';
+  const response = await fetch(`${base}${verifyPath}?token=${token}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

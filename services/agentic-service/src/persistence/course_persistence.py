@@ -3,6 +3,7 @@ import uuid
 from typing import List
 
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.logging import setup_logger
@@ -76,6 +77,9 @@ def save_course_state(state: State) -> None:
 
     with next(get_db()) as db:  # type: ignore[misc]
         try:
+            # Ensure runtime schema compatibility for older databases
+            _ensure_runtime_schema(db)
+
             # Ensure reference tags
             _ensure_difficult_levels(db)
             understand_level_id = _ensure_understand_level(db, state.difficulty)
@@ -177,6 +181,21 @@ def save_course_state(state: State) -> None:
         except Exception as e:
             db.rollback()
             logger.exception("Unexpected error persisting course %s: %s", state.id, e)
+
+
+def _ensure_runtime_schema(db: Session) -> None:
+    """Best-effort schema alignment for deployments missing new columns.
+
+    - Adds final_qa.answer and final_qa.explanation if they don't exist.
+    This is a safe, idempotent operation on Postgres.
+    """
+    try:
+        db.execute(text("ALTER TABLE final_qa ADD COLUMN IF NOT EXISTS answer VARCHAR NOT NULL DEFAULT ''"))
+        db.execute(text("ALTER TABLE final_qa ADD COLUMN IF NOT EXISTS explanation VARCHAR NOT NULL DEFAULT ''"))
+        db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.warning("Schema ensure failed or not needed: %s", e)
 
 
 def _insert_lesson_qa(db: Session, test_id: str, qa: TestQA) -> None:

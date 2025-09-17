@@ -3,6 +3,7 @@
  * Extracted from legacy api-client.ts for modular structure
  */
 import { API_CONFIG } from '../../config/env';
+import { storage } from '@/utils/api';
 import { API_CONSTANTS, ERROR_CONSTANTS, STORAGE_KEYS } from '../../constants';
 
 // =============================
@@ -53,8 +54,20 @@ class TokenManager {
     if (!TokenManager.instance) TokenManager.instance = new TokenManager();
     return TokenManager.instance;
   }
-  getToken() { return typeof window === 'undefined' ? null : localStorage.getItem(STORAGE_KEYS.TOKEN); }
-  setToken(token: string) { if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.TOKEN, token); }
+  getToken() {
+    if (typeof window === 'undefined') return null;
+    // Prefer cookie-based token via unified storage util (auth_token or session_token)
+    const cookieToken = storage.getToken();
+    if (cookieToken) return cookieToken;
+    // Fallback to legacy localStorage for backward compatibility
+    return localStorage.getItem(STORAGE_KEYS.TOKEN);
+  }
+  setToken(token: string) {
+    if (typeof window === 'undefined') return;
+    // Write to cookies (session) for consistency; localStorage kept for backward compat.
+    storage.setToken(token, true);
+    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+  }
   removeToken() {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(STORAGE_KEYS.TOKEN);
@@ -87,7 +100,8 @@ class ServiceRouter {
   getServiceUrl(): string { return API_CONFIG.BASE_URL; }
   buildEndpointWithPrefix(endpoint: string): string {
     const cleanEndpoint = endpoint.toLowerCase();
-    if (cleanEndpoint.startsWith('/api/user/')) return endpoint;
+    // If DIRECT_BACKEND is true, we treat /api/user/* as backend paths and keep them as-is (will be prefixed externally by buildUrl)
+    if (!API_CONFIG.DIRECT_BACKEND && cleanEndpoint.startsWith('/api/user/')) return endpoint;
     if (cleanEndpoint.includes('/signin') || cleanEndpoint.includes('/signup') || cleanEndpoint.includes('/login') || cleanEndpoint.includes('/register') || cleanEndpoint.includes('/signout') || cleanEndpoint.includes('/refresh') || cleanEndpoint.includes('/verify') || cleanEndpoint.includes('/forgot-password') || cleanEndpoint.includes('/reset-password') || cleanEndpoint.includes('/change-password') || cleanEndpoint.includes('/oauth') || cleanEndpoint.includes('/resend-verification') || cleanEndpoint.includes('/forget-password') || cleanEndpoint.includes('/validate-reset-token') || cleanEndpoint.startsWith('/auth/')) {
       if (endpoint.startsWith('/auth/')) return endpoint;
       const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -119,8 +133,16 @@ export class ApiClient {
     return `${base}${cleanEndpoint}`;
   }
   private async buildHeaders(config: ApiRequestConfig): Promise<HeadersInit> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-    if (!config.skipAuth) { const token = this.tokenManager.getToken(); if (token) headers.Authorization = `Bearer ${token}`; }
+    const isFormData = typeof FormData !== 'undefined' && (config as RequestInit)?.body instanceof FormData;
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    // Only set JSON content-type when not sending FormData
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (!config.skipAuth) {
+      const token = this.tokenManager.getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
     if (config.headers) Object.assign(headers, config.headers as Record<string, string>);
     return headers;
   }
@@ -185,21 +207,25 @@ export class ApiClient {
   delete<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'DELETE' }); }
   async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
-    const formData = new FormData(); formData.append('file', file);
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    // Remove content-type for multipart so browser sets boundary
-    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
-      delete (headers as Record<string, unknown>)['Content-Type'];
-    }
-    return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+  const formData = new FormData(); formData.append('file', file, file.name);
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+  return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
-    const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file));
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
-      delete (headers as Record<string, unknown>)['Content-Type'];
+  const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file, file.name));
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+  }
+
+  // Upload multiple files with the same field name (e.g., 'files'), suitable for FastAPI List[UploadFile]
+  async uploadFiles<T>(endpoint: string, files: File[], fieldName = 'files', config: ApiRequestConfig = {}) {
+    const url = this.buildUrl(endpoint, config.baseURL);
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append(fieldName, file, file.name);
     }
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
 }

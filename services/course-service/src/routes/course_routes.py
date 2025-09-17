@@ -86,7 +86,7 @@ async def request_create_course(
         Request body (JSON):
       {
         "course_id": "course-123",
-                "s3_key": ["path/to/file1.pdf", "path/to/file2.docx"],
+        "s3_key": ["path/to/file1.pdf", "path/to/file2.docx"],
         "difficulty": "medium",
         "duration": 1200
       }
@@ -126,7 +126,9 @@ async def request_create_course(
         return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
     from src.controllers.course_controller import _verify_token
-    user_id = _verify_token(request) or "anonymous"
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
 
     try:
         resp = send_generate_with_vectorize(

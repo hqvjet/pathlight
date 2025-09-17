@@ -85,13 +85,27 @@ export const getAuthHeaders = (): Record<string, string> => {
   };
 };
 
+// Build a fully-qualified backend URL with strict host consistency.
+// Rules:
+// 1. ALWAYS use the configured BASE_URL host (no mixing localhost & AWS).
+// 2. Prevent double '/api' when endpoint already includes '/api/'.
+// 3. Preserve leading slash for endpoint paths.
+// Example:
+//   BASE_URL = https://example.com/api
+//   endpoint = /user/profile  => https://example.com/api/user/profile (BASE_URL already ends with /api)
+//   endpoint = /signin            => https://example.com/api/signin
 export const buildApiUrl = (endpoint: string, baseUrl?: string): string => {
-  // If targeting Next.js internal API routes, return relative path to current origin
-  if (endpoint.startsWith('/api/')) {
-    return endpoint;
+  const base = (baseUrl || API_BASE).replace(/\/+$/, ''); // trim trailing slashes
+  let path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  const baseEndsWithApi = /\/api$/i.test(base);
+  // If base already ends with /api and path begins with /api/, drop the duplicate segment
+  if (baseEndsWithApi && path.startsWith('/api/')) {
+    path = path.substring(4); // remove leading '/api'
+    if (!path.startsWith('/')) path = '/' + path;
   }
-  const base = baseUrl || API_BASE;
-  return `${base.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  return `${base}${path}`;
 };
 
 export const buildQueryParams = (params: Record<string, unknown>): string => {
@@ -237,31 +251,35 @@ export const api = {
   
   // User management
   user: {
-    getProfile: () => apiRequest('/api/user/profile', { 
+  // SPEC ALIGNMENT NOTE:
+  // OpenAPI user service exposes:
+  //  - PUT /user/change-info (change personal info)
+  //  - GET/PUT /user/avatar
+  //  - GET /user/info (optional id)
+  //  - GET /user/all
+  //  - PUT /user/notify-time
+  //  - GET /user/dashboard
+  //  - POST /user/activity
+  //  - (No /user/me, /user/profile (GET/PUT now change-info), users-by-ids, test/*, GET /user/activity variants)
+  // Removed unsupported: /user/me. Use /user/info.
+  // Removed old profile GET; info covers retrieval.
+  getInfo: () => apiRequest('/user/info', {
       method: 'GET',
       serviceUrl: undefined,
     }),
-    getMe: () => apiRequest('/api/user/me', { 
+  getDashboard: () => apiRequest('/user/dashboard', {
       method: 'GET',
       serviceUrl: undefined,
     }),
-    getInfo: () => apiRequest('/api/user/info', {
-      method: 'GET',
-      serviceUrl: undefined,
-    }),
-    getDashboard: () => apiRequest('/api/user/dashboard', {
-      method: 'GET',
-      serviceUrl: undefined,
-    }),
-    updateProfile: (data: unknown) => apiRequest('/api/user/profile', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-      serviceUrl: undefined,
-    }),
+  updateProfile: (data: unknown) => apiRequest('/user/change-info', { // change-info per spec
+    method: 'PUT',
+    body: JSON.stringify(data),
+    serviceUrl: undefined,
+  }),
     updateAvatar: (file: File) => {
       const formData = new FormData();
       formData.append('avatar_file', file);
-      return apiRequest('/api/user/avatar', {
+  return apiRequest('/user/avatar', {
         method: 'PUT',
         body: formData,
         headers: {
@@ -270,77 +288,32 @@ export const api = {
         serviceUrl: undefined,
       });
     },
-    getAvatar: (userId: string) => apiRequest(`/api/user/avatar?user-id=${encodeURIComponent(userId)}`, {
+  getAvatar: (userId: string) => apiRequest(`/user/avatar?user-id=${encodeURIComponent(userId)}`, {
       method: 'GET',
       serviceUrl: undefined,
     }),
-    setNotifyTime: (data: unknown) => apiRequest('/api/user/notify-time', {
+  setNotifyTime: (data: unknown) => apiRequest('/user/notify-time', {
       method: 'PUT',
       body: JSON.stringify(data),
       serviceUrl: undefined,
     }),
-    saveActivity: () => apiRequest('/api/user/activity', { 
+  saveActivity: () => apiRequest('/user/activity', { 
       method: 'POST',
       serviceUrl: undefined,
     }),
-    getAllUsers: () => apiRequest('/api/user', {
+  getAllUsers: () => apiRequest('/user', {
       method: 'GET',
       serviceUrl: undefined,
     }),
-    getUsersByIds: (userIds: string[]) => apiRequest('/api/user/users-by-ids', {
-      method: 'POST',
-      body: JSON.stringify(userIds),
-      serviceUrl: undefined,
-    }),
+  // Removed unsupported users-by-ids endpoint (no equivalent in spec)
     
     // Test APIs for development
-    test: {
-      addExperience: (amount: number) => apiRequest(`/api/user/test/add-experience?exp_amount=${amount}`, {
-        method: 'POST',
-        serviceUrl: undefined,
-      }),
-      updateStats: (data: unknown) => apiRequest('/api/user/test/update-stats', {
-        method: 'PUT',
-        body: JSON.stringify(data),
-        serviceUrl: undefined,
-      }),
-      resetStats: () => apiRequest('/api/user/test/reset-stats', {
-        method: 'POST',
-        serviceUrl: undefined,
-      }),
-      simulateActivity: () => apiRequest('/api/user/test/simulate-activity', {
-        method: 'GET',
-        serviceUrl: undefined,
-      }),
-      getLevelSystemInfo: () => apiRequest('/api/user/test/level-system-info', {
-        method: 'GET',
-        serviceUrl: undefined,
-      }),
-    },
+  // Removed /user/test/* dev endpoints (not in spec)
 
     // Activity data management
     activity: {
-      get: () => apiRequest(
-        '/api/user/activity', 
-        {
-          method: 'GET',
-          serviceUrl: undefined,
-        }
-      ),
-      save: (data: { date: string; level: number }) => apiRequest('/api/user/activity', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        serviceUrl: undefined,
-      }),
-      saveBatch: (data: { [key: string]: number }) => apiRequest('/api/user/activity', {
-        method: 'POST',
-        body: JSON.stringify({ activityData: data }),
-        serviceUrl: undefined,
-      }),
-      clear: () => apiRequest('/api/user/activity', {
-        method: 'DELETE',
-        serviceUrl: undefined,
-      }),
+      // Spec only defines POST /user/activity (Save Activity)
+      save: () => apiRequest('/user/activity', { method: 'POST', serviceUrl: undefined }),
     },
   },
   
@@ -451,15 +424,14 @@ export const endpoints = {
   adminSignin: '/admin/signin',
   
   // User endpoints via Next.js API proxies
-  profile: '/api/user/profile',
-  me: '/api/user/me',
-  info: '/api/user/info',
-  changeInfo: '/api/user/profile',
-  avatar: '/api/user/avatar',
-  notifyTime: '/api/user/notify-time',
-  dashboard: '/api/user/dashboard',
-  activity: '/api/user/activity',
-  allUsers: '/api/user',
+  profile: '/user/info', // legacy alias for backward compatibility
+  info: '/user/info',
+  changeInfo: '/user/change-info',
+  avatar: '/user/avatar',
+  notifyTime: '/user/notify-time',
+  dashboard: '/user/dashboard',
+  activity: '/user/activity',
+  allUsers: '/user/all',
   
   // Course endpoints (no prefix needed)
   courses: '/courses',

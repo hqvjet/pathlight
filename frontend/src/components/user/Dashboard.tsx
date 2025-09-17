@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useActivity, useDashboard } from './dashboard/hooks';
-import Layout from '@/components/common/Layout';
-import { UserProfile } from './dashboard/types';
 import { StatsGrid } from './dashboard/StatsGrid';
 import { ProfileCard } from './dashboard/ProfileCard';
 import { ActivityHeatmap } from './dashboard/ActivityHeatmap';
@@ -17,11 +15,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const { user, dashboardData, loading } = useDashboard(onLogout);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const { handleActivityClick, generateYearActivityData } = useActivity();
-
-  const layoutUser = useMemo(() => {
-    if (!user) return { avatar_url: '', name: '', email: '' } as UserProfile;
-    return { avatar_url: user.avatar_url || '', name: user.name, email: user.email, avatarKey: Date.now() } as UserProfile & { avatarKey: number };
-  }, [user]);
 
   if (loading) {
     return (
@@ -50,26 +43,24 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
 
   return (
-    <Layout title="Trang Chủ" user={layoutUser}>
-      <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
-        <div className="max-w-7xl mx-auto space-y-10">
-          <StatsGrid user={user} />
-          <div className="grid gap-6 md:grid-cols-3">
-            <ProfileCard user={user} />
-            <ActivityHeatmap selectedYear={selectedYear} setSelectedYear={setSelectedYear} generateYearActivityData={generateYearActivityData} handleActivityClick={handleActivityClick} />
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-10">
+        <StatsGrid user={user} />
+        <div className="grid gap-6 md:grid-cols-3">
+          <ProfileCard user={user} />
+          <ActivityHeatmap selectedYear={selectedYear} setSelectedYear={setSelectedYear} generateYearActivityData={generateYearActivityData} handleActivityClick={handleActivityClick} />
+        </div>
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 className="text-lg font-semibold mb-6">Top Bảng Xếp Hạng</h3>
+            <Leaderboard top={dashboardData?.info?.user_top_rank || []} />
           </div>
-          <div className="grid gap-8 lg:grid-cols-2">
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Top Bảng Xếp Hạng</h3>
-              <Leaderboard top={dashboardData?.info?.user_top_rank || []} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Bảng Xếp Hạng Người Dùng</h3>
-              <LeaderboardTable users={dashboardData?.info?.user_top_rank || []} />
-            </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-6">Bảng Xếp Hạng Người Dùng</h3>
+            <LeaderboardTable users={dashboardData?.info?.user_top_rank || []} />
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }

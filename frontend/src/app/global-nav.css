@@ -1,0 +1,3 @@
+:root { --global-nav-offset: 0px; }
+body:has(nav[data-global-nav]) { --global-nav-offset: 80px; }
+@media (max-width: 640px) { body:has(nav[data-global-nav]) { --global-nav-offset: 64px; } }

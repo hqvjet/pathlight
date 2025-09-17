@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { Montserrat } from 'next/font/google';
 import "./globals.css";
+import "./global-nav.css";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import CookieWarning from '@/components/common/CookieWarning';
+import React from 'react';
+import GlobalNavWrapper from '@/components/layout/GlobalNavWrapper';
+import { AuthProvider } from '@/context/AuthContext';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -12,6 +16,8 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
+  // Used to resolve absolute URLs for Open Graph/Twitter images and links
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
   title: {
     default: 'PathLight',
     template: '%s | PathLight'
@@ -53,9 +59,14 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${montserrat.variable} font-sans antialiased`}
-      >
-        <CookieWarning />
-        {children}
+      >        
+        <AuthProvider>
+          <CookieWarning />
+          <GlobalNavWrapper />
+          <div className="pt-[var(--global-nav-offset,0px)]">
+            {children}
+          </div>
+        </AuthProvider>
         <ToastContainer
           position="top-right"
           autoClose={5000}

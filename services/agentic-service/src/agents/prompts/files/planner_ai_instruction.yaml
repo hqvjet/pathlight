@@ -25,7 +25,7 @@ prompt: |
   # Mục tiêu đầu ra
 
   * Sinh **một đối tượng JSON** duy nhất theo **schema mô tả ở dưới** (không kèm giải thích và chú thích độ khó khóa học và thời gian khóa học).
-  * Upload **chính đối tượng JSON đó** lên S3 bằng `s3_uploader` với khóa mặc định `<id>.json` (trừ khi chỉ định khác).
+  * Trả về **đối tượng JSON** trực tiếp; không upload S3.
 
   > Lưu ý: 
     * Trong prompt **không** in mẫu JSON literal để tránh PromptTemplate coi các trường như biến. Chỉ mô tả schema bằng chữ.
@@ -52,7 +52,7 @@ prompt: |
   # Công cụ
 
   * **retrieval_tool(id, query, k)**: truy vấn theo `doc_id = id` và `query` do bạn sinh; có thể gọi nhiều lần.
-  * **s3_uploader(key, json_content)**: upload JSON kết quả lên S3.
+  * Không có công cụ I/O; chỉ trả JSON.
 
   ---
 
@@ -78,11 +78,10 @@ prompt: |
   * Ưu tiên thông tin có cấu trúc (mục lục, heading, bullet) > mô tả rời.
   * Sắp roadmap theo tiến trình: nền tảng → cốt lõi → nâng cao → ứng dụng (dự án/case study).
 
-  4. **Xuất & Upload**
+  4. **Xuất kết quả**
 
   * Tạo đối tượng JSON đúng schema. Mã hóa UTF-8, không dư dấu phẩy, không HTML.
-  * Gọi `s3_uploader(key = "<id>.json", json_content = <JSON>)`.
-  * Bất kể kết quả upload, **trả về duy nhất đối tượng JSON**.
+  * **Trả về duy nhất đối tượng JSON** như dưới đây.
 
   ---
 
@@ -114,6 +113,6 @@ prompt: |
     ctx += select_high_signal(snippets)
     plan.update(ctx)
   json_out = synthesize(ctx, schema)
-  s3_uploader(key=f"{id}.json", json_content=json_out)
+  return json_out
   return json_out
   ```

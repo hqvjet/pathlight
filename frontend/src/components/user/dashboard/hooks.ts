@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, storage } from '@/utils/api';
+import { storage } from '@/utils/api';
+import { ApiPool } from '@/lib/api/pool';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
@@ -49,7 +50,7 @@ export function useDashboard(onLogout: () => void) {
           if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
         }
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
-        const response = await Promise.race([api.user.getDashboard(), timeoutPromise]) as { status: number; data?: unknown };
+  const response = await Promise.race([ApiPool.user.dashboard(), timeoutPromise]) as { status: number; data?: unknown };
         if (response.status === 401) {
           setLoading(false); onLogout(); return; }
         if (response.status !== 200) throw new Error(`API returned status ${response.status}`);
@@ -66,7 +67,7 @@ export function useDashboard(onLogout: () => void) {
           name: fullName,
           given_name: userInfo.given_name,
           family_name: userInfo.family_name,
-          avatar_url: userInfo.avatar_url ? userInfo.avatar_url : (userInfo.id ? `/api/user/avatar?user-id=${userInfo.id}` : undefined),
+          avatar_url: userInfo.avatar_url ? userInfo.avatar_url : (userInfo.id ? `/user/avatar?user-id=${userInfo.id}` : undefined),
           remind_time: userInfo.remind_time,
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,

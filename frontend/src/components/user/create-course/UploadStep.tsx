@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 interface UploadStepProps {
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: FileList | null) => void | Promise<void>;
   onRemove: (id: string) => void;
   onNext: () => void;
   onCancel: () => void;
@@ -135,7 +135,7 @@ export function UploadStep({ documents, uploading, onFiles, onRemove, onNext, on
       <p className="text-xs text-gray-500">Note: Toàn bộ files không được vượt quá 25MB</p>
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onCancel} className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Hủy</button>
-        <button disabled={!documents.length} onClick={onNext} className={cn('px-6 py-2 rounded-md text-white font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed', documents.length ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-400')}>Bước Tiếp</button>
+  <button disabled={!documents.length || uploading.length > 0} onClick={onNext} className={cn('px-6 py-2 rounded-md text-white font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed', documents.length && uploading.length === 0 ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-400')}>Bước Tiếp</button>
       </div>
     </div>
   );
