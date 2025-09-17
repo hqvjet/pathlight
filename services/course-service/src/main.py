@@ -4,7 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from contextlib import asynccontextmanager
-from mangum import Mangum
+try:
+    from mangum import Mangum  # type: ignore
+except Exception:
+    Mangum = None
 import json
 
 from src.config import config
@@ -66,7 +69,10 @@ app.add_middleware(
 
 app.include_router(course_router, prefix="/course")
 
-mangum_handler = Mangum(app, lifespan="off")
+if Mangum:
+    mangum_handler = Mangum(app, lifespan="off")
+else:
+    mangum_handler = None
 
 def handler(event, context):
     logger.info("Lambda Event:")
@@ -81,6 +87,8 @@ def handler(event, context):
         event["path"] = "/openapi.json"
 
     try:
+        if mangum_handler is None:
+            raise RuntimeError("Mangum is not available")
         response = mangum_handler(event, context)
         logger.info(f"Response Status: {response.get('statusCode', 'Unknown')}")
         return response
