@@ -19,31 +19,28 @@ from __future__ import annotations
 
 from typing import Optional
 
-from infrastructure.aws.dynamo_client import put_item, update_item, put_item_strict, ensure_table
+from infrastructure.aws.dynamo_client import (
+    put_item,
+    update_item,
+    put_item_strict,
+    ensure_table,
+    update_item_strict,
+)
 
 
 def start(course_id: str, strict: bool = True) -> None:
+    """Initialize or bump progress to 'started' without resetting other flags.
+
+    Uses an upsert/merge so existing fields (e.g., vectorized, plan flags) are preserved.
+    """
+    updates = {
+        "progress": "started",
+    }
     if strict:
         ensure_table(strict=True)
-        put_item_strict(
-            {
-                "course_id": course_id,
-                "title_ready": False,
-                "lessons_ready": False,
-                "final_ready": False,
-                "progress": "started",
-            }
-        )
+        update_item_strict(course_id, updates)
     else:
-        put_item(
-            {
-                "course_id": course_id,
-                "title_ready": False,
-                "lessons_ready": False,
-                "final_ready": False,
-                "progress": "started",
-            }
-        )
+        update_item(course_id, updates)
 
 
 def mark_plan_ready(course_id: str, title: Optional[str], description: Optional[str], roadmap_count: int) -> None:
@@ -85,4 +82,4 @@ def mark_final_ready(course_id: str, count: int) -> None:
 
 
 def mark_vectorized(course_id: str, ok: bool = True) -> None:
-    update_item(course_id, {"vectorized": bool(ok)})
+    update_item_strict(course_id, {"vectorized": bool(ok)})
