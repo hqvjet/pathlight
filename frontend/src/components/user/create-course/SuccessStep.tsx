@@ -69,15 +69,31 @@ export function SuccessStep({ draft, onRestart, onGoToCourses }: SuccessStepProp
         let derivedPhase: StatusPhase = 'processing';
         if (typeof body?.phase === 'string') {
           const p = body.phase.toLowerCase();
-          if (['queued','processing','generating','finalizing','completed','failed'].includes(p)) {
+          // Normalize known terminal/near-terminal strings
+          const completedSynonyms = ['completed', 'complete', 'done', 'final_ready', 'ready'];
+          if (completedSynonyms.includes(p)) {
+            derivedPhase = 'completed';
+          } else if (['queued','processing','generating','finalizing','failed'].includes(p)) {
             derivedPhase = p as StatusPhase;
           }
-        } else if (body) {
-          // Ignore 'vectorized' flag entirely per requirements.
-          if (body.generated_final_test) derivedPhase = 'finalizing';
-          if (body.generated_lessons) derivedPhase = 'generating';
-          if (body.generated_plan) derivedPhase = 'generating';
-          // If none of the above booleans true yet, we keep 'processing'.
+        }
+
+        if (body) {
+          // Completion conditions
+          const progressText = (body.progress || '').toString().toLowerCase();
+          const isCompleted = body.status === true || /final_ready|complete|completed|done|success/.test(progressText);
+          if (isCompleted) {
+            derivedPhase = 'completed';
+          } else {
+            // Ignore 'vectorized' flag entirely per requirements.
+            if (body.generated_final_test) {
+              derivedPhase = 'finalizing';
+            } else if (body.generated_lessons || body.generated_plan) {
+              derivedPhase = 'generating';
+            } else if (!derivedPhase || derivedPhase === 'processing') {
+              derivedPhase = 'processing';
+            }
+          }
         }
 
         setPhase(derivedPhase);
