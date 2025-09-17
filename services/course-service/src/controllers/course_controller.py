@@ -3,6 +3,7 @@ from datetime import datetime
 import hashlib
 import secrets
 import logging
+import string
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -55,15 +56,48 @@ def _get_s3_client():
 	return boto3.client(**kwargs)
 
 
+def _random_value(length: int = 8) -> str:
+	alphabet = string.ascii_letters + string.digits
+	return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _sanitize_filename_base(original_name: str, max_len: int = 60) -> str:
+	base = original_name.rsplit('.', 1)[0]
+	# keep alnum, dash, underscore; replace others with '-'
+	cleaned = []
+	prev_dash = False
+	for ch in base:
+		if ch.isalnum() or ch in ('-', '_'):
+			cleaned.append(ch)
+			prev_dash = False
+		else:
+			if not prev_dash:
+				cleaned.append('-')
+				prev_dash = True
+	res = ''.join(cleaned).strip('-_')
+	if not res:
+		res = 'file'
+	return res[:max_len]
+
+
 def _encrypted_filename(user_id: str, original_name: str) -> str:
+	"""Build an S3 object key that contains an encrypted/random prefix and the (sanitized) real filename.
+
+	Format: <rand8>-<shortcode>-<sanitizedBase><ext>
+	- rand8: random A-Za-z0-9 (like the provided approach)
+	- shortcode: 10-char short from SHA256(user_id|original|timestamp|salt)
+	- sanitizedBase: original filename (without extension), sanitized
+	"""
 	ext = ""
 	if "." in original_name:
 		ext = "." + original_name.rsplit(".", 1)[1].lower()
-	salt = secrets.token_hex(8)
+	salt = secrets.token_hex(4)
 	seed = f"{user_id}|{original_name}|{datetime.utcnow().isoformat()}|{salt}"
 	digest = hashlib.sha256(seed.encode()).hexdigest()
-	numeric = str(int(digest, 16) % 10**12).zfill(12)
-	return f"{numeric}{ext}"
+	short = digest[:10]
+	rand = _random_value(8)
+	base = _sanitize_filename_base(original_name)
+	return f"{rand}-{short}-{base}{ext}"
 
 
 async def upload_files_docs(request: Request, files: List[UploadFile]):
