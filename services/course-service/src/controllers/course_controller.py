@@ -203,7 +203,7 @@ async def delete_single_course(request: Request, course_id: str | None):
 		course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
 		if not course:
 			return _unauth_delete_response()
-		# Use tuple-unpacking style for single-column ORM queries (consistent with delete_all)
+		# Query single columns return tuples/rows, unpack safely
 		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
 		test_ids = [tid for (tid,) in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
 		final_test_ids = [fid for (fid,) in session.query(FinalTest.final_test_id).filter(FinalTest.course_id == course.course_id).all()]
@@ -249,15 +249,11 @@ async def delete_all_courses(request: Request):
 		courses = session.query(Course).filter(Course.user_id == user_id).all()
 		if not courses:
 			return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
-
-		# Collect ids once
 		course_ids = [c.course_id for c in courses]
 		course_info_ids = [c.course_info_id for c in courses]
 		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id.in_(course_ids)).all()]
 		test_ids = [tid for (tid,) in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
 		final_test_ids = [fid for (fid,) in session.query(FinalTest.final_test_id).filter(FinalTest.course_id.in_(course_ids)).all()]
-
-		# Delete dependencies explicitly (avoid bulk delete quirks with sqlite)
 		if test_ids:
 			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
 		if final_test_ids:
@@ -268,17 +264,12 @@ async def delete_all_courses(request: Request):
 			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
 		if lesson_ids:
 			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
-
-		# Delete courses per-entity to ensure cross-session visibility
-		for c in courses:
-			session.delete(c)
-
-		# Cleanup orphaned course_info
+		# Finally delete all courses owned by the user
+		session.query(Course).filter(Course.user_id == user_id).delete(synchronize_session=False)
 		for ci in course_info_ids:
 			still = session.query(Course).filter(Course.course_info_id == ci).first()
 			if not still:
 				session.query(CourseInfo).filter(CourseInfo.course_info_id == ci).delete(synchronize_session=False)
-
 		session.commit()
 		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
 	except Exception as e:
@@ -314,14 +305,14 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			.order_by(Lesson.created_at.asc())
 			.all()
 		)
-		lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
+		lesson_models = [LessonInfo(lesson_id=l[0], title=l[1], finish=l[2]) for l in lessons]
 		course_full = CourseFullInfo(
-			title=info.title if info else "",
-			description=info.description if info else "",
-			duration=info.duration if info else 0,
-			roadmap=info.roadmap if info else None,
+			title=getattr(info, "title", "") if info else "",
+			description=getattr(info, "description", "") if info else "",
+			duration=getattr(info, "duration", 0) if info else 0,
+			roadmap=getattr(info, "roadmap", None) if info else None,
 			lesson=lesson_models,
-			updated_at=course.updated_at.isoformat() if course.updated_at else "",
+			updated_at=course.updated_at.isoformat() if getattr(course, "updated_at", None) else "",
 		)
 		return CourseFullInfoResponse(status=200, info=course_full)
 	finally:
@@ -396,12 +387,12 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 		)
 		lesson_models = [
 			LessonDetail(
-				lesson_id=l.lesson_id,
-				course_id=l.course_id,
-				title=l.title,
-				description=l.description,
-				content=l.content,
-				finish=l.finish,
+				lesson_id=getattr(l, "lesson_id"),
+				course_id=getattr(l, "course_id"),
+				title=getattr(l, "title"),
+				description=getattr(l, "description"),
+				content=getattr(l, "content"),
+				finish=getattr(l, "finish"),
 			)
 			for l in lessons
 		]
@@ -426,12 +417,12 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 		if not lesson:
 			raise HTTPException(status_code=404, detail="Lesson not found")
 		return LessonDetail(
-			lesson_id=lesson.lesson_id,
-			course_id=lesson.course_id,
-			title=lesson.title,
-			description=lesson.description,
-			content=lesson.content,
-			finish=lesson.finish,
+			lesson_id=getattr(lesson, "lesson_id"),
+			course_id=getattr(lesson, "course_id"),
+			title=getattr(lesson, "title"),
+			description=getattr(lesson, "description"),
+			content=getattr(lesson, "content"),
+			finish=getattr(lesson, "finish"),
 		)
 	finally:
 		session.close()
@@ -460,22 +451,22 @@ def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str)
 		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
 		qa_models = [
 			LessonTestQA(
-				qa_id=qa.qa_id,
-				question=qa.question,
-				option1=qa.option1,
-				option2=qa.option2,
-				option3=qa.option3,
-				option4=qa.option4,
+				qa_id=getattr(qa, "qa_id"),
+				question=getattr(qa, "question"),
+				option1=getattr(qa, "option1"),
+				option2=getattr(qa, "option2"),
+				option3=getattr(qa, "option3"),
+				option4=getattr(qa, "option4"),
 			)
 			for qa in qas
 		]
 		test_model = LessonTest(
-			test_id=test.test_id,
-			title=test.title,
-			description=test.description,
-			duration=test.duration,
-			exp=test.exp,
-			finish=test.finish,
+			test_id=getattr(test, "test_id"),
+			title=getattr(test, "title"),
+			description=getattr(test, "description"),
+			duration=getattr(test, "duration"),
+			exp=getattr(test, "exp"),
+			finish=getattr(test, "finish"),
 			qas=qa_models,
 		)
 		return LessonTestResponse(status=200, test=test_model)
@@ -501,21 +492,21 @@ def get_final_test_controller(request: Request, course_id: str) -> FinalTestResp
 		qas = session.query(FinalQA).filter(FinalQA.final_test_id == final_test.final_test_id).all()
 		qa_models = [
 			FinalTestQA(
-				final_qa_id=qa.final_qa_id,
-				question=qa.question,
-				option1=qa.option1,
-				option2=qa.option2,
-				option3=qa.option3,
-				option4=qa.option4,
+				final_qa_id=getattr(qa, "final_qa_id"),
+				question=getattr(qa, "question"),
+				option1=getattr(qa, "option1"),
+				option2=getattr(qa, "option2"),
+				option3=getattr(qa, "option3"),
+				option4=getattr(qa, "option4"),
 			)
 			for qa in qas
 		]
 		final_test_model = FinalTestDetail(
-			final_test_id=final_test.final_test_id,
-			title=final_test.title,
-			description=final_test.description,
-			duration=final_test.duration,
-			exp=final_test.exp,
+			final_test_id=getattr(final_test, "final_test_id"),
+			title=getattr(final_test, "title"),
+			description=getattr(final_test, "description"),
+			duration=getattr(final_test, "duration"),
+			exp=getattr(final_test, "exp"),
 			qas=qa_models,
 		)
 		return FinalTestResponse(status=200, final_test=final_test_model)
