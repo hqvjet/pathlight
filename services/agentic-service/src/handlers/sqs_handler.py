@@ -8,6 +8,7 @@ Returns Lambda batch failure response format.
 from __future__ import annotations
 
 import json
+from math import log
 from typing import List
 
 from core.logging import setup_logger, log_exception
@@ -51,6 +52,7 @@ def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
             msg_type = MessageType(data.get("type"))
             if msg_type == MessageType.GENERATE_COURSE_WITH_VECTORIZE:
                 msg = GenerateCourseWithVectorizeMessage(**data)
+                logger.info(f"Processing GENERATE_COURSE_WITH_VECTORIZE message {message_id}")
                 _handle_generate_course_with_vectorize(msg)
             else:
                 raise ValueError(f"Unsupported message type: {data.get('type')}")

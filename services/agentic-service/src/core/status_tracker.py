@@ -19,19 +19,31 @@ from __future__ import annotations
 
 from typing import Optional
 
-from infrastructure.aws.dynamo_client import put_item, update_item
+from infrastructure.aws.dynamo_client import put_item, update_item, put_item_strict, ensure_table
 
 
-def start(course_id: str) -> None:
-    put_item(
-        {
-            "course_id": course_id,
-            "title_ready": False,
-            "lessons_ready": False,
-            "final_ready": False,
-            "progress": "started",
-        }
-    )
+def start(course_id: str, strict: bool = True) -> None:
+    if strict:
+        ensure_table(strict=True)
+        put_item_strict(
+            {
+                "course_id": course_id,
+                "title_ready": False,
+                "lessons_ready": False,
+                "final_ready": False,
+                "progress": "started",
+            }
+        )
+    else:
+        put_item(
+            {
+                "course_id": course_id,
+                "title_ready": False,
+                "lessons_ready": False,
+                "final_ready": False,
+                "progress": "started",
+            }
+        )
 
 
 def mark_plan_ready(course_id: str, title: Optional[str], description: Optional[str], roadmap_count: int) -> None:

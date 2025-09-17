@@ -26,23 +26,16 @@ class CombinedController:
         self.agent = AgentController()
 
     async def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int, user_id: str) -> None:
-        # Start status row early
-        try:
-            status.start(course_id)
-        except Exception:
-            pass
+        # 0) Strictly ensure Dynamo entry exists before any work
+        status.start(course_id, strict=True)
 
-        # 1) Vectorize
-        try:
-            s3 = self.files.get_files_by_names(s3_keys)
-            await self.files.vectorize_files(s3.file_streams, material_id=course_id, category=0)
-            try:
-                status.mark_vectorized(course_id, True)
-            except Exception:
-                pass
-        except Exception as e:
-            self.logger.exception("Vectorization step failed: %s", e)
-            # Do not abort the whole combined flow; continue to generation
+        # 1) Vectorize (must index to OpenSearch successfully)
+        s3 = self.files.get_files_by_names(s3_keys)
+        vect_resp = await self.files.vectorize_files(s3.file_streams, material_id=course_id, category=0)
+        # Consider any warnings as failures for the requirement "only mark vectorize=true when docs pushed to OpenSearch"
+        if getattr(vect_resp, "warnings", None):
+            raise InternalServerError("Vectorization completed with warnings; OpenSearch indexing not fully successful")
+        status.mark_vectorized(course_id, True)
 
         # 2) Generate course
         await self.agent.generate_course(

@@ -88,6 +88,37 @@ def put_item(item: Dict[str, Any]) -> None:
         logger.warning(f"DynamoDB put_item failed: {e}")
 
 
+def ensure_table(strict: bool = False) -> bool:
+    """Ensure DynamoDB table exists; optionally raise if unavailable.
+
+    Returns True if table is available, False otherwise. If strict=True and table
+    is not available, raises a RuntimeError.
+    """
+    resource = _resource()
+    table = _ensure_table(resource) if resource else None
+    ok = table is not None
+    if not ok and strict:
+        raise RuntimeError(
+            f"DynamoDB table {_table_name()} unavailable and auto-create disabled"
+        )
+    return ok
+
+
+def put_item_strict(item: Dict[str, Any]) -> None:
+    """Strict variant of put_item: raises if table unavailable or write fails."""
+    resource = _resource()
+    table = _ensure_table(resource) if resource else None
+    if not table:
+        raise RuntimeError(
+            f"DynamoDB table {_table_name()} unavailable; cannot create status item"
+        )
+    try:
+        item["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        table.put_item(Item=item)
+    except (ClientError, BotoCoreError) as e:
+        raise RuntimeError(f"DynamoDB put_item failed: {e}")
+
+
 def update_item(course_id: str, updates: Dict[str, Any]) -> None:
     resource = _resource()
     table = _ensure_table(resource) if resource else None

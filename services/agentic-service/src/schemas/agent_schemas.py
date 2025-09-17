@@ -27,10 +27,3 @@ class RetrievalArgs(BaseModel):
     id: str = Field(..., description="ID of the Course/Quiz for retrieval")
     query: str = Field(..., description="Query string for the retrieval")
     k: int = Field(..., description="Number of results to return")
-
-class S3UploadArgs(BaseModel):
-    key: str = Field(..., description="S3 object key")
-    json_content: str = Field(..., description="JSON content to upload")
-
-class S3ReadArgs(BaseModel):
-    key: str = Field(..., description="S3 object key to read")
