@@ -17,15 +17,32 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 def create_access_token(data: dict) -> str:
+    """Create a signed JWT access token.
+
+    Claims added:
+    - exp: expiration (config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES, default 1440 = 24h)
+    - iat: issued at
+    - type: "access"
+    - jti: unique token id (for blacklist support)
+    """
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(minutes=60)
+    expire_minutes_val = getattr(config, "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
+    try:
+        expire_minutes = int(expire_minutes_val)
+    except Exception:
+        expire_minutes = 1440
+    expire = now + timedelta(minutes=expire_minutes)
     to_encode.update({
         "exp": int(expire.timestamp()),
         "type": "access",
-        "iat": int(now.timestamp())
+        "iat": int(now.timestamp()),
+        "jti": str(uuid.uuid4()),
     })
-    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm="HS256")
+    algorithm = getattr(config, "JWT_ALGORITHM", "HS256")
+    if not isinstance(algorithm, str) or not algorithm:
+        algorithm = "HS256"
+    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=algorithm)
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)

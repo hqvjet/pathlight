@@ -99,6 +99,8 @@ class TestAuthService:
     def test_create_access_token_expiration(self, mock_config):
         """Test JWT token expiration is set correctly"""
         mock_config.JWT_SECRET_KEY = "test_secret_key"
+        mock_config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 1440
+        mock_config.JWT_ALGORITHM = "HS256"
         
         from services.auth_service import create_access_token
         
@@ -109,9 +111,9 @@ class TestAuthService:
         decoded = jwt.decode(token, "test_secret_key", algorithms=["HS256"])
         exp_time = datetime.fromtimestamp(decoded["exp"], tz=timezone.utc)
         
-        # Token should expire in approximately 60 minutes
-        expected_min = before_time + timedelta(minutes=59)
-        expected_max = after_time + timedelta(minutes=61)
+        # Token should expire in approximately 1440 minutes (24 hours)
+        expected_min = before_time + timedelta(minutes=1439)
+        expected_max = after_time + timedelta(minutes=1441)
         
         assert expected_min <= exp_time <= expected_max
 

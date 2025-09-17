@@ -13,6 +13,7 @@ from agents.base.prompt_manager import PromptManager
 from agents.base.llm_manager import LLMManager
 from agents.base.tool_manager import ToolManager
 from utils import save_architecture
+from config import config
 from constant import (
     PLANNER_AGENT_NAME, 
     LESSON_CREATOR_AGENT_NAME, 
@@ -94,7 +95,8 @@ course_agent = graph.compile()
 # save_architecture(course_agent, filename="course_architecture.png")
 
 async def invoke_course_agent(payload):
-    results = await course_agent.ainvoke(payload)
+    # Increase recursion limit to avoid GraphRecursionError for complex routes
+    results = await course_agent.ainvoke(payload, recursion_limit=getattr(config, "RECURSION_LIMIT", 500))
     return results
 
 

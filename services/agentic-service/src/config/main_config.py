@@ -67,6 +67,10 @@ class Config:
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", AppSettings.LOG_LEVEL)
         self.SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8000"))
 
+        # LangGraph recursion limit (prevents GraphRecursionError). Default higher than library default (25).
+        # Can be overridden via Lambda env var RECURSION_LIMIT.
+        self.RECURSION_LIMIT = int(os.getenv("RECURSION_LIMIT", "500"))
+
         # CORS Configuration
         self.ALLOWED_ORIGINS = ["*"]
         self.ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -139,19 +143,24 @@ class Config:
         """Log configuration summary (without secrets)."""
         import logging
         logger = logging.getLogger(__name__)
-        
+
         logger.info("=== Configuration Summary ===")
         logger.info(f"Environment: {self.ENVIRONMENT}")
         logger.info(f"OpenSearch Enabled: {self.OPENSEARCH_ENABLED}")
         if self.IS_LOCAL:
             logger.info(f"Skip OpenSearch in Local: {self.SKIP_OPENSEARCH_LOCAL}")
             logger.info(f"Force OpenSearch in Local: {self.FORCE_OPENSEARCH_LOCAL}")
-        logger.info(f"OpenSearch Host: {self.OPENSEARCH_HOST if self.OPENSEARCH_HOST else 'Not configured'}")
-        logger.info(f"S3 Bucket: {self.S3_BUCKET_NAME if self.S3_BUCKET_NAME else 'Not configured'}")
+        logger.info(
+            f"OpenSearch Host: {self.OPENSEARCH_HOST if self.OPENSEARCH_HOST else 'Not configured'}"
+        )
+        logger.info(
+            f"S3 Bucket: {self.S3_BUCKET_NAME if self.S3_BUCKET_NAME else 'Not configured'}"
+        )
         logger.info(f"Max File Size: {self.MAX_FILE_SIZE_BYTES / (1024*1024):.0f}MB")
         logger.info(f"Allowed Extensions: {', '.join(self.ALLOWED_FILE_EXTENSIONS)}")
         logger.info(f"Is Lambda: {self.IS_LAMBDA}")
         logger.info(f"Is Testing: {self.IS_TESTING}")
+        logger.info(f"Recursion Limit: {self.RECURSION_LIMIT}")
         logger.info("=============================")
 
 
