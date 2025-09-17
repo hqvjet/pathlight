@@ -131,8 +131,34 @@ def update_item(course_id: str, updates: Dict[str, Any]) -> None:
             resp = table.get_item(Key={"course_id": course_id})
             current = resp.get("Item", {}) or {}
         except Exception:
-            current = {"course_id": course_id}
+            current = {}
+        # Ensure PK is always present
+        if "course_id" not in current:
+            current["course_id"] = course_id
         current.update(updates)
         put_item(current)
     except (ClientError, BotoCoreError) as e:
         logger.warning(f"DynamoDB update_item failed: {e}")
+
+
+def update_item_strict(course_id: str, updates: Dict[str, Any]) -> None:
+    """Strict variant of update_item that raises on failure and ensures PK."""
+    resource = _resource()
+    table = _ensure_table(resource) if resource else None
+    if not table:
+        raise RuntimeError(
+            f"DynamoDB table {_table_name()} unavailable; cannot update status item"
+        )
+    try:
+        current = {}
+        try:
+            resp = table.get_item(Key={"course_id": course_id})
+            current = resp.get("Item", {}) or {}
+        except Exception:
+            current = {}
+        if "course_id" not in current:
+            current["course_id"] = course_id
+        current.update(updates)
+        put_item_strict(current)
+    except (ClientError, BotoCoreError) as e:
+        raise RuntimeError(f"DynamoDB update_item failed: {e}")

@@ -9,6 +9,7 @@ from controllers.file_controller import FileController
 from controllers.agent_controller import AgentController
 from schemas.agent_schemas import AgentRequest
 from core import status_tracker as status
+from config import config
 
 
 class CombinedController:
@@ -25,6 +26,41 @@ class CombinedController:
         self.files = FileController()
         self.agent = AgentController()
 
+    async def _assert_indexed(self, course_id: str, expected_chunks: int) -> None:
+        """Verify documents for course_id are present in OpenSearch with expected chunk count.
+
+        Raises InternalServerError if OpenSearch is unavailable or count mismatches.
+        """
+        os_client = getattr(self.files, "opensearch_client", None)
+        if not os_client or not os_client.is_available():
+            raise InternalServerError(
+                "OpenSearch client not available; cannot verify indexing"
+            )
+
+        body = {
+            "query": {"term": {"id": course_id}},
+            "size": 0,
+            "track_total_hits": True,
+        }
+        try:
+            res = await os_client.search(index=config.OPENSEARCH_INDEX_NAME, body=body)
+            total = res.get("hits", {}).get("total", {})
+            # OpenSearch can return int or {'value': int, 'relation': 'eq/gte'}
+            if isinstance(total, dict):
+                count = int(total.get("value", 0))
+            else:
+                count = int(total or 0)
+        except Exception as e:
+            raise InternalServerError(f"Failed verifying OpenSearch indexing: {e}")
+
+        if count != int(expected_chunks):
+            raise InternalServerError(
+                f"Indexed chunk count mismatch: expected={expected_chunks}, actual={count}"
+            )
+        self.logger.info(
+            f"OpenSearch verified: material_id={course_id}, indexed_chunks={count}"
+        )
+
     async def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int, user_id: str) -> None:
         # 0) Strictly ensure Dynamo entry exists before any work
         status.start(course_id, strict=True)
@@ -35,6 +71,8 @@ class CombinedController:
         # Consider any warnings as failures for the requirement "only mark vectorize=true when docs pushed to OpenSearch"
         if getattr(vect_resp, "warnings", None):
             raise InternalServerError("Vectorization completed with warnings; OpenSearch indexing not fully successful")
+        # Strictly verify in OpenSearch before marking vectorized
+        await self._assert_indexed(course_id, vect_resp.total_chunks)
         status.mark_vectorized(course_id, True)
 
         # 2) Generate course
