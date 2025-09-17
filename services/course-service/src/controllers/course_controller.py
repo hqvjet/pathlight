@@ -5,9 +5,16 @@ import secrets
 import logging
 import string
 
-import boto3
-from botocore.config import Config as BotoConfig
-from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
+try:
+	import boto3  # type: ignore
+except Exception:
+	boto3 = None  # type: ignore
+try:
+	from botocore.config import Config as BotoConfig  # type: ignore
+	from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError  # type: ignore
+except Exception:
+	BotoConfig = None  # type: ignore
+	ClientError = NoCredentialsError = EndpointConnectionError = None  # type: ignore
 from fastapi import Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from jose import jwt
@@ -49,6 +56,8 @@ def _verify_token(request: Request):
 
 def _get_s3_client():
 	"""Create S3 client supporting both AWS cloud and S3-compatible endpoints."""
+	if boto3 is None:
+		raise RuntimeError("boto3 is not available")
 	kwargs = {
 		"service_name": "s3",
 		"aws_access_key_id": getattr(config, "ACCESS_KEY_ID", None) or None,
@@ -125,7 +134,12 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		enc_name = _encrypted_filename(user_id, original)
 		file_payloads.append((f, content, enc_name))
 
-	s3 = _get_s3_client()
+	# Only require S3 after validation passes
+	try:
+		s3 = _get_s3_client()
+	except Exception:
+		logger.error("Upload failed: S3 client not available")
+		return {"status": 500, "message": "S3 client not available (boto3 not installed)"}
 	bucket = config.S3_BUCKET_NAME
 	if not bucket:
 		logger.error("Upload failed: S3_BUCKET_NAME is not configured")
@@ -134,22 +148,22 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
-	except EndpointConnectionError as e:
-		logger.error("S3 endpoint connection failed: %s", str(e))
-		return {"status": 500, "message": "Cannot connect to S3 endpoint. Check network or region."}
-	except NoCredentialsError:
-		logger.error("AWS credentials not found")
-		return {"status": 500, "message": "Credentials missing. Configure ACCESS_KEY_ID/SECRET_ACCESS_KEY."}
-	except ClientError as e:
-		code = e.response.get("Error", {}).get("Code", "ClientError")
-		logger.error("S3 head_bucket error: %s", code)
+	except Exception as e:  # Fallback if botocore not installed
+		code = None
+		if hasattr(e, "response"):
+			try:
+				code = e.response.get("Error", {}).get("Code")
+			except Exception:
+				code = None
+		logger.error("S3 head_bucket check failed: %s", str(e))
 		if code in {"403", "Forbidden"}:
 			return {"status": 500, "message": "Access denied to S3 bucket. Check IAM permissions."}
 		if code in {"404", "NotFound", "NoSuchBucket"}:
 			return {"status": 500, "message": "S3 bucket not found. Ensure bucket exists in the configured region."}
 		if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
 			return {"status": 500, "message": "S3 region mismatch. Verify AWS_REGION matches the bucket's region."}
-		return {"status": 500, "message": f"S3 error: {code}"}
+		# Generic network/credentials message
+		return {"status": 500, "message": "Unable to access S3 bucket. Check endpoint, credentials, and region."}
 
 	uploaded_names = []
 	for f, body, enc_name in file_payloads:
@@ -162,18 +176,17 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 				ContentType=f.content_type or "application/octet-stream",
 			)
 			uploaded_names.append(enc_name)
-		except EndpointConnectionError as e:
-			logger.error("S3 upload endpoint error: %s", str(e))
-			return {"status": 500, "message": "Cannot connect to S3 endpoint during upload."}
-		except NoCredentialsError:
-			logger.error("AWS credentials not found during upload")
-			return {"status": 500, "message": "Credentials missing during upload."}
-		except ClientError as e:
-			code = e.response.get("Error", {}).get("Code", "ClientError")
-			logger.error("S3 put_object error: %s", code)
+		except Exception as e:  # Fallback if botocore not installed
+			code = None
+			if hasattr(e, "response"):
+				try:
+					code = e.response.get("Error", {}).get("Code")
+				except Exception:
+					code = None
+			logger.error("S3 put_object failed: %s", str(e))
 			if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
 				return {"status": 500, "message": "S3 region mismatch during upload. Verify AWS_REGION and bucket region."}
-			return {"status": 500, "message": f"S3 upload failed: {code}"}
+			return {"status": 500, "message": "S3 upload failed. Check credentials/endpoint/permissions."}
 
 	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
