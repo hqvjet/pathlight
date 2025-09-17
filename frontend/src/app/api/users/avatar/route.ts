@@ -6,6 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { API_CONFIG } from '@/config/env';
 
 // =============================================================================
@@ -37,12 +39,21 @@ async function proxyToUserService(
   const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
   
   console.log(`[USER AVATAR API] Proxying ${method} request to: ${userServiceUrl}`);
-
-  return fetch(userServiceUrl, {
-    method,
-    headers,
-    body,
-  });
+  // Add a timeout to avoid hanging image requests
+  const controller = new AbortController();
+  const timeoutMs = 4500;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(userServiceUrl, {
+      method,
+      headers,
+      body,
+      signal: controller.signal,
+    });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function handleApiResponse(response: Response): Promise<NextResponse> {
@@ -90,8 +101,25 @@ export async function GET(request: NextRequest) {
     const headers = createProxyHeaders(request);
     // Remove auth header to make it public
     delete headers.Authorization;
-    const response = await proxyToUserService(`/avatar?user-id=${encodeURIComponent(userId)}`, 'GET', headers);
-    return handleApiResponse(response);
+    try {
+      const response = await proxyToUserService(`/avatar?user-id=${encodeURIComponent(userId)}`, 'GET', headers);
+      // If upstream is slow or returns a non-OK, fallback to default avatar to keep UI responsive
+      if (!response.ok) throw new Error(`Upstream error ${response.status}`);
+      return handleApiResponse(response);
+    } catch (e) {
+      console.warn('[USER AVATAR API] Upstream failed or timed out, serving default avatar:', e instanceof Error ? e.message : e);
+      const filePath = path.join(process.cwd(), 'public', 'assets', 'images', 'default_avatar.png');
+  const buf = await readFile(filePath);
+  const uint8 = new Uint8Array(buf);
+  return new NextResponse(uint8, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=600',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
   } catch (error) {
     console.error('[USER AVATAR API] GET error:', error);
     return NextResponse.json(

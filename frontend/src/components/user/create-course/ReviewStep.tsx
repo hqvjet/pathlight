@@ -30,28 +30,12 @@ export function ReviewStep({ draft, onBack, onSubmit }: ReviewStepProps) {
           <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Thông tin khóa học</h3>
           <dl className="grid sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-gray-500">Tiêu đề</dt>
-              <dd className="font-medium text-gray-800">{draft.meta.title || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Danh mục</dt>
-              <dd className="font-medium text-gray-800">{draft.meta.category || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Ngôn ngữ</dt>
-              <dd className="font-medium text-gray-800">{draft.meta.language || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Trình độ</dt>
-              <dd className="font-medium text-gray-800">{draft.meta.level || '—'}</dd>
+              <dt className="text-gray-500">Độ sâu (độ khó)</dt>
+              <dd className="font-medium text-gray-800">{draft.meta.level}</dd>
             </div>
             <div>
               <dt className="text-gray-500">Thời lượng</dt>
               <dd className="font-medium text-gray-800">{draft.meta.durationValue} {draft.meta.durationUnit}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-gray-500">Mô tả</dt>
-              <dd className="font-medium text-gray-800 whitespace-pre-line mt-1">{draft.meta.description || '—'}</dd>
             </div>
           </dl>
         </div>

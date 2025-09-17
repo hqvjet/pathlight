@@ -16,6 +16,8 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
+  // Used to resolve absolute URLs for Open Graph/Twitter images and links
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
   title: {
     default: 'PathLight',
     template: '%s | PathLight'

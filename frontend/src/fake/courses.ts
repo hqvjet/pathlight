@@ -16,10 +16,12 @@ export interface CourseDraftDocumentMeta {
   type: string;
   uploadedAt: Date;
   url?: string; // local object URL for preview if needed
+  s3Key?: string; // backend-returned S3 key for this file
 }
 
 export interface CourseDraftState {
   step: number;
+  courseId?: string; // server-side identifier for tracking status
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
   meta: {
@@ -40,6 +42,7 @@ export interface CourseDraftState {
 
 export const createEmptyDraft = (): CourseDraftState => ({
   step: 1,
+  courseId: undefined,
   documents: [],
   uploading: [],
   meta: {

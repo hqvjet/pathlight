@@ -133,8 +133,16 @@ export class ApiClient {
     return `${base}${cleanEndpoint}`;
   }
   private async buildHeaders(config: ApiRequestConfig): Promise<HeadersInit> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-    if (!config.skipAuth) { const token = this.tokenManager.getToken(); if (token) headers.Authorization = `Bearer ${token}`; }
+    const isFormData = typeof FormData !== 'undefined' && (config as RequestInit)?.body instanceof FormData;
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    // Only set JSON content-type when not sending FormData
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (!config.skipAuth) {
+      const token = this.tokenManager.getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
     if (config.headers) Object.assign(headers, config.headers as Record<string, string>);
     return headers;
   }
@@ -199,21 +207,25 @@ export class ApiClient {
   delete<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'DELETE' }); }
   async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
-    const formData = new FormData(); formData.append('file', file);
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    // Remove content-type for multipart so browser sets boundary
-    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
-      delete (headers as Record<string, unknown>)['Content-Type'];
-    }
-    return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+  const formData = new FormData(); formData.append('file', file, file.name);
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+  return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
-    const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file));
-    const headers = await this.buildHeaders({ ...config, skipAuth: config.skipAuth });
-    if (typeof (headers as Record<string, unknown>)['Content-Type'] !== 'undefined') {
-      delete (headers as Record<string, unknown>)['Content-Type'];
+  const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file, file.name));
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+  }
+
+  // Upload multiple files with the same field name (e.g., 'files'), suitable for FastAPI List[UploadFile]
+  async uploadFiles<T>(endpoint: string, files: File[], fieldName = 'files', config: ApiRequestConfig = {}) {
+    const url = this.buildUrl(endpoint, config.baseURL);
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append(fieldName, file, file.name);
     }
+  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
 }
