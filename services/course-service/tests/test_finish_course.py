@@ -152,6 +152,7 @@ def test_finish_course_not_all_lessons_done(mocker, client, seed_full_course):
         session.close()
 
     resp = client.put("/course/finish", json={"course_id": target}, headers={"Authorization": "Bearer tok"})
+    assert resp.status_code == 401  # controller now returns HTTP 401 directly
     data = resp.json()
     assert data["status"] == 401
 
@@ -186,5 +187,5 @@ def test_finish_lesson_not_owner(mocker, client, seed_full_course):
     course_id = seed_full_course["course_id"]
     lid = seed_full_course["lesson_ids"][0]
     resp = client.put(f"/course/{course_id}/lessons/{lid}/finish", headers={"Authorization": "Bearer tok"})
-    assert resp.status_code == 200  # we return status key inside payload
+    assert resp.status_code == 401  # controller now returns HTTP 401 directly
     assert resp.json()["status"] == 401

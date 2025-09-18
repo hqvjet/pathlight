@@ -1,10 +1,7 @@
 from fastapi import APIRouter, Request, UploadFile, File, Depends, Query, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel, Field
-try:
-    import boto3  # type: ignore
-except Exception:
-    boto3 = None  # type: ignore
+import boto3
 from botocore.exceptions import ClientError
 from src.config import config
 from src.controllers.course_controller import (
@@ -114,9 +111,6 @@ async def request_create_course(
     bucket = getattr(config, "S3_BUCKET_NAME", None) or os.getenv("S3_BUCKET_NAME")
     if not bucket:
         return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
-
-    if boto3 is None:
-        return {"status": 500, "message": "S3 client not available (boto3 not installed)"}
 
     s3 = boto3.client("s3", region_name=region)
     max_bytes = 15 * 1024 * 1024  # 15MB

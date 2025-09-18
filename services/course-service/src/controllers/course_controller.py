@@ -1,21 +1,12 @@
 from typing import List, Optional
 from datetime import datetime
-import os
 import hashlib
 import secrets
 import logging
 import string
-
-try:
-	import boto3  # type: ignore
-except Exception:
-	boto3 = None  # type: ignore
-try:
-	from botocore.config import Config as BotoConfig  # type: ignore
-	from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError  # type: ignore
-except Exception:
-	BotoConfig = None  # type: ignore
-	ClientError = NoCredentialsError = EndpointConnectionError = None  # type: ignore
+import boto3
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
 from fastapi import Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from jose import jwt
@@ -43,41 +34,20 @@ logger = logging.getLogger(__name__)
 
 
 def _verify_token(request: Request):
-	"""Return user_id (sub) if Authorization header is valid; otherwise None.
-
-	Behavior:
-	- In tests (PYTEST_CURRENT_TEST set): try patched jwt.decode first, else fallback to 'user-1'.
-	- In normal runs: require successful decode using configured secret/algorithm.
-	"""
-	auth_header = request.headers.get("Authorization")
-	if not auth_header or not auth_header.startswith("Bearer "):
-		return None
-	token = auth_header.split(" ")[1]
-
-	if os.getenv("PYTEST_CURRENT_TEST"):
-		# Prefer patched decode supplied by tests
-		try:
-			payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-			sub = payload.get("sub") if isinstance(payload, dict) else None
-			if sub:
-				return sub
-		except Exception:
-			# fall through to default test user
-			pass
-		return "user-1"
-
-	# Non-test: strict decode
+	"""Return user_id (sub) if Authorization header is valid; otherwise None."""
 	try:
+		auth_header = request.headers.get("Authorization")
+		if not auth_header or not auth_header.startswith("Bearer "):
+			return None
+		token = auth_header.split(" ")[1]
 		payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-		return payload.get("sub") if isinstance(payload, dict) else None
+		return payload.get("sub")
 	except Exception:
 		return None
 
 
 def _get_s3_client():
 	"""Create S3 client supporting both AWS cloud and S3-compatible endpoints."""
-	if boto3 is None:
-		raise RuntimeError("boto3 is not available")
 	kwargs = {
 		"service_name": "s3",
 		"aws_access_key_id": getattr(config, "ACCESS_KEY_ID", None) or None,
@@ -154,12 +124,7 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		enc_name = _encrypted_filename(user_id, original)
 		file_payloads.append((f, content, enc_name))
 
-	# Only require S3 after validation passes
-	try:
-		s3 = _get_s3_client()
-	except Exception:
-		logger.error("Upload failed: S3 client not available")
-		return {"status": 500, "message": "S3 client not available (boto3 not installed)"}
+	s3 = _get_s3_client()
 	bucket = config.S3_BUCKET_NAME
 	if not bucket:
 		logger.error("Upload failed: S3_BUCKET_NAME is not configured")
@@ -168,22 +133,22 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
-	except Exception as e:  # Fallback if botocore not installed
-		code = None
-		if hasattr(e, "response"):
-			try:
-				code = getattr(e, "response", {}).get("Error", {}).get("Code")
-			except Exception:
-				code = None
-		logger.error("S3 head_bucket check failed: %s", str(e))
+	except EndpointConnectionError as e:
+		logger.error("S3 endpoint connection failed: %s", str(e))
+		return {"status": 500, "message": "Cannot connect to S3 endpoint. Check network or region."}
+	except NoCredentialsError:
+		logger.error("AWS credentials not found")
+		return {"status": 500, "message": "Credentials missing. Configure ACCESS_KEY_ID/SECRET_ACCESS_KEY."}
+	except ClientError as e:
+		code = e.response.get("Error", {}).get("Code", "ClientError")
+		logger.error("S3 head_bucket error: %s", code)
 		if code in {"403", "Forbidden"}:
 			return {"status": 500, "message": "Access denied to S3 bucket. Check IAM permissions."}
 		if code in {"404", "NotFound", "NoSuchBucket"}:
 			return {"status": 500, "message": "S3 bucket not found. Ensure bucket exists in the configured region."}
 		if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
 			return {"status": 500, "message": "S3 region mismatch. Verify AWS_REGION matches the bucket's region."}
-		# Generic network/credentials message
-		return {"status": 500, "message": "Unable to access S3 bucket. Check endpoint, credentials, and region."}
+		return {"status": 500, "message": f"S3 error: {code}"}
 
 	uploaded_names = []
 	for f, body, enc_name in file_payloads:
@@ -196,18 +161,18 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 				ContentType=f.content_type or "application/octet-stream",
 			)
 			uploaded_names.append(enc_name)
-		except Exception as e:  # Fallback if botocore not installed
-			code = None
-			response = getattr(e, "response", None)
-			if response is not None:
-				try:
-					code = response.get("Error", {}).get("Code")
-				except Exception:
-					code = None
-			logger.error("S3 put_object failed: %s", str(e))
+		except EndpointConnectionError as e:
+			logger.error("S3 upload endpoint error: %s", str(e))
+			return {"status": 500, "message": "Cannot connect to S3 endpoint during upload."}
+		except NoCredentialsError:
+			logger.error("AWS credentials not found during upload")
+			return {"status": 500, "message": "Credentials missing during upload."}
+		except ClientError as e:
+			code = e.response.get("Error", {}).get("Code", "ClientError")
+			logger.error("S3 put_object error: %s", code)
 			if code in {"301", "PermanentRedirect", "AuthorizationHeaderMalformed"}:
 				return {"status": 500, "message": "S3 region mismatch during upload. Verify AWS_REGION and bucket region."}
-			return {"status": 500, "message": "S3 upload failed. Check credentials/endpoint/permissions."}
+			return {"status": 500, "message": f"S3 upload failed: {code}"}
 
 	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
@@ -225,18 +190,31 @@ async def delete_single_course(request: Request, course_id: str | None):
 		return _unauth_delete_response()
 	if not course_id:
 		return _unauth_delete_response()
-	from src.database import SessionLocal, Base, engine
-	from src.models import Course
-	try:
-		Base.metadata.create_all(bind=engine)
-	except Exception:
-		pass
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
 	session = SessionLocal()
 	try:
-		# Delete only the course row for this user (tests assert only Course table changes)
-		deleted = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).delete(synchronize_session=False)
-		if not deleted:
+		course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
+		if not course:
 			return _unauth_delete_response()
+		lesson_ids = [l.lesson_id for l in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
+		test_ids = [t.test_id for t in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
+		final_test_ids = [ft.final_test_id for ft in session.query(FinalTest.final_test_id).filter(FinalTest.course_id == course.course_id).all()]
+		if test_ids:
+			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if test_ids:
+			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if lesson_ids:
+			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		course_info_id = course.course_info_id
+		session.delete(course)
+		other = session.query(Course).filter(Course.course_info_id == course_info_id).first()
+		if not other:
+			session.query(CourseInfo).filter(CourseInfo.course_info_id == course_info_id).delete(synchronize_session=False)
 		session.commit()
 		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa khóa học thành công"})
 	except Exception as e:
@@ -252,15 +230,33 @@ async def delete_all_courses(request: Request):
 	user_id = _verify_token(request)
 	if not user_id:
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
-	from src.database import SessionLocal, Base, engine
-	from src.models import Course
-	try:
-		Base.metadata.create_all(bind=engine)
-	except Exception:
-		pass
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
 	session = SessionLocal()
 	try:
-		session.query(Course).filter(Course.user_id == user_id).delete(synchronize_session=False)
+		courses = session.query(Course).filter(Course.user_id == user_id).all()
+		if not courses:
+			return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
+		course_ids = [c.course_id for c in courses]
+		course_info_ids = [c.course_info_id for c in courses]
+		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id.in_(course_ids)).all()]
+		test_ids = [tid for (tid,) in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
+		final_test_ids = [fid for (fid,) in session.query(FinalTest.final_test_id).filter(FinalTest.course_id.in_(course_ids)).all()]
+		if test_ids:
+			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if test_ids:
+			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
+		if final_test_ids:
+			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		if lesson_ids:
+			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		session.query(Course).filter(Course.course_id.in_(course_ids), Course.user_id == user_id).delete(synchronize_session=False)
+		for ci in course_info_ids:
+			still = session.query(Course).filter(Course.course_info_id == ci).first()
+			if not still:
+				session.query(CourseInfo).filter(CourseInfo.course_info_id == ci).delete(synchronize_session=False)
 		session.commit()
 		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
 	except Exception as e:
@@ -296,14 +292,14 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			.order_by(Lesson.created_at.asc())
 			.all()
 		)
-		lesson_models = [LessonInfo(lesson_id=l[0], title=l[1], finish=l[2]) for l in lessons]
+		lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
 		course_full = CourseFullInfo(
 			title=getattr(info, "title", "") if info else "",
 			description=getattr(info, "description", "") if info else "",
 			duration=getattr(info, "duration", 0) if info else 0,
 			roadmap=getattr(info, "roadmap", None) if info else None,
 			lesson=lesson_models,
-			updated_at=course.updated_at.isoformat() if getattr(course, "updated_at", None) else "",
+			updated_at=course.updated_at.isoformat() if getattr(course, "updated_at", None) is not None else "",
 		)
 		return CourseFullInfoResponse(status=200, info=course_full)
 	finally:
@@ -563,17 +559,16 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 
 	user_id = _verify_token(request)
 	if not user_id:
-		# Tests expect HTTP 200 with status field 401 in some cases
-		return {"status": 401, "message": "Bạn không có quyền cập nhật bài học này"}
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
 
 	session = SessionLocal()
 	try:
 		course = session.query(Course).filter_by(course_id=payload.course_id, user_id=user_id).first()
 		if not course:
-			return {"status": 401, "message": "Bạn không có quyền cập nhật bài học này"}
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
 		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
 		if not lesson:
-			return {"status": 404, "message": "Lesson không tồn tại"}
+			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
 		setattr(lesson, "finish", True)
 		# Mark related tests finished (if any)
 		tests = session.query(Test).filter(Test.lesson_id == lesson.lesson_id).all()
