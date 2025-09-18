@@ -62,6 +62,12 @@ class CombinedController:
         )
 
     async def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int, user_id: str) -> None:
+        self.logger.info(
+            "CombinedController.run: course_id=%s user_id=%s files=%d",
+            course_id,
+            user_id,
+            len(s3_keys or []),
+        )
         # 0) Strictly ensure Dynamo entry exists before any work
         status.start(course_id, strict=True)
 

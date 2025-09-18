@@ -17,6 +17,7 @@ class AgentController:
             id=request.id,
             difficulty=request.difficulty,
             duration=request.duration,
+            user_id=request.user_id,
         )
 
         try:
@@ -40,9 +41,14 @@ class AgentController:
         # Persist to database (best effort; don't fail main flow if DB missing)
         try:
             init_database()
+            # Ensure user_id survives through the agent pipeline
             if isinstance(result, State):
+                if not getattr(result, "user_id", None) and request.user_id:
+                    result.user_id = request.user_id
                 save_course_state(result)
             else:
+                if not result.get("user_id") and request.user_id:
+                    result["user_id"] = request.user_id
                 save_course_state(State(**result))  # type: ignore[arg-type]
         except Exception:
             self.logger.exception("Course persistence step failed for %s", request.id)
