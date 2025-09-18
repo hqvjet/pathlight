@@ -146,14 +146,15 @@ async def request_create_course(
         return {"status": 500, "message": f"Failed to submit job: {e}"}
 
 
+@router.get("/all", response_model=CourseListResponse)
+async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
+    # Important: define static route before dynamic '/{course_id}' to prevent route shadowing
+    return get_all_courses_controller(request)
+
+
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)
 async def get_course_full_info(course_id: str, request: Request, _auth=Depends(require_bearer)):
     return get_course_full_info_controller(request, course_id)
-
-
-@router.get("/all", response_model=CourseListResponse)
-async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
-    return get_all_courses_controller(request)
 
 
 @router.get("/{course_id}/lessons", response_model=LessonListResponse)
