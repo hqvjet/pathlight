@@ -14,6 +14,8 @@ from src.controllers.course_controller import (
     get_lesson_detail_controller,
     get_lesson_test_controller,
     get_final_test_controller,
+    finish_course_controller,
+    finish_lesson_controller,
 )
 from src.services.course_auth import require_bearer
 from src.services.status_service import fetch_generation_status
@@ -33,6 +35,8 @@ from src.schemas.course_schemas import (
     FinalTestResponse,
     FinalTestDetail,
     FinalTestQA,
+    FinishCourseRequest,
+    FinishLessonRequest,
 )
 import os
 
@@ -174,3 +178,14 @@ async def get_lesson_test(course_id: str, lesson_id: str, request: Request, _aut
 @router.get("/{course_id}/final-test", response_model=FinalTestResponse)
 async def get_final_test(course_id: str, request: Request, _auth=Depends(require_bearer)):
     return get_final_test_controller(request, course_id)
+
+
+@router.put("/finish")
+async def finish_course(request: Request, body: FinishCourseRequest, _auth=Depends(require_bearer)):
+    return finish_course_controller(request, body)
+
+
+@router.put("/{course_id}/lessons/{lesson_id}/finish")
+async def finish_lesson(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
+    payload = FinishLessonRequest(course_id=course_id, lesson_id=lesson_id)
+    return finish_lesson_controller(request, payload)
