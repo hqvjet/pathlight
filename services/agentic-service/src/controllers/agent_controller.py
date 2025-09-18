@@ -22,6 +22,7 @@ class AgentController:
 
         try:
             # 15-minute timeout guard
+            self.logger.info("Invoking course agent with recursion_limit=%s", getattr(__import__('config').config, 'RECURSION_LIMIT', 500))
             result = await asyncio.wait_for(invoke_course_agent(init_state), timeout=900)
         except asyncio.TimeoutError:
             raise InternalServerError("Course generation timed out after 15 minutes")
