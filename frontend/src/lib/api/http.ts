@@ -70,9 +70,12 @@ class TokenManager {
   }
   removeToken() {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(STORAGE_KEYS.TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.USER);
+  // Clear cookie/session tokens via unified storage util first
+  try { storage.removeToken(); } catch {}
+  // Backward compatibility cleanup
+  localStorage.removeItem(STORAGE_KEYS.TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.USER);
   }
   getRefreshToken() { return typeof window === 'undefined' ? null : localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN); }
   setRefreshToken(token: string) { if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token); }
@@ -173,10 +176,11 @@ export class ApiClient {
         try {
           await this.tokenManager.refreshToken();
           const newHeaders = await this.buildHeaders(config);
-            const retryResponse = await fetch(url, { ...config, headers: newHeaders, signal: controller.signal });
-            return this.handleResponse<T>(retryResponse);
+          const retryResponse = await fetch(url, { ...config, headers: newHeaders, signal: controller.signal });
+          return this.handleResponse<T>(retryResponse);
         } catch (refreshError) {
-          this.tokenManager.removeToken(); if (typeof window !== 'undefined') window.location.href = '/auth/signin'; throw refreshError;
+          // Do NOT auto-redirect or clear tokens here. Surface the error so UI can handle gracefully.
+          throw refreshError instanceof Error ? refreshError : new Error('Unauthorized');
         }
       }
       return this.handleResponse<T>(response);
