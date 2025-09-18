@@ -96,7 +96,9 @@ course_agent = graph.compile()
 
 async def invoke_course_agent(payload):
     # Increase recursion limit to avoid GraphRecursionError for complex routes
-    results = await course_agent.ainvoke(payload, recursion_limit=getattr(config, "RECURSION_LIMIT", 500))
+    # Some LangGraph versions require passing via `config={'recursion_limit': N}`
+    limit = getattr(config, "RECURSION_LIMIT", 500)
+    results = await course_agent.ainvoke(payload, config={"recursion_limit": limit, "max_iterations": limit})
     return results
 
 

@@ -68,7 +68,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Protected routes that require authentication
-  const protectedRoutes = [ '/user/dashboard', '/user/profile', '/courses', '/quizzes', '/admin' ];
+  const protectedRoutes = [ '/user/dashboard', '/user/profile', '/user/my-courses', '/user/my-quizzes', '/admin' ];
   const publicRoutes = [ '/auth/signin', '/auth/signup', '/auth/forgot-password' ];
 
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
@@ -84,8 +84,12 @@ export function middleware(request: NextRequest) {
 
   // Redirect authenticated (non-expired) users away from public auth routes
   if (isPublicRoute && authToken) {
-    url.pathname = '/user/dashboard';
-    return NextResponse.redirect(url);
+    // If user is navigating explicitly due to redirect param, allow staying
+    const hasRedirectBack = request.nextUrl.searchParams.get('redirect');
+    if (!hasRedirectBack) {
+      url.pathname = '/user/dashboard';
+      return NextResponse.redirect(url);
+    }
   }
 
   // Continue with (possible) cookie clearing if token expired but route is public (e.g. /auth/signin)

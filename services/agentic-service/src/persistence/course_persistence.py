@@ -73,7 +73,13 @@ def save_course_state(state: State) -> None:
 
     create_all()
 
-    user_id = getattr(state, "user_id", None) or os.getenv("DEFAULT_USER_ID", "system")
+    user_id = getattr(state, "user_id", None) or os.getenv("DEFAULT_USER_ID")
+    if not user_id:
+        logger.error(
+            "Missing user_id for course %s; refusing to persist with 'system' default. Provide user_id in State.",
+            state.id,
+        )
+        return
 
     with next(get_db()) as db:  # type: ignore[misc]
         try:
