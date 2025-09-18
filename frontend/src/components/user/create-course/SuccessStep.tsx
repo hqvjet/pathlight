@@ -138,47 +138,119 @@ export function SuccessStep({ draft, onRestart, onGoToCourses }: SuccessStepProp
 
   const activeIndex = checkpoints.findIndex(c => c.key === phase);
 
+  // Dynamic header and description based on phase to avoid premature success copy
+  const { titleText, descText } = useMemo(() => {
+    const name = draft.meta.title || 'mới';
+    switch (phase) {
+      case 'completed':
+        return {
+          titleText: 'Hoàn Thành',
+          descText: `Khóa học ${name} đã được tạo thành công. Bạn có thể bắt đầu thêm nội dung bài học hoặc quay lại để tạo khóa học khác.`,
+        };
+      case 'failed':
+        return {
+          titleText: 'Không thể tạo khóa học',
+          descText: 'Đã xảy ra lỗi trong quá trình tạo khóa học. Vui lòng thử lại hoặc tạo yêu cầu mới.',
+        };
+      case 'finalizing':
+        return {
+          titleText: 'Đang hoàn thiện cấu trúc',
+          descText: 'Hệ thống đang sắp xếp và hoàn thiện cấu trúc khóa học của bạn. Vui lòng chờ trong giây lát.',
+        };
+      case 'generating':
+        return {
+          titleText: 'Đang tạo nội dung khóa học',
+          descText: 'Hệ thống đang tạo nội dung bài học dựa trên tài liệu của bạn. Tiến trình sẽ tự động cập nhật.',
+        };
+      case 'processing':
+        return {
+          titleText: 'Đang phân tích tài liệu',
+          descText: 'Hệ thống đang phân tích tài liệu để lập kế hoạch cho khóa học.',
+        };
+      case 'queued':
+      case 'initializing':
+      default:
+        return {
+          titleText: 'Khởi tạo yêu cầu',
+          descText: 'Yêu cầu của bạn đã được tiếp nhận và đang xếp hàng xử lý. Vui lòng đợi trong giây lát.',
+        };
+    }
+  }, [phase, draft.meta.title]);
+
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 space-y-8">
       <div className="relative w-64 h-64 mx-auto">
         <Image src="/assets/images/create_course_success.png" alt="Tạo khóa học thành công" fill priority className="object-contain drop-shadow-sm" />
       </div>
       <div className="space-y-4 max-w-xl">
-        <h2 className="text-2xl font-semibold text-gray-900">Hoàn Thành</h2>
-        <p className="text-gray-600 leading-relaxed text-base">Khóa học <span className="font-semibold text-gray-900">{draft.meta.title || 'mới'}</span> đã được tạo thành công. Bạn có thể bắt đầu thêm nội dung bài học hoặc quay lại để tạo khóa học khác.</p>
+        <h2 className="text-2xl font-semibold text-gray-900">{titleText}</h2>
+        <p className="text-gray-600 leading-relaxed text-base">{descText}</p>
       </div>
 
       {/* Checkpoints */}
       {courseId && (
         <div className="w-full max-w-2xl mt-4">
-          <div className="flex items-center justify-between">
-            {checkpoints.map((c, idx) => (
-              <div key={c.key} className="flex-1 flex items-center">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border-2 ${idx <= activeIndex ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-gray-300 text-gray-400'}`}>
-                  {idx + 1}
-                </div>
-                {idx < checkpoints.length - 1 && (
-                  <div className={`h-0.5 flex-1 mx-2 ${idx < activeIndex ? 'bg-orange-500' : 'bg-gray-200'}`} />
-                )}
-              </div>
-            ))}
+          {/* Track lines (base + progress) */}
+          <div className="relative">
+            <div className="absolute left-0 right-0 top-5 h-0.5 bg-gray-200" aria-hidden="true" />
+            <div
+              className="absolute left-0 top-5 h-0.5 bg-orange-500 transition-all"
+              style={{ width: `${Math.max(0, activeIndex) / Math.max(1, checkpoints.length - 1) * 100}%` }}
+              aria-hidden="true"
+            />
+            {/* Nodes + labels aligned in one grid so titles center under nodes */}
+            <div className="grid grid-cols-5 gap-0">
+              {checkpoints.map((c, idx) => {
+                const isActive = idx === activeIndex;
+                const isDone = idx < activeIndex;
+                return (
+                  <div key={c.key} className="col-span-1 flex flex-col items-center">
+                    <div
+                      className={
+                        `z-10 flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border-2 ` +
+                        (isDone || isActive
+                          ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
+                          : 'bg-white border-gray-300 text-gray-400') +
+                        (isActive ? ' ring-2 ring-orange-300' : '')
+                      }
+                      aria-current={isActive ? 'step' : undefined}
+                    >
+                      {idx + 1}
+                    </div>
+                    <div className={`mt-2 text-center truncate px-1 text-[11px] sm:text-xs ${isActive ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                      {c.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="mt-3 grid grid-cols-5 text-[11px] sm:text-xs text-gray-600">
-            {checkpoints.map(c => (
-              <div key={c.key} className="text-center truncate px-1">
-                {c.label}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 text-sm text-gray-500">
-            <span className="font-medium text-gray-700">Trạng thái:</span> {message}
-            {lastUpdated && <span className="ml-2">• Cập nhật: {lastUpdated.toLocaleTimeString()}</span>}
+          <div className="mt-4 text-sm">
+            {/* Status line emphasis */}
+            <div className={
+              `inline-flex items-center gap-2 px-3 py-2 rounded-md ` +
+              (phase === 'completed' ? 'bg-green-50 text-green-700' : phase === 'failed' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-700')
+            }>
+              {phase !== 'completed' && phase !== 'failed' && (
+                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" aria-hidden="true" />
+              )}
+              <span className="font-semibold">Trạng thái:</span>
+              <span>{message}</span>
+              {lastUpdated && <span className="opacity-70">• Cập nhật: {lastUpdated.toLocaleTimeString()}</span>}
+            </div>
           </div>
         </div>
       )}
 
       <div className="flex flex-wrap gap-4 pt-4">
-        <button onClick={onGoToCourses} className="px-8 h-11 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-semibold shadow-sm">Đi đến Khóa Học</button>
+        <button
+          onClick={onGoToCourses}
+          disabled={phase !== 'completed'}
+          title={phase !== 'completed' ? 'Chỉ khả dụng sau khi hoàn tất' : undefined}
+          className={`px-8 h-11 rounded-md text-white font-semibold shadow-sm ${phase === 'completed' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-300 cursor-not-allowed'}`}
+        >
+          Đi đến Khóa Học
+        </button>
         <button onClick={onRestart} className="px-8 h-11 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Tạo Khóa Học Khác</button>
       </div>
     </div>
