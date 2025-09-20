@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createEmptyDraft, CourseDraftDocumentMeta, UploadingFile, CourseDraftState } from '@/fake/courses';
 import { Stepper } from './Stepper';
 import { UploadStep } from './UploadStep';
@@ -13,6 +14,7 @@ import { ApiErrorClass } from '@/lib/api/http';
 import { API_CONFIG } from '@/config/env';
 
 export function CreateCourseWizard() {
+  const router = useRouter();
   const [draft, setDraft] = useState<CourseDraftState>(createEmptyDraft());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -109,7 +111,10 @@ export function CreateCourseWizard() {
                 onFiles={simulateUpload}
                 onRemove={removeDoc}
                 onNext={next}
-                onCancel={() => setDraft(createEmptyDraft())}
+                onCancel={() => {
+                  // Navigate to My Courses when cancelling upload step
+                  router.push('/user/my-courses');
+                }}
               />
             )}
             {draft.step === 2 && (
@@ -131,7 +136,7 @@ export function CreateCourseWizard() {
               <SuccessStep
                 draft={draft}
                 onRestart={() => setDraft(createEmptyDraft())}
-                onGoToCourses={() => showToast.info('Đi đến danh sách khóa học (demo)')}
+                onGoToCourses={() => router.push('/user/my-courses')}
               />
             )}
           </div>
