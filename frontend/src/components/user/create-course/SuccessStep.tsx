@@ -251,6 +251,12 @@ export function SuccessStep({ draft, onRestart, onGoToCourses }: SuccessStepProp
         >
           Đi đến Khóa Học
         </button>
+        <a
+          href="/user/generation-tracking"
+          className="px-8 h-11 inline-flex items-center rounded-md bg-white border border-orange-300 text-orange-700 hover:bg-orange-50 font-medium"
+        >
+          Theo dõi tiến trình tạo khóa học
+        </a>
         <button onClick={onRestart} className="px-8 h-11 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Tạo Khóa Học Khác</button>
       </div>
     </div>

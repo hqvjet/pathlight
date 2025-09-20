@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { useEffect, useMemo, useState } from 'react';
 import { courseApi } from '@/lib/api/course';
 
@@ -82,10 +83,15 @@ export default function MyCoursesPage() {
 				<p className="text-sm text-gray-500 font-medium tracking-wide">{greeting}</p>
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<h1 className="text-2xl font-semibold text-gray-900">Khóa Học Của Tôi</h1>
-					<Link href="/user/create-course" className="inline-flex items-center gap-2 px-5 h-11 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-sm shadow-orange-500/30">
-						<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-						Tạo Khóa Học
-					</Link>
+					<div className="flex items-center gap-3">
+						<Link href="/user/generation-tracking">
+							<Button variant="outline" className="border-gray-200">Theo dõi tiến trình</Button>
+						</Link>
+						<Link href="/user/create-course" className="inline-flex items-center gap-2 px-5 h-11 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow-sm shadow-orange-500/30">
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+							Tạo Khóa Học
+						</Link>
+					</div>
 				</div>
 			</div>
 

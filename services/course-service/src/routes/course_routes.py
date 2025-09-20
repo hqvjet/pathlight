@@ -18,7 +18,7 @@ from src.controllers.course_controller import (
     finish_lesson_controller,
 )
 from src.services.course_auth import require_bearer
-from src.services.status_service import fetch_generation_status
+from src.services.status_service import fetch_generation_status, fetch_user_generations
 from src.services.sqs_publisher import send_generate_with_vectorize
 from src.schemas.course_schemas import (
     CreateCourseRequest,
@@ -77,6 +77,23 @@ async def get_generation_status(course_id: str = Query(...), _auth=Depends(requi
     if not result:
         return {"status": 501, "message": "Không tìm thấy khóa học này, xin vui lòng thử lại"}
     return {"status": 200, "body": result}
+
+
+@router.get("/generations/my")
+async def list_my_generations(request: Request, _auth=Depends(require_bearer)):
+    """List all course generation records in DynamoDB for the current user.
+
+    Response shape (200): { "status": 200, "items": [ { course_id, user_id, progress, ... } ] }
+    On error/unauthorized: appropriate status codes with message.
+    """
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    rows = fetch_user_generations(user_id)
+    if rows is None:
+        return {"status": 500, "message": "Không thể lấy dữ liệu tiến trình"}
+    return {"status": 200, "items": rows}
 
 
 @router.post("/create")

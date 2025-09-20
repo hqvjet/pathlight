@@ -15,6 +15,7 @@ export const courseApi = {
   getStatus: (course_id: string) => apiClient.get<{ status: number; body?: unknown; message?: string }>(`/course/status?course_id=${encodeURIComponent(course_id)}`),
   getById: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}`),
   getAll: () => apiClient.get(`/course/all`),
+  listMyGenerations: () => apiClient.get<{ status: number; items?: Array<Record<string, unknown>>; message?: string }>(`/course/generations/my`),
   listLessons: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons`),
   getLessonDetail: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}`),
   getLessonTest: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/test`),

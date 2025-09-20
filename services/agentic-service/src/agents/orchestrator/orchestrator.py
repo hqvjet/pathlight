@@ -38,9 +38,10 @@ class Orchestrator:
         # 1) Need a plan
         if not title and not description and not roadmap:
             tracer.record("decide", "planner needed (no title/description/roadmap)")
-            # Start tracking in DynamoDB at the very beginning
+            # Start tracking in DynamoDB at the very beginning (requires user_id)
             try:
-                status.start(id)
+                if getattr(state, "user_id", None):
+                    status.start(id, state.user_id)
             except Exception:
                 pass
             return "create_plan"
