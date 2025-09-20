@@ -2,6 +2,7 @@
 
 Schema (DynamoDB Item):
 - course_id (PK)
+- user_id: string (non-key; for tracking rows by owner)
 - title_ready: bool
 - lessons_ready: bool
 - final_ready: bool
@@ -9,7 +10,7 @@ Schema (DynamoDB Item):
 - updated_at: iso8601
 
 Usage:
-- status_tracker.start(course_id)
+- status_tracker.start(course_id, user_id)
 - status_tracker.mark_plan_ready(course_id, title, desc, roadmap_count)
 - status_tracker.mark_lessons_ready(course_id, count)
 - status_tracker.mark_final_ready(course_id, count)
@@ -28,14 +29,15 @@ from infrastructure.aws.dynamo_client import (
 )
 
 
-def start(course_id: str, strict: bool = True) -> None:
-    """Initialize or bump progress to 'started' without resetting other flags.
+def start(course_id: str, user_id: str, strict: bool = True) -> None:
+    """Initialize or bump progress to 'started' and ALWAYS set user_id.
 
     Uses an upsert/merge so existing fields (e.g., vectorized, plan flags) are preserved.
+    user_id is REQUIRED and will be written to the item as a non-key attribute.
     """
-    updates = {
-        "progress": "started",
-    }
+    if not user_id or not str(user_id).strip():
+        raise ValueError("user_id is required for status tracking")
+    updates = {"progress": "started", "user_id": str(user_id)}
     if strict:
         ensure_table(strict=True)
         update_item_strict(course_id, updates)
