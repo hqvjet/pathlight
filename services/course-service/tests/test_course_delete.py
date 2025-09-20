@@ -1,7 +1,4 @@
 import os
-os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
-os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
-
 import uuid
 import pytest
 from fastapi.testclient import TestClient
@@ -9,12 +6,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+# Use unique database URL to avoid interference with other test files  
+TEST_DB_URL = f"sqlite+pysqlite:///:memory:delete_test_{os.getpid()}"
+os.environ["DATABASE_URL"] = TEST_DB_URL
+os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
+
 from src.database import Base
 from src.models import Course, CourseInfo, UnderstandLevelTag
 from src.main import app
 
 engine = create_engine(
-    os.environ["DATABASE_URL"],
+    TEST_DB_URL,
     echo=False,
     future=True,
     connect_args={"check_same_thread": False},
@@ -32,8 +34,9 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")  # Changed from module to function for test isolation
 def seed_db():
+    Base.metadata.drop_all(bind=engine)  # Clean slate for each test
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     try:

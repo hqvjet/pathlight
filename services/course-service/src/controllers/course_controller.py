@@ -4,7 +4,6 @@ import hashlib
 import secrets
 import logging
 import string
-
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
@@ -27,6 +26,8 @@ from src.schemas.course_schemas import (
 	FinalTestResponse,
 	FinalTestDetail,
 	FinalTestQA,
+	FinishCourseRequest,
+	FinishLessonRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -312,12 +313,12 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 		)
 		lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
 		course_full = CourseFullInfo(
-			title=info.title if info else "",
-			description=info.description if info else "",
-			duration=info.duration if info else 0,
-			roadmap=info.roadmap if info else None,
+			title=getattr(info, "title", "") if info else "",
+			description=getattr(info, "description", "") if info else "",
+			duration=getattr(info, "duration", 0) if info else 0,
+			roadmap=getattr(info, "roadmap", None) if info else None,
 			lesson=lesson_models,
-			updated_at=course.updated_at.isoformat() if course.updated_at else "",
+			updated_at=course.updated_at.isoformat() if getattr(course, "updated_at", None) is not None else "",
 		)
 		return CourseFullInfoResponse(status=200, info=course_full)
 	finally:
@@ -392,12 +393,12 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 		)
 		lesson_models = [
 			LessonDetail(
-				lesson_id=l.lesson_id,
-				course_id=l.course_id,
-				title=l.title,
-				description=l.description,
-				content=l.content,
-				finish=l.finish,
+				lesson_id=getattr(l, "lesson_id"),
+				course_id=getattr(l, "course_id"),
+				title=getattr(l, "title"),
+				description=getattr(l, "description"),
+				content=getattr(l, "content"),
+				finish=getattr(l, "finish"),
 			)
 			for l in lessons
 		]
@@ -422,12 +423,12 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 		if not lesson:
 			raise HTTPException(status_code=404, detail="Lesson not found")
 		return LessonDetail(
-			lesson_id=lesson.lesson_id,
-			course_id=lesson.course_id,
-			title=lesson.title,
-			description=lesson.description,
-			content=lesson.content,
-			finish=lesson.finish,
+			lesson_id=getattr(lesson, "lesson_id"),
+			course_id=getattr(lesson, "course_id"),
+			title=getattr(lesson, "title"),
+			description=getattr(lesson, "description"),
+			content=getattr(lesson, "content"),
+			finish=getattr(lesson, "finish"),
 		)
 	finally:
 		session.close()
@@ -456,22 +457,22 @@ def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str)
 		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
 		qa_models = [
 			LessonTestQA(
-				qa_id=qa.qa_id,
-				question=qa.question,
-				option1=qa.option1,
-				option2=qa.option2,
-				option3=qa.option3,
-				option4=qa.option4,
+				qa_id=getattr(qa, "qa_id"),
+				question=getattr(qa, "question"),
+				option1=getattr(qa, "option1"),
+				option2=getattr(qa, "option2"),
+				option3=getattr(qa, "option3"),
+				option4=getattr(qa, "option4"),
 			)
 			for qa in qas
 		]
 		test_model = LessonTest(
-			test_id=test.test_id,
-			title=test.title,
-			description=test.description,
-			duration=test.duration,
-			exp=test.exp,
-			finish=test.finish,
+			test_id=getattr(test, "test_id"),
+			title=getattr(test, "title"),
+			description=getattr(test, "description"),
+			duration=getattr(test, "duration"),
+			exp=getattr(test, "exp"),
+			finish=getattr(test, "finish"),
 			qas=qa_models,
 		)
 		return LessonTestResponse(status=200, test=test_model)
@@ -497,23 +498,106 @@ def get_final_test_controller(request: Request, course_id: str) -> FinalTestResp
 		qas = session.query(FinalQA).filter(FinalQA.final_test_id == final_test.final_test_id).all()
 		qa_models = [
 			FinalTestQA(
-				final_qa_id=qa.final_qa_id,
-				question=qa.question,
-				option1=qa.option1,
-				option2=qa.option2,
-				option3=qa.option3,
-				option4=qa.option4,
+				final_qa_id=getattr(qa, "final_qa_id"),
+				question=getattr(qa, "question"),
+				option1=getattr(qa, "option1"),
+				option2=getattr(qa, "option2"),
+				option3=getattr(qa, "option3"),
+				option4=getattr(qa, "option4"),
 			)
 			for qa in qas
 		]
 		final_test_model = FinalTestDetail(
-			final_test_id=final_test.final_test_id,
-			title=final_test.title,
-			description=final_test.description,
-			duration=final_test.duration,
-			exp=final_test.exp,
+			final_test_id=getattr(final_test, "final_test_id"),
+			title=getattr(final_test, "title"),
+			description=getattr(final_test, "description"),
+			duration=getattr(final_test, "duration"),
+			exp=getattr(final_test, "exp"),
 			qas=qa_models,
 		)
 		return FinalTestResponse(status=200, final_test=final_test_model)
+	finally:
+		session.close()
+
+
+# ---------------- Mutation Controllers ----------------
+
+def finish_course_controller(request: Request, payload: FinishCourseRequest):
+	"""Mark a course as finished if all its lessons and tests/final test are finished.
+
+	Business rule (current inferred):
+	- User must own course
+	- All lessons.finish == True
+	- (Optional) final tests existence not strictly enforced; if exists must have all qas done? Currently only have finish flag on Course, Lesson, Test. We'll require all Lessons.finish AND any Test / FinalTest under it have finish=True if present.
+	"""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter_by(course_id=payload.course_id, user_id=user_id).first()
+		if not course:
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Check lessons
+		lessons = session.query(Lesson.lesson_id, Lesson.finish).filter(Lesson.course_id == course.course_id).all()
+		if not lessons or any(not l.finish for l in lessons):
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Check tests
+		tests = session.query(Test.finish).join(Lesson, Test.lesson_id == Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()
+		if any(not t.finish for t in tests):
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
+
+		# Mark course finished
+		setattr(course, "finish", True)
+		session.commit()
+		return {"status": 200, "message": "Đã cập nhật thành công"}
+	except Exception as e:
+		logger.error("finish_course_controller error user=%s course=%s err=%s", user_id, payload.course_id, e)
+		session.rollback()
+		return JSONResponse(status_code=500, content={"status": 500, "message": "Internal error"})
+	finally:
+		session.close()
+
+
+def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
+	"""Mark a single lesson (and optionally its test) as finished.
+
+	Rules (inferred):
+	- User must own the course containing the lesson.
+	- We assume caller only invokes after passing its test. We'll just flip finish flag.
+	- If related Test exists we also mark its finish=True (since spec says triggered after passing test).
+	"""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
+
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter_by(course_id=payload.course_id, user_id=user_id).first()
+		if not course:
+			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
+		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
+		if not lesson:
+			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
+		setattr(lesson, "finish", True)
+		# Mark related tests finished (if any)
+		tests = session.query(Test).filter(Test.lesson_id == lesson.lesson_id).all()
+		for t in tests:
+			setattr(t, "finish", True)
+		session.commit()
+		return {"status": 200, "message": "Đã cập nhật thành công"}
+	except Exception as e:
+		logger.error("finish_lesson_controller error user=%s course=%s lesson=%s err=%s", user_id, payload.course_id, payload.lesson_id, e)
+		session.rollback()
+		return JSONResponse(status_code=500, content={"status": 500, "message": "Internal error"})
 	finally:
 		session.close()
