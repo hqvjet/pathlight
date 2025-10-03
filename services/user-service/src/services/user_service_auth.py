@@ -6,10 +6,12 @@ from jose import JWTError, jwt as jose_jwt
 
 from config import config
 from database import get_db
-from models import User
+from models import User, Admin
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
+
+ADMIN_ACCESS_DENIED_MESSAGE = "Bạn không có quyền truy cập"
 
 # JWT Configuration
 JWT_SECRET_KEY = config.JWT_SECRET_KEY
@@ -51,36 +53,70 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}")
 
-def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
-    """Get current authenticated admin user"""
+def _admin_access_denied_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=ADMIN_ACCESS_DENIED_MESSAGE,
+    )
+
+
+def _authorize_admin_internal(credentials: HTTPAuthorizationCredentials, db: Session) -> Admin:
+    token = credentials.credentials
     try:
-        token = credentials.credentials
-        try:
-            payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        except JWTError as e:
-            logger.error(f"JWT Error: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token expired or invalid: {str(e)}")
-        if payload.get("type") != "access":
-            logger.error(f"Invalid token type: {payload.get('type')}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token type: {payload.get('type')}")
-        role = payload.get("role")
-        if role != "admin":
-            logger.error("Not an admin user")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-        admin_id = payload.get("sub")
-        if admin_id is None:
-            logger.error("No admin ID in token")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: no admin id")
-        class MockAdmin:
-            def __init__(self, id):
-                self.id = id
-                self.email = "admin@pathlight.com"
-                self.role = "admin"
-        return MockAdmin(admin_id)
-    except HTTPException:
-        raise
+        payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except JWTError as e:
+        logger.error(f"Admin JWT Error: {str(e)}")
+        raise _admin_access_denied_exception()
+
+    if payload.get("type") != "access":
+        logger.error(f"Admin token type invalid: {payload.get('type')}")
+        raise _admin_access_denied_exception()
+
+    if payload.get("role") != "admin":
+        logger.error("Admin token missing admin role")
+        raise _admin_access_denied_exception()
+
+    admin_id = payload.get("sub")
+    if not admin_id:
+        logger.error("Admin token missing subject")
+        raise _admin_access_denied_exception()
+
+    admin = db.query(Admin).filter(Admin.id == admin_id).first()
+    if not admin:
+        logger.error(f"Admin not found in database: {admin_id}")
+        raise _admin_access_denied_exception()
+
+    return admin
+
+
+def authorize_admin(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+    raise_http_exception: bool = True,
+) -> Admin | None:
+    try:
+        return _authorize_admin_internal(credentials, db)
+    except HTTPException as exc:
+        if raise_http_exception:
+            raise
+        logger.warning(f"Admin authorization failed: {exc.detail}")
+        return None
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}")
+        logger.error(f"Unexpected admin authorization error: {str(e)}")
+        if raise_http_exception:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid token: {str(e)}",
+            )
+        return None
+
+
+def get_current_admin_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Dependency that ensures admin-only access."""
+    admin = authorize_admin(credentials, db, raise_http_exception=True)
+    if admin is None:
+        raise _admin_access_denied_exception()
+    return admin

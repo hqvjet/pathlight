@@ -12,6 +12,14 @@ import uuid
 Base = declarative_base()
 
 
+class Admin(Base):
+    """Admin model representing privileged administrators."""
+    __tablename__ = "admins"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, nullable=False, unique=True, index=True)
+    password = Column(String, nullable=False)
+
 class User(Base):
     """
     User model for user service
@@ -58,4 +66,4 @@ class User(Base):
 
 
 # Make all models available for import
-__all__ = ['User', 'Base']
+__all__ = ['Admin', 'User', 'Base']

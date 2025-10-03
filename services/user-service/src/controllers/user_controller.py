@@ -106,6 +106,29 @@ async def get_all_users(db: Session) -> UsersListResponse:
         logger.error(f"Error getting all users: {e}")
         return UsersListResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
+
+async def get_admin_users_list(db: Session) -> AdminUsersResponse:
+    try:
+        users = (
+            db.query(User)
+            .filter(User.is_active == True)  # noqa: E712
+            .order_by(User.created_at.desc())
+            .all()
+        )
+        summaries = [
+            AdminUserSummary(
+                user_id=str(getattr(u, 'id')),
+                email=getattr(u, 'email', None),
+                given_name=getattr(u, 'given_name', None),
+                level=getattr(u, 'level', None),
+            )
+            for u in users
+        ]
+        return AdminUsersResponse(status=200, users=summaries)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Error getting admin user list: {e}")
+        return AdminUsersResponse(status=500, message="Không thể lấy danh sách người dùng")
+
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
     try:

@@ -11,6 +11,7 @@ from schemas.user_schemas import (
     UsersListResponse,
     NotifyTimeRequest,
     DashboardResponse,
+    AdminUsersResponse,
 )
 from models import User
 from controllers.user_controller import (
@@ -21,8 +22,14 @@ from controllers.user_controller import (
     set_notify_time,
     get_user_dashboard,
     save_user_activity,
+    get_admin_users_list,
 )
-from services.user_service_auth import get_current_user, get_current_admin_user
+from services.user_service_auth import (
+    get_current_user,
+    get_current_admin_user,
+    authorize_admin,
+    security,
+)
 from services.avatar_service import get_avatar_bytes  # bytes version
 
 logger = logging.getLogger(__name__)
@@ -113,6 +120,18 @@ async def get_users(
     db: Session = Depends(get_db)
 ):
     return await get_all_users(db)
+
+
+# 6.1. Lấy danh sách người dùng cho Admin
+@router.get("/admin/users", response_model=AdminUsersResponse)
+async def list_users_for_admin(
+    credentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    admin = authorize_admin(credentials, db, raise_http_exception=False)
+    if not admin:
+        return AdminUsersResponse(status=503, message="Bạn không có quyền truy cập")
+    return await get_admin_users_list(db)
 
 # 2.6. Set thời gian học mỗi ngày
 @router.put("/notify-time", response_model=MessageResponse)
