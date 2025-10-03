@@ -11,6 +11,7 @@ import json
 from config import config
 from database import create_tables, engine, SessionLocal
 from routes.user_routes import router as user_router
+from services.admin_service import ensure_default_admin_account
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +26,12 @@ async def lifespan(app: FastAPI):
     else:
         try:
             create_tables()
+            try:
+                created = ensure_default_admin_account()
+                if created:
+                    logger.info("Default admin account ensured during startup")
+            except Exception as admin_err:  # pragma: no cover
+                logger.error(f"Failed to ensure default admin: {admin_err}")
             logger.info("Database setup completed successfully")
         except Exception as e:
             logger.error(f"Error during startup: {e}")
