@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import re
 
@@ -42,6 +42,19 @@ class DashboardResponse(BaseModel):
 class UsersListResponse(BaseModel):
     status: int
     infos: Optional[list] = None
+    message: Optional[str] = None
+
+
+class AdminUserItem(BaseModel):
+    user_id: str
+    email: Optional[str]
+    given_name: Optional[str]
+    level: Optional[int]
+
+
+class AdminUsersResponse(BaseModel):
+    status: int
+    users: Optional[List[AdminUserItem]] = None
     message: Optional[str] = None
 
 class TestStatsRequest(BaseModel):

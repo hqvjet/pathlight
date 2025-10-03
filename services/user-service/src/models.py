@@ -57,5 +57,15 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
 
+class Admin(Base):
+    """Admin model for managing privileged users"""
+
+    __tablename__ = "admins"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, nullable=False, unique=True)
+    password = Column(String, nullable=False)
+
+
 # Make all models available for import
-__all__ = ['User', 'Base']
+__all__ = ['User', 'Admin', 'Base']
