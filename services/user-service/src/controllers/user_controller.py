@@ -52,7 +52,8 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             target_user = db.query(User).filter(User.id == user_id).first()
             if not target_user:
                 return UserInfoResponse(status=401, message="Người dùng không tồn tại")
-        dob_formatted = getattr(target_user, 'dob', None).strftime("%d/%m/%Y") if getattr(target_user, 'dob', None) else None
+        dob_value = getattr(target_user, 'dob', None)
+        dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         avatar_id = getattr(target_user, 'avatar_url', None)
         # Unified avatar_url format with user-id query param (same as dashboard)
         avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
@@ -82,7 +83,8 @@ async def get_all_users(db: Session) -> UsersListResponse:
         users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
         infos = []
         for u in users:
-            dob_formatted = getattr(u, 'dob', None).strftime("%d/%m/%Y") if getattr(u, 'dob', None) else None
+            dob_value = getattr(u, 'dob', None)
+            dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
             avatar_id = getattr(u, 'avatar_url', None)
             avatar_url = None
             if avatar_id:
@@ -106,10 +108,29 @@ async def get_all_users(db: Session) -> UsersListResponse:
         logger.error(f"Error getting all users: {e}")
         return UsersListResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
+
+async def get_admin_user_overview(db: Session) -> AdminUsersResponse:
+    """Return compact user data for admin dashboard listing"""
+    try:
+        users = db.query(User).all()
+        user_items = [
+            AdminUserItem(
+                user_id=str(user.id),
+                email=getattr(user, 'email', None),
+                given_name=getattr(user, 'given_name', None),
+                level=getattr(user, 'level', None),
+            )
+            for user in users
+        ]
+        return AdminUsersResponse(status=200, users=user_items)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Error retrieving admin user overview: {e}")
+        return AdminUsersResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
     try:
-        current_user.remind_time = request.remind_time
+        setattr(current_user, 'remind_time', request.remind_time)
         db.commit()
         logger.info(f"Set remind time for {current_user.email} -> {request.remind_time}")
         return MessageResponse(status=200, message="Đã đặt lịch thành công")
@@ -126,8 +147,8 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         avatar_url = (
             f"{config.BASE_URL}/user/avatar?user-id={current_user.id}" if avatar_id else None
         )
-        course_stats = get_course_stats(current_user.email)
-        quiz_stats = get_quiz_stats(current_user.email)
+        course_stats = get_course_stats(str(getattr(current_user, 'email', '')))
+        quiz_stats = get_quiz_stats(str(getattr(current_user, 'email', '')))
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
         dashboard_info = {

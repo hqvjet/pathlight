@@ -1,28 +1,31 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Query, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
+
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 
 from database import get_db
 from schemas.user_schemas import (
     MessageResponse,
     ChangeInfoRequest,
     UserInfoResponse,
-    UsersListResponse,
     NotifyTimeRequest,
     DashboardResponse,
+    AdminUsersResponse,
 )
 from models import User
 from controllers.user_controller import (
     change_user_info,
     update_user_avatar,
     get_user_info,
-    get_all_users,
+    get_admin_user_overview,
     set_notify_time,
     get_user_dashboard,
     save_user_activity,
 )
-from services.user_service_auth import get_current_user, get_current_admin_user
+from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
 
 logger = logging.getLogger(__name__)
@@ -107,12 +110,22 @@ async def get_user(
     return await get_user_info(id, current_user, db)
 
 # 2.5. Lấy thông tin USERS (Admin only)
-@router.get("/all", response_model=UsersListResponse)
-async def get_users(
-    current_admin: User = Depends(get_current_admin_user),
+@router.get("/admin/users", response_model=AdminUsersResponse)
+async def get_users_for_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    return await get_all_users(db)
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+    result = await get_admin_user_overview(db)
+    return result
 
 # 2.6. Set thời gian học mỗi ngày
 @router.put("/notify-time", response_model=MessageResponse)
