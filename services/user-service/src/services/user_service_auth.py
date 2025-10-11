@@ -66,9 +66,6 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
             _deny_access("token invalid or expired")
         if payload.get("type") != "access":
             _deny_access(f"invalid token type: {payload.get('type')}")
-        role = payload.get("role")
-        if role != "admin":
-            _deny_access("role is not admin")
         admin_id = payload.get("sub")
         if not admin_id:
             _deny_access("missing admin id")
