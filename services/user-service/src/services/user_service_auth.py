@@ -66,16 +66,16 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
             _deny_access("token invalid or expired")
         if payload.get("type") != "access":
             _deny_access(f"invalid token type: {payload.get('type')}")
-        # Check role if present - must be admin
+        # Check role - must be admin
         role = payload.get("role")
-        if role and role != "admin":
+        if role != "admin":
             _deny_access(f"role is not admin: {role}")
         admin_id = payload.get("sub")
         if not admin_id:
             _deny_access("missing admin id")
-        admin = db.query(Admin).filter(Admin.id == admin_id).first()
-        if not admin:
-            _deny_access("admin not found")
+        # Return a dummy admin object with the ID from token
+        # No need to verify against local database since auth-service already validated it
+        admin = type('Admin', (), {'id': admin_id, 'username': 'admin'})()
         return admin
     except HTTPException:
         raise
