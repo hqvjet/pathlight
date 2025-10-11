@@ -92,6 +92,20 @@ if "requests" not in sys.modules:  # pragma: no cover
     setattr(requests_stub, "post", _dummy_request)
     sys.modules["requests"] = requests_stub
 
+if "mangum" not in sys.modules:  # pragma: no cover
+    mangum_stub = types.ModuleType("mangum")
+
+    class _Mangum:
+        def __init__(self, app, lifespan="off"):
+            self.app = app
+            self.lifespan = lifespan
+
+        def __call__(self, event, context):  # minimal handler stub
+            return {"statusCode": 200, "body": "{}"}
+
+    setattr(mangum_stub, "Mangum", _Mangum)
+    sys.modules["mangum"] = mangum_stub
+
 from src.main import app
 from src.database import create_tables, SessionLocal
 from src.models import User, Admin
@@ -152,3 +166,62 @@ def test_admin_users_listing_forbidden(mock_env_vars):
     )
     assert response.status_code == 503
     assert response.json() == {"status": 503, "message": "Bạn không có quyền truy cập"}
+
+
+def test_admin_create_success(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    response = client.post(
+        "/user/admin/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "admin123", "password": "123123"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == 200
+
+    with SessionLocal() as session:
+        created = session.query(Admin).filter(Admin.username == "admin123").first()
+        assert created is not None
+        assert str(getattr(created, "password")) != "123123"
+
+
+def test_admin_create_forbidden(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="user")
+
+    response = client.post(
+        "/user/admin/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "another_admin", "password": "123123"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"status": 503, "message": "Bạn không có quyền truy cập"}
+
+
+def test_admin_create_duplicate_username(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    client.post(
+        "/user/admin/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "admin_dup", "password": "123123"},
+    )
+
+    response = client.post(
+        "/user/admin/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "admin_dup", "password": "456456"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["status"] == 400
+    assert "Tên đăng nhập" in body["message"]

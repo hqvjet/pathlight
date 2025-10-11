@@ -8,6 +8,7 @@ from schemas.user_schemas import *  # noqa
 from config import config
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect
+from services.admin_service import create_admin, get_admin_by_username
 from services.experience_service import (
     get_level_system_info as svc_get_level_system_info,
     update_test_stats as svc_update_test_stats,
@@ -126,6 +127,24 @@ async def get_admin_user_overview(db: Session) -> AdminUsersResponse:
     except Exception as e:  # pragma: no cover
         logger.error(f"Error retrieving admin user overview: {e}")
         return AdminUsersResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+
+
+async def create_admin_account(request: AdminCreateRequest, db: Session) -> MessageResponse:
+    try:
+        username = request.username.strip()
+        if not username:
+            return MessageResponse(status=400, message="Username không được để trống")
+        if get_admin_by_username(db, username):
+            return MessageResponse(status=400, message="Tên đăng nhập đã tồn tại")
+        try:
+            create_admin(db, username, request.password)
+        except Exception as exc:
+            logger.error(f"Failed to create admin '{username}': {exc}")
+            return MessageResponse(status=500, message="Không thể tạo admin mới")
+        return MessageResponse(status=200, message="Admin đã được tạo thành công")
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Unexpected error during admin creation: {e}")
+        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:

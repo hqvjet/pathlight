@@ -45,6 +45,23 @@ class UsersListResponse(BaseModel):
     message: Optional[str] = None
 
 
+class AdminCreateRequest(BaseModel):
+    username: str
+    password: str
+
+    @validator('username')
+    def validate_username(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Username không được để trống')
+        return v
+
+    @validator('password')
+    def validate_password(cls, v):
+        if not v or len(v) < 6:
+            raise ValueError('Password phải có ít nhất 6 ký tự')
+        return v
+
+
 class AdminUserItem(BaseModel):
     user_id: str
     email: Optional[str]

@@ -14,6 +14,7 @@ from schemas.user_schemas import (
     NotifyTimeRequest,
     DashboardResponse,
     AdminUsersResponse,
+    AdminCreateRequest,
 )
 from models import User
 from controllers.user_controller import (
@@ -21,6 +22,7 @@ from controllers.user_controller import (
     update_user_avatar,
     get_user_info,
     get_admin_user_overview,
+    create_admin_account,
     set_notify_time,
     get_user_dashboard,
     save_user_activity,
@@ -126,6 +128,29 @@ async def get_users_for_admin(
         raise
     result = await get_admin_user_overview(db)
     return result
+
+
+@router.post("/admin/create", response_model=MessageResponse)
+async def create_admin_user(
+    request: AdminCreateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+
+    result = await create_admin_account(request, db)
+    if result.status == 200:
+        return result
+    status_code = 400 if result.status == 400 else 500
+    return JSONResponse(status_code=status_code, content=result.dict())
 
 # 2.6. Set thời gian học mỗi ngày
 @router.put("/notify-time", response_model=MessageResponse)
