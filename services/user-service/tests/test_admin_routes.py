@@ -349,3 +349,17 @@ def test_admin_delete_user_not_found(mock_env_vars):
     body = response.json()
     assert body["status"] == 404
     assert "không tồn tại" in body["message"]
+
+
+def test_admin_get_costs_forbidden(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="user")
+
+    response = client.get(
+        "/user/admin/cost",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"status": 503, "message": "Bạn không có quyền truy cập"}
