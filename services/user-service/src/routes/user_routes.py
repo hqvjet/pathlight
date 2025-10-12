@@ -28,6 +28,7 @@ from controllers.user_controller import (
     get_user_dashboard,
     save_user_activity,
     admin_update_user_email,
+    admin_delete_user,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
@@ -198,6 +199,29 @@ async def admin_update_email(
         raise
     
     result = await admin_update_user_email(user_id, request.email, db)
+    if result.status == 200:
+        return result
+    status_code = 404 if result.status == 404 else 500
+    return JSONResponse(status_code=status_code, content=result.dict())
+
+# 6.6. Admin delete user
+@router.delete("/admin/user", response_model=MessageResponse)
+async def admin_delete_user_endpoint(
+    user_id: str = Query(..., alias="userid"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+    
+    result = await admin_delete_user(user_id, db)
     if result.status == 200:
         return result
     status_code = 404 if result.status == 404 else 500
