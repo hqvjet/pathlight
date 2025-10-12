@@ -74,6 +74,18 @@ class AdminUpdateEmailRequest(BaseModel):
         return v
 
 
+class CostItem(BaseModel):
+    date: str
+    cost: float
+
+
+class AdminCostResponse(BaseModel):
+    status: int
+    total_cost: Optional[float] = None
+    costs: Optional[List[CostItem]] = None
+    message: Optional[str] = None
+
+
 class AdminUserItem(BaseModel):
     user_id: str
     email: Optional[str]

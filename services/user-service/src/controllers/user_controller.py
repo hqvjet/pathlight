@@ -266,3 +266,8 @@ async def admin_delete_user(user_id: str, db: Session) -> MessageResponse:
         logger.error(f"Admin delete user error: {e}")
         db.rollback()
         return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+
+# ---------- Admin Get AWS Costs ----------
+async def get_admin_aws_costs():
+    from services.aws_cost_service import get_aws_costs_last_30_days
+    return get_aws_costs_last_30_days()

@@ -16,6 +16,7 @@ from schemas.user_schemas import (
     AdminUsersResponse,
     AdminCreateRequest,
     AdminUpdateEmailRequest,
+    AdminCostResponse,
 )
 from models import User
 from controllers.user_controller import (
@@ -29,6 +30,7 @@ from controllers.user_controller import (
     save_user_activity,
     admin_update_user_email,
     admin_delete_user,
+    get_admin_aws_costs,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
@@ -226,3 +228,22 @@ async def admin_delete_user_endpoint(
         return result
     status_code = 404 if result.status == 404 else 500
     return JSONResponse(status_code=status_code, content=result.dict())
+
+# 6.3. Admin get AWS costs
+@router.get("/admin/cost", response_model=AdminCostResponse)
+async def admin_get_costs(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+    
+    result = await get_admin_aws_costs()
+    return result
