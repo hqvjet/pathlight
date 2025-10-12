@@ -300,3 +300,52 @@ def test_admin_update_user_email_not_found(mock_env_vars):
     body = response.json()
     assert body["status"] == 404
     assert "không tồn tại" in body["message"]
+
+
+def test_admin_delete_user_success(mock_env_vars):
+    admin, user = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    response = client.delete(
+        f"/user/admin/user?userid={user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == 200
+
+    with SessionLocal() as session:
+        deleted_user = session.query(User).filter(User.id == user.id).first()
+        assert deleted_user is None
+
+
+def test_admin_delete_user_forbidden(mock_env_vars):
+    admin, user = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="user")
+
+    response = client.delete(
+        f"/user/admin/user?userid={user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"status": 503, "message": "Bạn không có quyền truy cập"}
+
+
+def test_admin_delete_user_not_found(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    response = client.delete(
+        "/user/admin/user?userid=invalid-user-id",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["status"] == 404
+    assert "không tồn tại" in body["message"]

@@ -249,3 +249,20 @@ async def admin_update_user_email(user_id: str, new_email: str, db: Session) -> 
         logger.error(f"Admin update email error: {e}")
         db.rollback()
         return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+
+# ---------- Admin Delete User ----------
+async def admin_delete_user(user_id: str, db: Session) -> MessageResponse:
+    try:
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            return MessageResponse(status=404, message="Người dùng không tồn tại")
+        
+        # Delete user and all related resources
+        db.delete(target_user)
+        db.commit()
+        logger.info(f"Admin deleted user {user_id} and all related resources")
+        return MessageResponse(status=200, message="Xóa người dùng thành công")
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Admin delete user error: {e}")
+        db.rollback()
+        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
