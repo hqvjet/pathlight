@@ -228,3 +228,24 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
 
 async def add_experience(exp_amount: int, current_user: User, db: Session) -> TestStatsResponse:
     return await svc_add_experience(exp_amount, current_user, db)
+
+# ---------- Admin Update Email ----------
+async def admin_update_user_email(user_id: str, new_email: str, db: Session) -> MessageResponse:
+    try:
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            return MessageResponse(status=404, message="Người dùng không tồn tại")
+        
+        existing_user = db.query(User).filter(User.email == new_email).first()
+        if existing_user:
+            if str(getattr(existing_user, 'id')) != str(user_id):
+                return MessageResponse(status=500, message="Email muốn thay đổi đã tồn tại trong hệ thống, vui lòng cung cấp email khác")
+        
+        setattr(target_user, 'email', new_email)
+        db.commit()
+        logger.info(f"Admin updated email for user {user_id} to {new_email}")
+        return MessageResponse(status=200)
+    except Exception as e:
+        logger.error(f"Admin update email error: {e}")
+        db.rollback()
+        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")

@@ -225,3 +225,78 @@ def test_admin_create_duplicate_username(mock_env_vars):
     body = response.json()
     assert body["status"] == 400
     assert "Tên đăng nhập" in body["message"]
+
+
+def test_admin_update_user_email_success(mock_env_vars):
+    admin, user = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    response = client.put(
+        f"/user/admin/user?userid={user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "newemail@example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == 200
+
+    with SessionLocal() as session:
+        updated_user = session.query(User).filter(User.id == user.id).first()
+        assert updated_user is not None
+        assert updated_user.email == "newemail@example.com"
+
+
+def test_admin_update_user_email_forbidden(mock_env_vars):
+    admin, user = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="user")
+
+    response = client.put(
+        f"/user/admin/user?userid={user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "newemail@example.com"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"status": 503, "message": "Bạn không có quyền truy cập"}
+
+
+def test_admin_update_user_email_duplicate(mock_env_vars):
+    admin, user = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    with SessionLocal() as session:
+        another_user = User(email="existing@example.com", password="hashed")
+        session.add(another_user)
+        session.commit()
+
+    response = client.put(
+        f"/user/admin/user?userid={user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "existing@example.com"},
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["status"] == 500
+    assert "đã tồn tại" in body["message"]
+
+
+def test_admin_update_user_email_not_found(mock_env_vars):
+    admin, _ = _bootstrap_entities()
+    client = TestClient(app)
+    token = _issue_token(str(admin.id), role="admin")
+
+    response = client.put(
+        "/user/admin/user?userid=invalid-user-id",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "newemail@example.com"},
+    )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["status"] == 404
+    assert "không tồn tại" in body["message"]
