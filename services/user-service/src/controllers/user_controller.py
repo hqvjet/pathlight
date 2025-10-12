@@ -244,7 +244,7 @@ async def admin_update_user_email(user_id: str, new_email: str, db: Session) -> 
         setattr(target_user, 'email', new_email)
         db.commit()
         logger.info(f"Admin updated email for user {user_id} to {new_email}")
-        return MessageResponse(status=200)
+        return MessageResponse(status=200, message="Cập nhật email thành công")
     except Exception as e:
         logger.error(f"Admin update email error: {e}")
         db.rollback()
