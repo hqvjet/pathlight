@@ -85,6 +85,8 @@ class LessonTestQA(BaseModel):
     option2: str
     option3: str
     option4: str
+    answer: str  # Correct answer (option1, option2, option3, or option4)
+    explanation: str  # Explanation for the correct answer
 
 
 class LessonTest(BaseModel):
@@ -109,6 +111,8 @@ class FinalTestQA(BaseModel):
     option2: str
     option3: str
     option4: str
+    answer: str  # Correct answer (option1, option2, option3, or option4)
+    explanation: str  # Explanation for the correct answer
 
 
 class FinalTestDetail(BaseModel):
