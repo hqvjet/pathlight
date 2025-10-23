@@ -62,6 +62,18 @@ class AdminCreateRequest(BaseModel):
         return v
 
 
+class AdminUpdateEmailRequest(BaseModel):
+    email: str
+
+    @validator('email')
+    def validate_email(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Email không được để trống')
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+            raise ValueError('Email không hợp lệ')
+        return v
+
+
 class AdminUserItem(BaseModel):
     user_id: str
     email: Optional[str]

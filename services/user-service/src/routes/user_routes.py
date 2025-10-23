@@ -15,6 +15,7 @@ from schemas.user_schemas import (
     DashboardResponse,
     AdminUsersResponse,
     AdminCreateRequest,
+    AdminUpdateEmailRequest,
 )
 from models import User
 from controllers.user_controller import (
@@ -26,6 +27,7 @@ from controllers.user_controller import (
     set_notify_time,
     get_user_dashboard,
     save_user_activity,
+    admin_update_user_email,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
@@ -176,3 +178,27 @@ async def save_activity(
     db: Session = Depends(get_db)
 ):
     return await save_user_activity(current_user, db)
+
+# 6.5. Admin update user email
+@router.put("/admin/user", response_model=MessageResponse)
+async def admin_update_email(
+    request: AdminUpdateEmailRequest,
+    user_id: str = Query(..., alias="userid"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+    
+    result = await admin_update_user_email(user_id, request.email, db)
+    if result.status == 200:
+        return result
+    status_code = 404 if result.status == 404 else 500
+    return JSONResponse(status_code=status_code, content=result.dict())
