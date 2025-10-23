@@ -249,3 +249,55 @@
 .Toastify__close-button:hover {
   opacity: 1 !important;
 }
+
+/* Custom Scrollbar Styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb {
+  background-color: rgb(51 65 85);
+  border-radius: 4px;
+}
+
+.scrollbar-track-slate-800::-webkit-scrollbar-track {
+  background-color: rgb(30 41 59);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+}
+
+/* Prose (Typography) enhancements */
+.prose {
+  max-width: 65ch;
+}
+
+.prose pre {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184) rgb(15 23 42);
+}
+
+.prose pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.prose pre::-webkit-scrollbar-track {
+  background-color: rgb(15 23 42);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(203 213 225);
+}
+

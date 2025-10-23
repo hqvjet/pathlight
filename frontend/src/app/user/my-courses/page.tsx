@@ -129,8 +129,16 @@ export default function MyCoursesPage() {
 			{!loading && !error && (
 				<div className="space-y-6">
 					{pageItems.map((course) => (
-						<div key={course.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition group relative">
-							<button className="absolute top-4 right-3 text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100" aria-label="Menu">
+						<div 
+							key={course.id} 
+							className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition group relative cursor-pointer"
+							onClick={() => window.location.href = `/user/my-courses/${course.id}`}
+						>
+							<button 
+								className="absolute top-4 right-3 text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100" 
+								aria-label="Menu"
+								onClick={(e) => e.stopPropagation()}
+							>
 								<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm4 2a2 2 0 100-4 2 2 0 000 4z" /></svg>
 							</button>
 							<h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 pr-10 line-clamp-2 group-hover:text-orange-600 transition-colors">{course.title}</h2>
@@ -150,7 +158,15 @@ export default function MyCoursesPage() {
 							</div>
 							<div className="flex items-center gap-3">
 								<span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{course.status}</span>
-								<button className="ml-auto text-sm font-semibold text-orange-600 hover:text-orange-700">Tiếp tục học</button>
+								<button 
+									className="ml-auto text-sm font-semibold text-orange-600 hover:text-orange-700"
+									onClick={(e) => {
+										e.stopPropagation();
+										window.location.href = `/user/my-courses/${course.id}`;
+									}}
+								>
+									Tiếp tục học
+								</button>
 							</div>
 						</div>
 					))}

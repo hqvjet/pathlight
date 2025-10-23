@@ -24,6 +24,14 @@ interface UserSectionLayoutProps {
 export default function UserSectionLayout({ children }: UserSectionLayoutProps) {
   const pathname = usePathname();
 
+  // Lesson pages have their own complete layout (course outline sidebar)
+  // so we bypass the user dashboard layout for them
+  const isLessonPage = pathname.includes('/lessons/');
+  
+  if (isLessonPage) {
+    return <>{children}</>;
+  }
+
   // Derive the title from the current path (fallback generic)
   const title = titleMap[pathname] || 'PathLight';
 
