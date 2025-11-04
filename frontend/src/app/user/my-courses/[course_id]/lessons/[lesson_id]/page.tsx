@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { courseApi } from '@/lib/api/course';
 import CourseOutlineSidebar from '@/components/user/course/CourseOutlineSidebar';
+import { showToast } from '@/utils/toast';
 
 // Dynamic import for ReactMarkdown (ESM module)
 const ReactMarkdown = dynamic(() => import('react-markdown'), { ssr: false });
@@ -72,7 +73,6 @@ export default function LessonDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [courseData, setCourseData] = useState<CourseFullInfo | null>(null);
   const [lessonData, setLessonData] = useState<LessonDetail | null>(null);
-  const [isCompleting, setIsCompleting] = useState(false);
 
   // Load course data for sidebar
   useEffect(() => {
@@ -147,33 +147,6 @@ export default function LessonDetailPage() {
     ? courseData?.lesson[currentLessonIndex + 1] 
     : null;
   const isLastLesson = currentLessonIndex === (courseData?.lesson.length ?? 0) - 1;
-
-  const handleMarkComplete = async () => {
-    if (!lessonData || lessonData.finish) return;
-
-    setIsCompleting(true);
-    try {
-      // TODO: Call API to mark lesson as complete
-      // await courseApi.markLessonComplete(courseId, lessonId);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Update local state
-      setLessonData({ ...lessonData, finish: true });
-      
-      // Reload course data to update sidebar
-      const response = await courseApi.getById(courseId);
-      const data = response.data as CourseFullInfoResponse;
-      if (data.status === 200 && data.info) {
-        setCourseData(data.info);
-      }
-    } catch (err) {
-      console.error('Error marking lesson complete:', err);
-    } finally {
-      setIsCompleting(false);
-    }
-  };
 
   const handleNavigateToTest = () => {
     router.push(`/user/my-courses/${courseId}/lessons/${lessonId}/test`);
@@ -297,31 +270,6 @@ export default function LessonDetailPage() {
 
           {/* Action Buttons */}
           <div className="space-y-6">
-            {/* Mark Complete & Test Buttons */}
-            {!lessonData.finish && (
-              <Card className="p-6 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-200/60 shadow-sm">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="p-2 bg-emerald-100 rounded-full">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-900 mb-0.5">Hoàn thành bài học này?</h3>
-                      <p className="text-sm text-slate-600">Đánh dấu khi bạn đã hiểu nội dung</p>
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={handleMarkComplete}
-                    disabled={isCompleting}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm w-full sm:w-auto min-w-[140px]"
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    {isCompleting ? 'Đang lưu...' : 'Đã Hiểu'}
-                  </Button>
-                </div>
-              </Card>
-            )}
-
             {/* Lesson Test */}
             <Card className="p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/60 shadow-sm">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -331,16 +279,27 @@ export default function LessonDetailPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 mb-0.5">Kiểm tra kiến thức</h3>
-                    <p className="text-sm text-slate-600">Làm bài test để củng cố kiến thức</p>
+                    <p className="text-sm text-slate-600">
+                      {lessonData.finish 
+                        ? 'Bạn đã hoàn thành bài học này' 
+                        : 'Hoàn thành bài test để đánh dấu bài học hoàn thành'}
+                    </p>
                   </div>
                 </div>
-                <Button 
-                  onClick={handleNavigateToTest}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto min-w-[140px]"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Làm Bài Test
-                </Button>
+                {lessonData.finish ? (
+                  <Badge className="bg-emerald-500 text-white px-4 py-2">
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Đã Hoàn Thành
+                  </Badge>
+                ) : (
+                  <Button 
+                    onClick={handleNavigateToTest}
+                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto min-w-[140px]"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Làm Bài Test
+                  </Button>
+                )}
               </div>
             </Card>
 
