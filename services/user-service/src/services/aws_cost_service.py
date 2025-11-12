@@ -1,13 +1,29 @@
+import json
 import logging
+import os
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import Dict
+from urllib.error import URLError, HTTPError
+from urllib.request import Request, urlopen
+
 import boto3
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-# VND exchange rate (approximate)
-USD_TO_VND = 25000
+EXCHANGE_RATE_API = os.getenv('EXCHANGE_RATE_API_URL', 'https://api.exchangerate.host/latest?base=USD&symbols=VND')
+USD_TO_VND_FALLBACK = 25000
+
+
+def get_usd_to_vnd_rate() -> float:
+    try:
+        request = Request(EXCHANGE_RATE_API, headers={'User-Agent': 'pathlight-service'})
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read())
+        return float(payload['rates']['VND'])
+    except (KeyError, TypeError, ValueError, HTTPError, URLError, TimeoutError) as exc:
+        logger.warning("Falling back to default USD/VND rate: %s", exc)
+        return float(os.getenv('USD_TO_VND_FALLBACK', USD_TO_VND_FALLBACK))
 
 
 def get_aws_costs_last_30_days() -> Dict:
@@ -37,7 +53,7 @@ def get_aws_costs_last_30_days() -> Dict:
             Metrics=['UnblendedCost']
         )
         
-        # Process results
+        usd_to_vnd = get_usd_to_vnd_rate()
         costs = []
         total_cost_usd = 0.0
         
@@ -50,7 +66,7 @@ def get_aws_costs_last_30_days() -> Dict:
             # Get cost in USD
             cost_usd = float(result['Total']['UnblendedCost']['Amount'])
             # Convert to VND
-            cost_vnd = cost_usd * USD_TO_VND
+            cost_vnd = cost_usd * usd_to_vnd
             
             costs.append({
                 'date': formatted_date,
@@ -58,15 +74,14 @@ def get_aws_costs_last_30_days() -> Dict:
             })
             
             total_cost_usd += cost_usd
-        
-        total_cost_vnd = round(total_cost_usd * USD_TO_VND, 2)
-        
+
+        total_cost_vnd = round(total_cost_usd * usd_to_vnd, 2)
+
         return {
             'status': 200,
             'total_cost': total_cost_vnd,
             'costs': costs
         }
-        
     except ClientError as e:
         logger.error(f"AWS Cost Explorer error: {e}")
         return {
