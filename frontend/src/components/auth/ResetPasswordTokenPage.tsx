@@ -98,7 +98,8 @@ export default function ResetPasswordTokenPage() {
         title="Đặt lại mật khẩu thành công"
         subtitle="Bạn có thể đăng nhập bằng mật khẩu mới."
         icon="success"
-        imageSrc="/assets/images/email_success.png" children={undefined}      >
+        imageSrc="/assets/images/email_success.png"
+      >
         <div className="space-y-6 text-center">
           <p className="text-base text-gray-600">Tài khoản của bạn đã sẵn sàng để sử dụng.</p>
           <Link
@@ -118,7 +119,8 @@ export default function ResetPasswordTokenPage() {
         title="Liên kết không hợp lệ"
         subtitle="Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."
         icon="error"
-        imageSrc="/assets/images/error_page.png" children={undefined}      >
+        imageSrc="/assets/images/error_page.png"
+      >
         <div className="space-y-4">
           <Link
             href="/auth/forgot-password"
@@ -143,7 +145,8 @@ export default function ResetPasswordTokenPage() {
         title="Đang kiểm tra liên kết"
         subtitle="Vui lòng đợi trong giây lát"
         icon="warning"
-        imageSrc="/assets/images/reset-password.png" children={undefined}      >
+        imageSrc="/assets/images/reset-password.png"
+      >
         <div className="flex justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" aria-label="Đang tải" />
         </div>
@@ -156,7 +159,8 @@ export default function ResetPasswordTokenPage() {
       title="Đặt Lại Mật Khẩu"
       subtitle="Nhập mật khẩu mới cho tài khoản của bạn. Hãy chọn mật khẩu mạnh để bảo vệ tài khoản."
       icon="warning"
-      imageSrc="/assets/images/reset-password.png" children={undefined}    >
+        imageSrc="/assets/images/reset-password.png"
+      >
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div>
           <label htmlFor="newPassword" className="block text-base font-medium text-gray-700 mb-3">

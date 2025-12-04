@@ -1,6 +1,4 @@
 import { cookieStorage } from './cookies';
-import { api as unifiedApi } from '../lib/api';
-import { apiClient } from '../lib/api/http';
 
 // Centralized storage helpers (keep in this module per request)
 export const storage = {
@@ -19,6 +17,4 @@ export const storage = {
   isTokenExpiringSoon: (): boolean => cookieStorage.isTokenExpiringSoon(),
 };
 
-// Re-export unified API surface to avoid duplicate request logic
-export const api = unifiedApi;
-export { apiClient };
+// Intentionally do not re-export API clients here to avoid circular deps with lib/api/http.
