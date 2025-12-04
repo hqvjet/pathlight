@@ -5,8 +5,7 @@
  * Authentication related API services using the new API client
  */
 
-import { api } from '../lib/api-client';
-import { endpoints } from '../utils/api';
+import { api } from '../lib/api';
 
 // =============================================================================
 // 🔧 TYPES & INTERFACES
@@ -83,88 +82,87 @@ export const authService = {
    * Sign in with email and password
    */
   async signIn(data: SignInRequest) {
-    return api.post(endpoints.signin, data);
+    return api.auth.signin(data);
   },
 
   /**
    * Sign up with email and password
    */
   async signUp(data: SignUpRequest) {
-    return api.post(endpoints.signup, data);
+    return api.auth.signup(data);
   },
 
   /**
    * Sign out
    */
   async signOut() {
-    return api.post(endpoints.signout);
+    return api.auth.signout();
   },
 
   /**
    * Google OAuth sign in
    */
   async googleSignIn(data: GoogleAuthRequest) {
-    return api.post(endpoints.oauthSignin, data);
+    return api.auth.oauthSignin(data);
   },
 
   /**
    * Forgot password
    */
   async forgotPassword(data: ForgotPasswordRequest) {
-    return api.post(endpoints.forgotPassword, data);
+    return api.auth.forgotPassword(data.email);
   },
 
   /**
    * Reset password with token
    */
   async resetPassword(data: ResetPasswordRequest) {
-    return api.post('/api/v1/reset-password', data);
+    return api.auth.resetPassword(data.token, {
+      password: data.password,
+      confirm_password: data.confirm_password,
+    });
   },
 
   /**
    * Change password (authenticated)
    */
   async changePassword(data: ChangePasswordRequest) {
-    return api.post(endpoints.changePassword, data);
+    return api.auth.changePassword(data);
   },
 
   /**
    * Verify email with token
    */
   async verifyEmail(data: VerifyEmailRequest) {
-    return api.post(endpoints.verifyEmail, data);
+    return api.auth.verifyEmail(data.token);
   },
 
   /**
    * Resend email verification
    */
   async resendVerification(data: ResendVerificationRequest) {
-    return api.post(endpoints.resendVerification, data);
+    return api.auth.resendVerification(data.email);
   },
 
   /**
    * Admin sign in
    */
   async adminSignIn(data: SignInRequest) {
-    return api.post(endpoints.adminSignin, data);
+    return api.auth.adminSignin(data);
   },
 
   /**
    * Refresh access token
    */
   async refreshToken(refreshToken: string) {
-    return api.post(
-      '/api/v1/auth/refresh',
-      { refresh_token: refreshToken },
-      { skipAuth: true }
-    );
+    return api.auth.refresh(refreshToken);
   },
 
   /**
    * Get current user profile
    */
   async getCurrentUser() {
-    return api.get('/api/v1/auth/me');
+    return api.auth.me();
   },
 
   /**
