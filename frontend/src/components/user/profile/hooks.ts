@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { showToast } from '@/utils/toast';
-import { api, storage } from '@/utils/api';
-import { ApiPool } from '@/lib/api/pool';
+import { storage } from '@/utils/api';
+import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { ProfileFormData, UserProfile } from './types';
 
@@ -18,10 +18,12 @@ export function useProfileData() {
 
   const loadUserProfile = useCallback(async () => {
     try {
-  // Use unified pool first (info), fallback to legacy sequence
-  let response = await ApiPool.user.info() as unknown as { status: number; data?: unknown; error?: string };
+      let response = await api.user.getInfo();
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
-  if (response.status !== 200) { response = await api.user.getDashboard() as { status: number; data?: unknown; error?: string }; if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; } }
+      if (response.status !== 200) {
+        response = await api.user.getDashboard();
+        if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
+      }
       if (response.status === 200) {
         const responseData = response.data as unknown;
         let userData: unknown = responseData;
@@ -55,9 +57,12 @@ export function useProfileData() {
     setSaving(true);
     try {
       const payload = buildProfilePayload(form);
-  const response = await ApiPool.user.changeInfo(payload);
-      if (response.status === 200) { showToast.authSuccess('Cập nhật hồ sơ thành công!'); setEditMode(false); await loadUserProfile(); }
-      else {
+      const response = await api.user.updateProfile(payload);
+      if (response.status === 200) {
+        showToast.authSuccess('Cập nhật hồ sơ thành công!');
+        setEditMode(false);
+        await loadUserProfile();
+      } else {
         const data = response.data as { message?: string } | undefined;
         let errorMsg = response.error || 'Cập nhật hồ sơ thất bại';
         if (data?.message) errorMsg = data.message;

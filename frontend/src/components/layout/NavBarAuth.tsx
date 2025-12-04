@@ -5,9 +5,9 @@ import Avatar from '@/components/common/Avatar';
 import { LogoutIcon } from '@/components/icons';
 
 interface AvatarUser { name?: string; avatar_url?: string; avatarKey?: number }
-interface NavBarAuthProps { user?: AvatarUser | null; onLogout?: () => void }
+interface NavBarAuthProps { user?: AvatarUser | null; onLogout?: () => void; showLogoutButton?: boolean }
 
-export default function NavBarAuth({ user, onLogout }: NavBarAuthProps) {
+export default function NavBarAuth({ user, onLogout, showLogoutButton = true }: NavBarAuthProps) {
   const avatarUser: AvatarUser = user || {};
   return (
     <nav data-global-nav className="fixed top-0 left-0 right-0 bg-white shadow-sm border-b w-full z-50">
@@ -37,7 +37,7 @@ export default function NavBarAuth({ user, onLogout }: NavBarAuthProps) {
                 </div>
               </div>
             )}
-            {onLogout && user && (
+            {showLogoutButton && onLogout && user && (
               <button onClick={onLogout} className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
                 <LogoutIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Đăng xuất</span>
