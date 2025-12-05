@@ -17,6 +17,7 @@ from schemas.user_schemas import (
     AdminCreateRequest,
     AdminUpdateEmailRequest,
     AdminCostResponse,
+    AdminLogsResponse,
 )
 from models import User
 from controllers.user_controller import (
@@ -31,6 +32,7 @@ from controllers.user_controller import (
     admin_update_user_email,
     admin_delete_user,
     get_admin_aws_costs,
+    get_admin_logs,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
@@ -244,6 +246,29 @@ async def admin_get_costs(
                 content={"status": 503, "message": "Bạn không có quyền truy cập"}
             )
         raise
-    
+
     result = await get_admin_aws_costs()
     return result
+
+# 6.3. Admin get AWS CloudWatch logs
+@router.get("/admin/log", response_model=AdminLogsResponse)
+async def get_admin_logs_endpoint(
+    filter: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"}
+            )
+        raise
+
+    result = get_admin_logs(filter)
+    if result.status == 200:
+        return result
+    status_code = 400 if result.status == 400 else 502 if result.status == 502 else 500
+    return JSONResponse(status_code=status_code, content=result.dict())

@@ -19,6 +19,7 @@ from services.experience_service import (
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
 from services.external.course_client import get_course_stats
 from services.external.quiz_client import get_quiz_stats
+from services.log_service import get_admin_logs as fetch_admin_logs
 
 logger = logging.getLogger(__name__)
 
@@ -271,3 +272,7 @@ async def admin_delete_user(user_id: str, db: Session) -> MessageResponse:
 async def get_admin_aws_costs():
     from services.aws_cost_service import get_aws_costs_last_30_days
     return get_aws_costs_last_30_days()
+
+
+def get_admin_logs(filter_key: str):
+    return fetch_admin_logs(filter_key)
