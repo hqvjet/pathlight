@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createEmptyDraft, CourseDraftDocumentMeta, UploadingFile, CourseDraftState } from '@/fake/courses';
+import { createEmptyDraft, CourseDraftDocumentMeta, UploadingFile } from '@/types/create-course';
 import { Stepper } from './Stepper';
 import { UploadStep } from './UploadStep';
 import { MetaStep } from './MetaStep';
@@ -9,19 +9,21 @@ import { ReviewStep } from './ReviewStep';
 import { SuccessStep } from './SuccessStep';
 import { v4 as uuid } from 'uuid';
 import { showToast } from '@/utils/toast';
-import { courseApi, CreateCourseRequest } from '@/lib/api/course';
+import { courseApi } from '@/lib/api/course';
+import { agenticApi, AgenticCourseResponse, CreateAgenticCourseRequest } from '@/lib/api/agentic';
 import { ApiErrorClass } from '@/lib/api/http';
 import { API_CONFIG } from '@/config/env';
 
 export function CreateCourseWizard() {
   const router = useRouter();
   const [draft, setDraft] = useState<CourseDraftState>(createEmptyDraft());
+  const [result, setResult] = useState<AgenticCourseResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Real uploading to backend
-  const simulateUpload = async (files: FileList | null) => {
+  const simulateUpload = async (files: FileList | File[] | null) => {
     if (!files) return;
-    const fileArr = Array.from(files);
+    const fileArr = Array.from(files as File[]);
     const uploading: UploadingFile[] = fileArr.map(f => ({ id: uuid(), file: f, progress: 0, status: 'pending' }));
     setDraft(d => ({ ...d, uploading: [...d.uploading, ...uploading] }));
     // Start progress animation
@@ -60,6 +62,10 @@ export function CreateCourseWizard() {
     setDraft(d => ({ ...d, documents: d.documents.filter(doc => doc.id !== id) }));
   };
 
+  const retryUpload = (file: File) => {
+    simulateUpload([file]);
+  };
+
   const setMeta = (meta: CourseDraftState['meta']) => setDraft(d => ({ ...d, meta }));
 
   const next = () => setDraft(d => ({ ...d, step: Math.min(d.step + 1, 3) }));
@@ -67,26 +73,43 @@ export function CreateCourseWizard() {
   const setStep = (step: number) => setDraft(d => ({ ...d, step }));
 
   const submit = async () => {
-    if (isSubmitting) return; setIsSubmitting(true);
+    if (isSubmitting) return;
+    setResult(null);
+    setIsSubmitting(true);
     try {
-      const course_id = uuid();
-      // Backend expects difficulty (string) and duration (number seconds?). We'll map level and duration.
-      const difficulty = draft.meta.level === 'beginner' ? 'easy' : draft.meta.level === 'advanced' ? 'hard' : 'medium';
-      const unit = draft.meta.durationUnit; const val = Math.max(1, draft.meta.durationValue || 1);
-      const durationMinutes = unit === 'Ngày' ? val * 24 * 60 : unit === 'Tuần' ? val * 7 * 24 * 60 : val * 30 * 24 * 60;
-      const payload: CreateCourseRequest = {
-        course_id,
-        s3_key: draft.documents.map(d => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name)),
-        difficulty,
-        duration: durationMinutes, // let backend interpret as minutes
+      const missing: string[] = [];
+      if (!draft.meta.userPosition.trim()) missing.push('User position');
+      if (!draft.meta.shortPrompt.trim()) missing.push('Short user prompt');
+      if (!draft.meta.courseLevel) missing.push('Course level');
+      if (!draft.meta.courseConstraint) missing.push('Course constraint');
+      if (!draft.meta.durationDays || draft.meta.durationDays < 1) missing.push('Course duration');
+
+      if (missing.length) {
+        showToast.error(`Thiếu thông tin: ${missing.join(', ')}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const payload: CreateAgenticCourseRequest = {
+        user_position: draft.meta.userPosition.trim(),
+        short_user_prompt: draft.meta.shortPrompt.trim(),
+        course_duration: Math.max(1, draft.meta.durationDays || 1),
+        documents:
+          draft.documents.length > 0
+            ? draft.documents.map((d) => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name))
+            : undefined,
+        course_level: draft.meta.courseLevel,
+        course_constraint: draft.meta.courseConstraint,
       };
-      const resp = await courseApi.requestCreate(payload);
-      if (resp.data?.status === 202) {
-        showToast.success('Yêu cầu tạo khóa học đã được gửi');
-        setDraft(d => ({ ...d, step: 4, courseId: course_id }));
+
+      const resp = await agenticApi.createCourse(payload);
+      if (resp?.data) {
+        setResult(resp.data);
+        setDraft((d) => ({ ...d, step: 4 }));
+        showToast.success('Đã tạo khóa học bằng multi-agent.');
       } else {
-        showToast.info(resp.data?.message || 'Đã gửi yêu cầu');
-        setDraft(d => ({ ...d, step: 4, courseId: course_id }));
+        showToast.info('Đã gửi yêu cầu, vui lòng chờ phản hồi.');
+        setDraft((d) => ({ ...d, step: 4 }));
       }
     } catch (e: unknown) {
       if (e instanceof ApiErrorClass && e.status === 401) {
@@ -109,6 +132,7 @@ export function CreateCourseWizard() {
                 documents={draft.documents}
                 uploading={draft.uploading}
                 onFiles={simulateUpload}
+                onRetry={retryUpload}
                 onRemove={removeDoc}
                 onNext={next}
                 onCancel={() => {
@@ -135,7 +159,8 @@ export function CreateCourseWizard() {
             {draft.step === 4 && (
               <SuccessStep
                 draft={draft}
-                onRestart={() => setDraft(createEmptyDraft())}
+                result={result}
+                onRestart={() => { setDraft(createEmptyDraft()); setResult(null); }}
                 onGoToCourses={() => router.push('/user/my-courses')}
               />
             )}

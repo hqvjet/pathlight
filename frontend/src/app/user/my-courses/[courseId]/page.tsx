@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useMemo, useState } from 'react';
 import { courseApi } from '@/lib/api/course';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
