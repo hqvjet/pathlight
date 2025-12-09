@@ -1,263 +1,165 @@
 "use client";
-import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CourseDraftState } from '@/fake/courses';
-import { courseApi } from '@/lib/api/course';
+import { useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { CourseDraftState } from '@/types/create-course';
+import { AgenticCourseResponse } from '@/lib/api/agentic';
+import { showToast } from '@/utils/toast';
 
 interface SuccessStepProps {
   draft: CourseDraftState;
+  result: AgenticCourseResponse | null;
   onRestart: () => void;
   onGoToCourses: () => void;
 }
 
-type StatusPhase = 'initializing' | 'queued' | 'processing' | 'generating' | 'finalizing' | 'completed' | 'failed';
+const levelLabel = (level?: number) => {
+  if (!level) return 'N/A';
+  if (level <= 1) return 'Rất dễ (1)';
+  if (level === 2) return 'Dễ (2)';
+  if (level === 3) return 'Trung bình (3)';
+  if (level === 4) return 'Khó (4)';
+  return 'Rất khó (5)';
+};
 
-export function SuccessStep({ draft, onRestart, onGoToCourses }: SuccessStepProps) {
-  const [phase, setPhase] = useState<StatusPhase>('queued');
-  const [message, setMessage] = useState<string>('Đang xếp hàng...');
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+export function SuccessStep({ draft, result, onRestart, onGoToCourses }: SuccessStepProps) {
+  const jsonString = useMemo(() => (result ? JSON.stringify(result, null, 2) : ''), [result]);
 
-  const courseId = draft.courseId;
-
-  const checkpoints = useMemo(() => (
-    [
-      // We map 'initializing' to the first checkpoint visually (same as 'queued')
-      { key: 'queued', label: 'Đã nhận yêu cầu' },
-      { key: 'processing', label: 'Phân tích tài liệu' },
-      { key: 'generating', label: 'Tạo nội dung khóa học' },
-      { key: 'finalizing', label: 'Hoàn thiện cấu trúc' },
-      { key: 'completed', label: 'Hoàn tất' }
-    ] as Array<{ key: StatusPhase; label: string }>
-  ), []);
-
-  useEffect(() => {
-    if (!courseId) return;
-    const poll = async () => {
-      try {
-        const resp = await courseApi.getStatus(courseId);
-        // If backend returns HTTP 200 but semantic status indicates not found yet,
-        // treat as initializing to handle DynamoDB eventual consistency.
-        const semantic = (resp?.data as { status?: number; message?: string } | undefined);
-        if (
-          semantic?.status === 404 ||
-          semantic?.status === 501 ||
-          (typeof semantic?.message === 'string' && /không\s*tìm\s*thấy\s*khóa\s*học/i.test(semantic.message))
-        ) {
-          setPhase('queued');
-          setMessage('Đang khởi tạo... Hệ thống đang thiết lập khóa học.');
-          setLastUpdated(new Date());
-          return;
-        }
-        // Possible shapes:
-        // - { body: { phase?: string; message?: string } }
-        // - { body: { status?: boolean; vectorized?: boolean; generated_plan?: boolean; generated_lessons?: boolean; generated_final_test?: boolean; progress?: string } }
-        interface StatusBody {
-          phase?: string;
-          message?: string;
-          status?: boolean;
-          vectorized?: boolean;
-          generated_plan?: boolean;
-          generated_lessons?: boolean;
-          generated_final_test?: boolean;
-          progress?: string;
-          updated_at?: string;
-        }
-        const body = resp.data?.body as StatusBody | undefined;
-
-        // Phase priority from explicit phase or derived from booleans.
-        let derivedPhase: StatusPhase = 'processing';
-        if (typeof body?.phase === 'string') {
-          const p = body.phase.toLowerCase();
-          // Normalize known terminal/near-terminal strings
-          const completedSynonyms = ['completed', 'complete', 'done', 'final_ready', 'ready'];
-          if (completedSynonyms.includes(p)) {
-            derivedPhase = 'completed';
-          } else if (['queued','processing','generating','finalizing','failed'].includes(p)) {
-            derivedPhase = p as StatusPhase;
-          }
-        }
-
-        if (body) {
-          // Completion conditions
-          const progressText = (body.progress || '').toString().toLowerCase();
-          const isCompleted = body.status === true || /final_ready|complete|completed|done|success/.test(progressText);
-          if (isCompleted) {
-            derivedPhase = 'completed';
-          } else {
-            // Ignore 'vectorized' flag entirely per requirements.
-            if (body.generated_final_test) {
-              derivedPhase = 'finalizing';
-            } else if (body.generated_lessons || body.generated_plan) {
-              derivedPhase = 'generating';
-            } else if (!derivedPhase || derivedPhase === 'processing') {
-              derivedPhase = 'processing';
-            }
-          }
-        }
-
-        setPhase(derivedPhase);
-
-        if (body?.message || resp.data?.message) {
-          setMessage(body?.message || (resp.data?.message as string));
-        } else {
-          // Friendly default message by phase
-          const defaults: Record<StatusPhase, string> = {
-            initializing: 'Đang khởi tạo... Hệ thống đang thiết lập khóa học.',
-            queued: 'Đang xếp hàng... ',
-            processing: 'Phân tích tài liệu...',
-            generating: 'Đang tạo nội dung khóa học...',
-            finalizing: 'Đang hoàn thiện cấu trúc...',
-            completed: 'Hoàn tất.',
-            failed: 'Có lỗi xảy ra. Vui lòng thử lại.'
-          };
-          setMessage(defaults[derivedPhase]);
-        }
-        setLastUpdated(new Date());
-  // Stop on terminal state
-  if (derivedPhase === 'completed' || derivedPhase === 'failed') {
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-      } catch (err: unknown) {
-        // On early 404 (course not yet created in DB), show initializing state and keep polling.
-        const maybe: { status?: number } = (err as object) ?? {};
-        if (typeof maybe.status === 'number' && maybe.status === 404) {
-          setPhase('queued'); // visually map to first step
-          setMessage('Đang khởi tạo... Hệ thống đang thiết lập khóa học.');
-          setLastUpdated(new Date());
-          return;
-        }
-        // Other network/parse errors: keep polling silently
-      }
-    };
-    // initial call
-    poll();
-    timerRef.current = setInterval(poll, 3000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [courseId]);
-
-  const activeIndex = checkpoints.findIndex(c => c.key === phase);
-
-  // Dynamic header and description based on phase to avoid premature success copy
-  const { titleText, descText } = useMemo(() => {
-    const name = draft.meta.title || 'mới';
-    switch (phase) {
-      case 'completed':
-        return {
-          titleText: 'Hoàn Thành',
-          descText: `Khóa học ${name} đã được tạo thành công. Bạn có thể bắt đầu thêm nội dung bài học hoặc quay lại để tạo khóa học khác.`,
-        };
-      case 'failed':
-        return {
-          titleText: 'Không thể tạo khóa học',
-          descText: 'Đã xảy ra lỗi trong quá trình tạo khóa học. Vui lòng thử lại hoặc tạo yêu cầu mới.',
-        };
-      case 'finalizing':
-        return {
-          titleText: 'Đang hoàn thiện cấu trúc',
-          descText: 'Hệ thống đang sắp xếp và hoàn thiện cấu trúc khóa học của bạn. Vui lòng chờ trong giây lát.',
-        };
-      case 'generating':
-        return {
-          titleText: 'Đang tạo nội dung khóa học',
-          descText: 'Hệ thống đang tạo nội dung bài học dựa trên tài liệu của bạn. Tiến trình sẽ tự động cập nhật.',
-        };
-      case 'processing':
-        return {
-          titleText: 'Đang phân tích tài liệu',
-          descText: 'Hệ thống đang phân tích tài liệu để lập kế hoạch cho khóa học.',
-        };
-      case 'queued':
-      case 'initializing':
-      default:
-        return {
-          titleText: 'Khởi tạo yêu cầu',
-          descText: 'Yêu cầu của bạn đã được tiếp nhận và đang xếp hàng xử lý. Vui lòng đợi trong giây lát.',
-        };
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(jsonString);
+      showToast.success('Đã sao chép dữ liệu khóa học.');
+    } catch {
+      showToast.error('Không thể sao chép, vui lòng thử lại.');
     }
-  }, [phase, draft.meta.title]);
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center text-center py-16 space-y-8">
-      <div className="relative w-64 h-64 mx-auto">
-        <Image src="/assets/images/create_course_success.png" alt="Tạo khóa học thành công" fill priority className="object-contain drop-shadow-sm" />
-      </div>
-      <div className="space-y-4 max-w-xl">
-        <h2 className="text-2xl font-semibold text-gray-900">{titleText}</h2>
-        <p className="text-gray-600 leading-relaxed text-base">{descText}</p>
+    <div className="space-y-8">
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl font-semibold text-gray-900">Hoàn tất! Đã nhận phản hồi từ hệ thống</h2>
+        <p className="text-sm text-gray-600">Khóa học bên dưới được hiển thị trực tiếp từ dữ liệu hệ thống trả về. Bạn không cần biết JSON để xem.</p>
       </div>
 
-      {/* Checkpoints */}
-      {courseId && (
-        <div className="w-full max-w-2xl mt-4">
-          {/* Track lines (base + progress) */}
-          <div className="relative">
-            <div className="absolute left-0 right-0 top-5 h-0.5 bg-gray-200" aria-hidden="true" />
-            <div
-              className="absolute left-0 top-5 h-0.5 bg-orange-500 transition-all"
-              style={{ width: `${Math.max(0, activeIndex) / Math.max(1, checkpoints.length - 1) * 100}%` }}
-              aria-hidden="true"
-            />
-            {/* Nodes + labels aligned in one grid so titles center under nodes */}
-            <div className="grid grid-cols-5 gap-0">
-              {checkpoints.map((c, idx) => {
-                const isActive = idx === activeIndex;
-                const isDone = idx < activeIndex;
-                return (
-                  <div key={c.key} className="col-span-1 flex flex-col items-center">
-                    <div
-                      className={
-                        `z-10 flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border-2 ` +
-                        (isDone || isActive
-                          ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                          : 'bg-white border-gray-300 text-gray-400') +
-                        (isActive ? ' ring-2 ring-orange-300' : '')
-                      }
-                      aria-current={isActive ? 'step' : undefined}
-                    >
-                      {idx + 1}
-                    </div>
-                    <div className={`mt-2 text-center truncate px-1 text-[11px] sm:text-xs ${isActive ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
-                      {c.label}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {/* Input recap */}
+      <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-6">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Tóm tắt đầu vào</h3>
+        <dl className="grid sm:grid-cols-2 gap-3 text-sm text-gray-800">
+          <div>
+            <dt className="text-gray-500">User position</dt>
+            <dd className="font-medium">{draft.meta.userPosition || '—'}</dd>
           </div>
-          <div className="mt-4 text-sm">
-            {/* Status line emphasis */}
-            <div className={
-              `inline-flex items-center gap-2 px-3 py-2 rounded-md ` +
-              (phase === 'completed' ? 'bg-green-50 text-green-700' : phase === 'failed' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-700')
-            }>
-              {phase !== 'completed' && phase !== 'failed' && (
-                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" aria-hidden="true" />
-              )}
-              <span className="font-semibold">Trạng thái:</span>
-              <span>{message}</span>
-              {lastUpdated && <span className="opacity-70">• Cập nhật: {lastUpdated.toLocaleTimeString()}</span>}
+          <div>
+            <dt className="text-gray-500">Course level</dt>
+            <dd className="font-medium capitalize">{draft.meta.courseLevel}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Course constraint</dt>
+            <dd className="font-medium capitalize">{draft.meta.courseConstraint}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Course duration</dt>
+            <dd className="font-medium">{draft.meta.durationDays} ngày</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-gray-500">Short user prompt</dt>
+            <dd className="font-medium whitespace-pre-wrap leading-relaxed">{draft.meta.shortPrompt || '—'}</dd>
+          </div>
+          <div className="sm:col-span-2 flex flex-wrap gap-2 items-center text-xs text-gray-600">
+            <span className="font-semibold text-gray-700">Documents:</span>
+            {draft.documents.length === 0 && <span>Không đính kèm</span>}
+            {draft.documents.map((doc) => (
+              <Badge key={doc.id} variant="outline" className="border-gray-200 text-gray-700 bg-gray-50">
+                {doc.name}
+              </Badge>
+            ))}
+          </div>
+        </dl>
+      </div>
+
+      {/* Course output */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Course Output</p>
+            <h3 className="text-2xl font-bold text-gray-900">{result?.course_title || 'Đang chờ phản hồi...'}</h3>
+            <p className="text-gray-700 leading-relaxed max-w-3xl">{result?.course_overview || 'Hệ thống đang xử lý phản hồi.'}</p>
+          </div>
+          {result && (
+            <div className="flex flex-col items-end gap-2 text-sm text-gray-700">
+              <Badge className="bg-orange-500 text-white border-none">Level {result.course_level} · {levelLabel(result.course_level)}</Badge>
+              <span className="text-gray-600">Duration: {result.course_duration} ngày</span>
             </div>
+          )}
+        </div>
+
+        {result && (
+          <div className="space-y-4">
+            {result.course_lessons.map((lesson, idx) => (
+              <div key={lesson.lesson_title + idx} className="rounded-lg border border-gray-200 p-4 bg-gray-50 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Lesson {idx + 1}</p>
+                    <h4 className="text-lg font-semibold text-gray-900">{lesson.lesson_title}</h4>
+                  </div>
+                  <Badge variant="outline" className="border-gray-300 text-gray-700">Level {lesson.lesson_level}</Badge>
+                </div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-gray-200 rounded-lg p-3">
+                  {lesson.lesson_content}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-gray-800">Assessments</p>
+                  <div className="space-y-2">
+                    {lesson.lesson_assessments.map((q, qIdx) => (
+                      <div key={q.assessment_question + qIdx} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs text-gray-500">Câu {qIdx + 1}</p>
+                            <p className="text-sm font-semibold text-gray-900">{q.assessment_question}</p>
+                          </div>
+                          <Badge variant="outline" className="border-gray-300 text-gray-700">Level {q.assessment_level}</Badge>
+                        </div>
+                        <p className="text-sm text-gray-700">Hint: {q.assessment_hint}</p>
+                        <p className="text-sm text-gray-700">Giải thích: {q.assessment_explanation}</p>
+                        <div className="grid sm:grid-cols-2 gap-2 text-sm">
+                          {q.assessment_options.map((opt, oIdx) => (
+                            <div
+                              key={oIdx}
+                              className={`rounded-md border p-2 ${opt.option_correction ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-gray-50 text-gray-700'}`}
+                            >
+                              <span className="font-medium">{String.fromCharCode(65 + oIdx)}.</span> {opt.option_content}
+                              {opt.option_correction && <span className="ml-2 text-xs font-semibold">(Đúng)</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Structured data (JSON) */}
+      <div className="rounded-xl border border-gray-900 bg-gray-950 text-gray-50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 text-sm">
+          <span className="font-semibold">Dữ liệu chi tiết (máy đọc)</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Dữ liệu đã cấu trúc sẵn; hệ thống dùng để hiển thị. Bạn có thể sao chép nếu cần chuyển sang nơi khác.</span>
+            <Button size="sm" variant="secondary" onClick={handleCopy} disabled={!result}>
+              Sao chép dữ liệu
+            </Button>
           </div>
         </div>
-      )}
+        <pre className="p-4 overflow-x-auto text-xs whitespace-pre-wrap">{jsonString || 'Đang chờ phản hồi...'}</pre>
+      </div>
 
-      <div className="flex flex-wrap gap-4 pt-4">
-        <button
-          onClick={onGoToCourses}
-          disabled={phase !== 'completed'}
-          title={phase !== 'completed' ? 'Chỉ khả dụng sau khi hoàn tất' : undefined}
-          className={`px-8 h-11 rounded-md text-white font-semibold shadow-sm ${phase === 'completed' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-300 cursor-not-allowed'}`}
-        >
-          Đi đến Khóa Học
-        </button>
-        <a
-          href="/user/generation-tracking"
-          className="px-8 h-11 inline-flex items-center rounded-md bg-white border border-orange-300 text-orange-700 hover:bg-orange-50 font-medium"
-        >
-          Theo dõi tiến trình tạo khóa học
-        </a>
-        <button onClick={onRestart} className="px-8 h-11 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Tạo Khóa Học Khác</button>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button onClick={onGoToCourses} className="bg-orange-500 hover:bg-orange-600 text-white">Về trang khóa học</Button>
+        <Button variant="outline" onClick={onRestart} className="border-gray-200">Tạo khóa học khác</Button>
       </div>
     </div>
   );

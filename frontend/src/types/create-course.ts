@@ -1,5 +1,4 @@
-// Temporary fake data & utilities for course creation flow
-// Easily removable after API integration
+// Shared types and helpers for course creation flow
 
 export interface UploadingFile {
   id: string;
@@ -25,13 +24,15 @@ export interface CourseDraftState {
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
   meta: {
-    title: string;
-    category: string;
-    description: string;
-    language: string;
-    level: string; // Cơ bản / Trung bình / Nâng cao
-    durationValue: number; // numeric portion of duration
-    durationUnit: 'Ngày' | 'Tuần' | 'Tháng';
+    userPosition: string;
+    shortPrompt: string;
+    durationDays: number;
+    courseLevel: 'overview' | 'intermediate' | 'advance';
+    courseConstraint:
+      | 'professional'
+      | 'academic'
+      | 'friendly'
+      | 'humorous';
   };
   modules: Array<{
     id: string;
@@ -46,15 +47,13 @@ export const createEmptyDraft = (): CourseDraftState => ({
   documents: [],
   uploading: [],
   meta: {
-    title: '',
-    category: '',
-    description: '',
-    language: 'vi',
-    level: 'beginner',
-    durationValue: 4,
-    durationUnit: 'Ngày'
+    userPosition: '',
+    shortPrompt: '',
+    durationDays: 7,
+    courseLevel: 'overview',
+    courseConstraint: 'professional',
   },
-  modules: []
+  modules: [],
 });
 
 // In-memory ephemeral store (simple, replace with context/store later)
