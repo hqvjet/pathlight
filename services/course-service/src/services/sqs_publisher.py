@@ -30,9 +30,15 @@ def send_generate_with_vectorize(
     difficulty: str,
     duration: int,
     *,
-    user_id: str,
-    region: Optional[str] = None,
-    group_id: Optional[str] = None,
+    s3_keys: Optional[List[str]] = None,
+    difficulty: str,
+    duration: int,
+    *,
+    short_user_prompt: str,
+    user_position: Optional[str] = None,
+    course_duration: int,
+    course_level: str,
+    course_constraint: str,
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
@@ -51,8 +57,13 @@ def send_generate_with_vectorize(
                 "s3_keys": s3_keys,
                 "user_id": user_id,
             },
-        }
+                "s3_keys": s3_keys or [],
     )
+                "short_user_prompt": short_user_prompt,
+                "user_position": user_position,
+                "course_duration": course_duration,
+                "course_level": course_level,
+                "course_constraint": course_constraint,
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
