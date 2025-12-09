@@ -68,7 +68,7 @@ export default function MyCoursesPage() {
         const data = resp.data as ApiCourseListResponse | undefined;
         const list = (data?.courses || []).map(mapApiToCard);
         if (!cancelled) setCourses(list);
-      } catch (e) {
+      } catch {
         if (!cancelled) setError('Không thể tải danh sách khóa học. Vui lòng thử lại.');
       } finally {
         if (!cancelled) setLoading(false);

@@ -100,8 +100,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           setHero(mappedHero);
           setLessons(lessonData?.lessons || []);
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Không thể tải dữ liệu khóa học');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Không thể tải dữ liệu khóa học';
+        if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
