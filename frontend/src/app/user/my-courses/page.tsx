@@ -57,6 +57,12 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Chào buổi sáng';
+    if (hour < 18) return 'Chào buổi chiều';
+    return 'Chào buổi tối';
+  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -108,8 +114,8 @@ export default function MyCoursesPage() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Khóa học của tôi</h2>
-            <p className="text-sm text-gray-600">Tiếp tục khóa đang học hoặc mở lại khóa bạn đã lưu.</p>
+            <p className="text-sm text-gray-500">{greeting}</p>
+            <h2 className="text-2xl font-semibold text-gray-900">Khóa Học Của Tôi</h2>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <div className="relative">
@@ -117,38 +123,39 @@ export default function MyCoursesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm khóa học..."
-                className="w-56 h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
+                className="w-72 sm:w-80 lg:w-96 h-11 pl-10 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
               />
-              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <div className="relative">
+              <span className="absolute -top-5 left-0 text-[11px] font-semibold text-gray-500 tracking-wide uppercase">Sắp xếp</span>
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortOption)}
-                className="appearance-none h-10 pl-3 pr-8 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400"
+                className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
               >
                 <option value="latest">Mới nhất</option>
                 <option value="progress_desc">Tiến độ cao</option>
                 <option value="title_asc">Tên A-Z</option>
               </select>
-              <svg className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
             <a
               href="/user/generation-tracking"
-              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-orange-200 bg-white text-orange-600 font-semibold shadow-sm hover:bg-orange-50"
+              className="inline-flex items-center gap-2 px-5 h-11 rounded-full border border-gray-200 bg-white text-gray-900 font-semibold shadow-sm hover:shadow-md"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
               </svg>
-              Generate tracking
+              Theo dõi tiến trình
             </a>
             <a
               href="/user/create-course"
-              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold shadow-sm"
+              className="inline-flex items-center gap-2 px-5 h-11 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-semibold shadow-lg"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

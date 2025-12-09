@@ -32,11 +32,7 @@ export interface CourseDraftState {
       | 'professional'
       | 'academic'
       | 'friendly'
-      | 'humorous'
-      | 'chuyen-nghiep'
-      | 'hoc-thuat'
-      | 'gan-gui'
-      | 'di-dom';
+      | 'humorous';
   };
   modules: Array<{
     id: string;

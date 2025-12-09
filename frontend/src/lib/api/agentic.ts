@@ -5,11 +5,7 @@ export type AgenticCourseConstraint =
   | 'professional'
   | 'academic'
   | 'friendly'
-  | 'humorous'
-  | 'chuyen-nghiep'
-  | 'hoc-thuat'
-  | 'gan-gui'
-  | 'di-dom';
+  | 'humorous';
 
 export interface CreateAgenticCourseRequest {
   user_position: string;
@@ -22,13 +18,13 @@ export interface CreateAgenticCourseRequest {
 
 export interface AgenticAssessmentOption {
   option_content: string;
-  option_correction: boolean | 0 | 1;
+  option_correction: boolean;
 }
 
 export interface AgenticAssessment {
   assessment_question: string;
   assessment_hint: string;
-  assessment_explaination: string;
+  assessment_explanation: string;
   assessment_level: number;
   assessment_options: AgenticAssessmentOption[];
 }
