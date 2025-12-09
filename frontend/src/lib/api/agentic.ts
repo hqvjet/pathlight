@@ -46,5 +46,5 @@ export interface AgenticCourseResponse {
 
 export const agenticApi = {
   createCourse: (payload: CreateAgenticCourseRequest) =>
-    apiClient.post<AgenticCourseResponse>(`/agentic/create-course`, payload),
+    apiClient.post<AgenticCourseResponse>(`/course/create`, payload),
 };
