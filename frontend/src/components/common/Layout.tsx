@@ -60,14 +60,16 @@ export default function Layout({ children, title, user }: LayoutProps) {
 
   // Persist sidebar preference on desktop
   useEffect(() => {
-    const stored = localStorage.getItem('pl_sidebar');
+    if (typeof window === 'undefined' || typeof window.localStorage?.getItem !== 'function') return;
+    const stored = window.localStorage.getItem('pl_sidebar');
     if (stored && window.innerWidth >= 1024) {
       setSidebarOpen(stored === 'open');
     }
   }, []);
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.localStorage?.setItem !== 'function') return;
     if (window.innerWidth >= 1024) {
-      localStorage.setItem('pl_sidebar', sidebarOpen ? 'open' : 'closed');
+      window.localStorage.setItem('pl_sidebar', sidebarOpen ? 'open' : 'closed');
     }
   }, [sidebarOpen]);
 
