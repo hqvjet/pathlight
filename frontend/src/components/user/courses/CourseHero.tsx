@@ -32,7 +32,7 @@ export function CourseHero({ course }: CourseHeroProps) {
             <span className="text-xs text-gray-500">{course.language}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">{course.title}</h1>
-          <p className="text-base text-gray-700 max-w-3xl leading-7">{course.description}</p>
+          <p className="text-base text-gray-700 max-w-3xl leading-7 line-clamp-2 sm:line-clamp-3">{course.description}</p>
           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
             <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow-sm border border-gray-100">
               <span className="h-2 w-2 rounded-full bg-green-500" />
