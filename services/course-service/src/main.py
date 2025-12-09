@@ -110,5 +110,5 @@ async def custom_redoc():
     return get_redoc_html(
         openapi_url="openapi.json", 
         title="Course Service - API Docs",
-        js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
     )
