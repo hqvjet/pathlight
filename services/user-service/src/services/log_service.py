@@ -22,6 +22,46 @@ _FILTER_TO_WINDOW = {
 
 _LOG_LEVEL_PREFIXES = ["ERROR", "WARN", "WARNING", "INFO", "DEBUG"]
 
+# Default log groups for the Pathlight stack (can be overridden via env CLOUDWATCH_LOG_GROUP_NAME_LIST)
+_DEFAULT_LOG_GROUPS = [
+    "/aws/lambda/pathlight-agentic-service",
+    "/aws/lambda/pathlight-authentication-service",
+    "/aws/lambda/pathlight-course-service",
+    "/aws/lambda/pathlight-user-service",
+    "/aws/lambda/pathlight-quiz-service",
+]
+
+def _resolve_log_groups(selected: str | None) -> list[str]:
+    """Return the list of log groups to query.
+
+    - If `selected` is provided, validate it is one of the known groups.
+    - Else, use env CLOUDWATCH_LOG_GROUP_NAME_LIST (comma-separated) or the default list above.
+    - For backward compatibility, if CLOUDWATCH_LOG_GROUP_NAME is set and list is empty, use it.
+    """
+    env_list = os.getenv("CLOUDWATCH_LOG_GROUP_NAME_LIST")
+    groups_env = []
+    if env_list:
+        groups_env = [g.strip() for g in env_list.split(",") if g.strip()]
+
+    if selected:
+        # Allow either full name or short suffix match (last token)
+        candidates = groups_env or _DEFAULT_LOG_GROUPS
+        if selected in candidates:
+            return [selected]
+        # try suffix match
+        for g in candidates:
+            if g.rsplit("/", 1)[-1] == selected:
+                return [g]
+        return []
+
+    if groups_env:
+        return groups_env
+
+    if config.CLOUDWATCH_LOG_GROUP_NAME:
+        return [config.CLOUDWATCH_LOG_GROUP_NAME]
+
+    return _DEFAULT_LOG_GROUPS
+
 
 def _resolve_time_window(filter_key: FilterKey) -> tuple[datetime, datetime]:
     """Return UTC start/end datetimes for the requested window."""
@@ -44,7 +84,7 @@ def _detect_log_level(message: str) -> str:
     return "INFO"
 
 
-def _format_events(events: Sequence[dict]) -> list[AdminLogItem]:
+def _format_events(events: Sequence[dict], source: str) -> list[AdminLogItem]:
     formatted: list[AdminLogItem] = []
     for event in events:
         message = (event.get("message") or "").rstrip()
@@ -53,19 +93,24 @@ def _format_events(events: Sequence[dict]) -> list[AdminLogItem]:
                 timestamp=_to_vietnam_time(int(event.get("timestamp", 0))),
                 type=_detect_log_level(message),
                 log=message,
+                source=source,
             )
         )
     return formatted
 
 
-def get_admin_logs(filter_key: str, logs_client=None) -> AdminLogsResponse:
-    """Fetch logs from CloudWatch for the requested window and convert to VN time."""
+def get_admin_logs(filter_key: str, *, service: Optional[str] = None, logs_client=None) -> AdminLogsResponse:
+    """Fetch logs from CloudWatch for the requested window and convert to VN time.
+
+    - filter_key: daily | weekly | monthly
+    - service: optional specific log group (full name or suffix). If None, aggregate all known groups.
+    """
     if filter_key not in _FILTER_TO_WINDOW:
         return AdminLogsResponse(status=400, message="filter must be daily, weekly, or monthly", logs=[])
 
-    log_group = config.CLOUDWATCH_LOG_GROUP_NAME
-    if not log_group:
-        return AdminLogsResponse(status=500, message="CloudWatch log group is not configured", logs=[])
+    log_groups = _resolve_log_groups(service)
+    if not log_groups:
+        return AdminLogsResponse(status=400, message="Log group không hợp lệ", logs=[])
 
     start_time, end_time = _resolve_time_window(filter_key)  # UTC datetimes
     start_ms = int(start_time.timestamp() * 1000)
@@ -78,31 +123,37 @@ def get_admin_logs(filter_key: str, logs_client=None) -> AdminLogsResponse:
         aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY or None,
     )
 
-    events: list[dict] = []
-    next_token: Optional[str] = None
-    try:
-        while True:
-            params = {
-                "logGroupName": log_group,
-                "startTime": start_ms,
-                "endTime": end_ms,
-                "limit": 1000,
-            }
-            if next_token:
-                params["nextToken"] = next_token
-            response = client.filter_log_events(**params)
-            events.extend(response.get("events", []))
-            new_token = response.get("nextToken")
-            if not new_token or new_token == next_token:
-                break
-            next_token = new_token
-    except (ClientError, BotoCoreError) as exc:
-        logger.error(f"Failed to fetch CloudWatch logs: {exc}")
-        return AdminLogsResponse(status=502, message="Không thể lấy log từ CloudWatch", logs=[])
-    except Exception as exc:  # pragma: no cover - safety net
-        logger.error(f"Unexpected error while fetching logs: {exc}")
-        return AdminLogsResponse(status=500, message="Có lỗi xảy ra khi lấy log", logs=[])
+    formatted: list[AdminLogItem] = []
 
-    events.sort(key=lambda e: e.get("timestamp", 0))
-    formatted = _format_events(events)
+    for group in log_groups:
+        events: list[dict] = []
+        next_token: Optional[str] = None
+        try:
+            while True:
+                params = {
+                    "logGroupName": group,
+                    "startTime": start_ms,
+                    "endTime": end_ms,
+                    "limit": 1000,
+                }
+                if next_token:
+                    params["nextToken"] = next_token
+                response = client.filter_log_events(**params)
+                events.extend(response.get("events", []))
+                new_token = response.get("nextToken")
+                if not new_token or new_token == next_token:
+                    break
+                next_token = new_token
+        except (ClientError, BotoCoreError) as exc:
+            logger.error(f"Failed to fetch CloudWatch logs for {group}: {exc}")
+            return AdminLogsResponse(status=502, message="Không thể lấy log từ CloudWatch", logs=[])
+        except Exception as exc:  # pragma: no cover - safety net
+            logger.error(f"Unexpected error while fetching logs for {group}: {exc}")
+            return AdminLogsResponse(status=500, message="Có lỗi xảy ra khi lấy log", logs=[])
+
+        events.sort(key=lambda e: e.get("timestamp", 0))
+        formatted.extend(_format_events(events, source=group))
+
+    # Sort combined logs by timestamp
+    formatted.sort(key=lambda e: e.timestamp)
     return AdminLogsResponse(status=200, logs=formatted)

@@ -254,6 +254,7 @@ async def admin_get_costs(
 @router.get("/admin/log", response_model=AdminLogsResponse)
 async def get_admin_logs_endpoint(
     filter: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    service: Optional[str] = Query(None, description="Tên log group hoặc suffix service"),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
@@ -267,7 +268,7 @@ async def get_admin_logs_endpoint(
             )
         raise
 
-    result = get_admin_logs(filter)
+    result = get_admin_logs(filter, service=service)
     if result.status == 200:
         return result
     status_code = 400 if result.status == 400 else 502 if result.status == 502 else 500

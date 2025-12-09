@@ -103,6 +103,7 @@ class AdminLogItem(BaseModel):
     timestamp: str
     type: str
     log: str
+    source: str
 
 
 class AdminLogsResponse(BaseModel):
