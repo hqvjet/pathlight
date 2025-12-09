@@ -4,14 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { courseApi } from '@/lib/api/course';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { LessonList } from '@/components/user/courses/LessonList';
+import type { CourseModule } from '@/components/user/courses/LessonList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-interface CourseDetailPageProps {
-  params: {
-    courseId: string;
-  };
-}
 
 interface LessonDetailApi {
   lesson_id: string;
@@ -43,6 +38,10 @@ interface LessonListResponseApi {
   message?: string;
 }
 
+type CourseDetailPageProps = {
+  params?: Promise<{ courseId: string }>;
+};
+
 const minutesToWeeksLabel = (minutes: number) => {
   if (!minutes) return '4 tuần';
   const days = Math.max(1, Math.round(minutes / (60 * 24)));
@@ -52,6 +51,7 @@ const minutesToWeeksLabel = (minutes: number) => {
 };
 
 export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+  const courseId = (params as unknown as { courseId: string } | undefined)?.courseId;
   const [hero, setHero] = useState<CourseHeroData | null>(null);
   const [lessons, setLessons] = useState<LessonDetailApi[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,12 +60,18 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!courseId) {
+        setError('Không tìm thấy khóa học');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
         const [infoResp, lessonResp] = await Promise.all([
-          courseApi.getById(params.courseId),
-          courseApi.listLessons(params.courseId),
+          courseApi.getById(courseId),
+          courseApi.listLessons(courseId),
         ]);
 
         const infoData = infoResp.data as CourseFullInfoResponseApi;
@@ -82,7 +88,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           : 0;
 
         const mappedHero: CourseHeroData = {
-          id: params.courseId,
+          id: courseId,
           title: infoData.info.title,
           subtitle: infoData.info.roadmap || 'Lộ trình học tập được tự động tạo',
           description: infoData.info.description || 'Khóa học không có mô tả',
@@ -111,15 +117,15 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [params.courseId]);
+  }, [courseId]);
 
-  const modules = useMemo(() => {
+  const modules: CourseModule[] = useMemo(() => {
     if (!lessons.length) return [];
     return [
       {
         id: 'main',
         title: 'Nội dung khóa học',
-        lessons: lessons.map((lesson, idx) => ({
+        lessons: lessons.map((lesson, idx): CourseModule['lessons'][number] => ({
           id: lesson.lesson_id,
           title: `${idx + 1}. ${lesson.title}`,
           duration: '—',

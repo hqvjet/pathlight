@@ -58,7 +58,7 @@ export function CourseCard({ course }: CourseCardProps) {
         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
           <span className={cn('rounded-full border px-3 py-1 font-medium', 'border-gray-200 bg-gray-50 text-gray-700')}>{course.level}</span>
           <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.language}</span>
-          <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.modules.length} chương</span>
+          <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.totalLessons} bài</span>
         </div>
         <div className="flex justify-between items-center pt-1">
           <div className="text-sm text-gray-500">Tiếp tục từ bài {course.completedLessons + 1}</div>

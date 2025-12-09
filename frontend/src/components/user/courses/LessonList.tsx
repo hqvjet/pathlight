@@ -1,6 +1,22 @@
-import { CourseModule, LessonItem } from '@/fake/course-landing';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+export type LessonStatus = 'completed' | 'in-progress' | 'locked';
+
+export interface LessonItem {
+  id: string;
+  title: string;
+  duration: string;
+  status: LessonStatus;
+  summary?: string;
+  isCurrent?: boolean;
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  lessons: LessonItem[];
+}
 
 function LessonRow({ lesson }: { lesson: LessonItem }) {
   const statusStyles: Record<LessonItem['status'], string> = {

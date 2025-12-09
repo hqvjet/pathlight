@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 interface UploadStepProps {
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
-  onFiles: (files: FileList | null) => void | Promise<void>;
+  onFiles: (files: FileList | File[] | null) => void | Promise<void>;
   onRetry: (file: File) => void;
   onRemove: (id: string) => void;
   onNext: () => void;
