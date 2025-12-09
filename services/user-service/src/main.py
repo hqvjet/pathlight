@@ -106,6 +106,7 @@ async def custom_redoc():
     return get_redoc_html(
         openapi_url="openapi.json",  # relative path
         title="Pathlight User Service - API Docs",
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
     )
 
 def handler(event, context):
