@@ -121,7 +121,7 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
                           <Badge variant="outline" className="border-gray-300 text-gray-700">Level {q.assessment_level}</Badge>
                         </div>
                         <p className="text-sm text-gray-700">Hint: {q.assessment_hint}</p>
-                        <p className="text-sm text-gray-700">Giải thích: {q.assessment_explaination}</p>
+                        <p className="text-sm text-gray-700">Giải thích: {q.assessment_explanation}</p>
                         <div className="grid sm:grid-cols-2 gap-2 text-sm">
                           {q.assessment_options.map((opt, oIdx) => (
                             <div
