@@ -11,7 +11,7 @@ from src.config import config
 from src.database import create_tables, engine
 from src.routes.course_routes import router as course_router
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
 
@@ -107,4 +107,8 @@ if __name__ == "__main__":
 
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc():
-    return get_redoc_html(openapi_url="openapi.json", title="Course Service - API Docs")
+    return get_redoc_html(
+        openapi_url="openapi.json", 
+        title="Course Service - API Docs",
+        js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
+    )
