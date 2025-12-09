@@ -135,4 +135,8 @@ if __name__ == "__main__":
 
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc():
-    return get_redoc_html(openapi_url="openapi.json", title="Auth Service - API Docs")
+    return get_redoc_html(
+        openapi_url="openapi.json", 
+        title="Auth Service - API Docs",
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
+    )

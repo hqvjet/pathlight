@@ -1,10 +1,11 @@
 
-
+from mangum import Mangum
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
+import json
 
 from .config import config
 from .database import get_engine, Base
@@ -51,6 +52,46 @@ async def debug_config():
         "SERVICE_PORT": config.SERVICE_PORT,
     }
 
+mangum_handler = Mangum(app, lifespan="off")
+
+def handler(event, context):
+    """
+    Custom Lambda handler for debugging and processing API Gateway events
+    """
+    # Log the complete event for debugging
+    logger.info("Lambda Event:")
+    logger.info(json.dumps(event))
+    
+    # Check if path contains "docs" and modify the path
+    # Only expose ReDoc (no Swagger) - normalize any redoc path variant
+    if "path" in event and "redoc" in event["path"]:
+        logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
+        event["path"] = "/redoc"
+
+    # Normalize schema path (stage + service prefixes get stripped otherwise)
+    if "path" in event and "openapi.json" in event["path"]:
+        logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
+        event["path"] = "/openapi.json"
+    
+    try:
+        # Process the request through Mangum
+        response = mangum_handler(event, context)
+        logger.info(f"Response Status: {response.get('statusCode', 'Unknown')}")
+        return response
+    except Exception as e:
+        logger.error(f"Error in Lambda handler: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal server error", "detail": str(e)}),
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        }
+    
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("SERVICE_PORT", str(config.SERVICE_PORT)))
@@ -59,4 +100,8 @@ if __name__ == "__main__":
 
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc():
-    return get_redoc_html(openapi_url="openapi.json", title="Quiz Service - API Docs")
+    return get_redoc_html(
+        openapi_url="openapi.json", 
+        title="Quiz Service - API Docs",
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
+    )
