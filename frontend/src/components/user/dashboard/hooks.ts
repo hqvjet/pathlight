@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { storage } from '@/utils/api';
-import { ApiPool } from '@/lib/api/pool';
+import { api } from '@/lib/api';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
@@ -50,11 +50,14 @@ export function useDashboard(onLogout: () => void) {
           if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
         }
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
-  const response = await Promise.race([ApiPool.user.dashboard(), timeoutPromise]) as { status: number; data?: unknown };
-        if (response.status === 401) {
-          setLoading(false); onLogout(); return; }
-        if (response.status !== 200) throw new Error(`API returned status ${response.status}`);
-        const raw = response.data as DashboardData | { info?: UserProfile } | UserProfile | undefined;
+        const response = await Promise.race([api.user.getDashboard(), timeoutPromise]);
+        if (!response || typeof response !== 'object' || typeof (response as { status?: number }).status !== 'number') {
+          throw new Error('Invalid API response');
+        }
+        const { status, data } = response as { status: number; data?: unknown };
+        if (status === 401) { setLoading(false); onLogout(); return; }
+        if (status !== 200) throw new Error(`API returned status ${status}`);
+        const raw = data as DashboardData | { info?: UserProfile } | UserProfile | undefined;
         const userInfo: UserProfile = (raw && typeof raw === 'object' && 'info' in raw)
           ? (raw as { info?: UserProfile }).info || { email: '', name: '', id: '' }
           : (raw as UserProfile);

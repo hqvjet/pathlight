@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { showToast } from '@/utils/toast';
 import { storage } from '@/utils/api';
-import { ApiPool } from '@/lib/api/pool';
+import { api } from '@/lib/api';
 import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
@@ -51,7 +51,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
 
       console.log('Setting reminder time:', selectedTime);
 
-      const response = await ApiPool.user.notifyTime({ remind_time: selectedTime }) as NotifyTimeResponse;
+      const response = await api.user.setNotifyTime({ remind_time: selectedTime }) as NotifyTimeResponse;
 
       console.log('Response:', response);
 

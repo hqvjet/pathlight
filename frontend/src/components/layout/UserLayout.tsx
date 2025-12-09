@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import NavBar from './NavBar';
+import NavBarAuth from './NavBarAuth';
 
 interface UserLayoutProps {
   children: ReactNode;
@@ -21,9 +21,9 @@ export default function UserLayout({
 }: UserLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavBar 
-        user={user} 
-        onLogout={onLogout} 
+      <NavBarAuth
+        user={user}
+        onLogout={onLogout}
         showLogoutButton={showNavLogout}
       />
       <main className="pt-32 py-8">
