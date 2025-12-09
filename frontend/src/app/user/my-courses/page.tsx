@@ -138,6 +138,15 @@ export default function MyCoursesPage() {
               </svg>
             </div>
             <a
+              href="/user/generation-tracking"
+              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-orange-200 bg-white text-orange-600 font-semibold shadow-sm hover:bg-orange-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+              </svg>
+              Generate tracking
+            </a>
+            <a
               href="/user/create-course"
               className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold shadow-sm"
             >
