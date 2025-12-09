@@ -1,6 +1,12 @@
 name: CICD For Agentic Service
 
-on: 
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/agentic-service/**'
   push:
     branches:
       - main
@@ -36,6 +42,7 @@ jobs:
 
   # Run Tests
   test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -72,8 +79,9 @@ jobs:
     
   # Push Image to ECR and Deploy to Lambda
   deploy:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: test
+    needs: build
     steps:
       - name: Use Artifact from Build
         uses: actions/download-artifact@v4
