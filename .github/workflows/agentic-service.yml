@@ -18,6 +18,7 @@ jobs:
 
   # Build Docker Image
   build:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
