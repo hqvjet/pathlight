@@ -8,7 +8,7 @@ interface UploadStepProps {
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
   onFiles: (files: FileList | File[] | null) => void | Promise<void>;
-  onRetry: (file: File) => void;
+  onRetry: (file: File, id?: string) => void;
   onRemove: (id: string) => void;
   onNext: () => void;
   onCancel: () => void;
@@ -48,7 +48,7 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
     <div className="space-y-8">
       <div className="text-center space-y-2">
         <h2 className="text-lg font-semibold text-gray-800">Thêm tài liệu (tuỳ chọn)</h2>
-        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Có thể bỏ qua bước này và chỉ dùng Short user prompt.</p>
+        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Có thể bỏ qua bước này và chỉ dùng Prompt ngắn.</p>
       </div>
 
       <div
@@ -108,7 +108,7 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
                       <span className="text-[10px] uppercase tracking-wide text-red-600 font-semibold">Lỗi</span>
                       <button
                         type="button"
-                        onClick={() => onRetry(f.file)}
+                        onClick={() => onRetry(f.file, f.id)}
                         className="px-2 py-1 text-xs rounded-md bg-orange-500 text-white hover:bg-orange-600"
                       >
                         Thử lại

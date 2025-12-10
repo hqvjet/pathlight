@@ -25,7 +25,7 @@ export default function UserSectionLayout({ children }: UserSectionLayoutProps) 
   const pathname = usePathname();
 
   // Derive the title from the current path (fallback generic)
-  const title = titleMap[pathname] || 'PathLight';
+  const title = titleMap[pathname] || '';
 
   const { user: authUser } = useAuthContext();
   const user = useMemo(() => {

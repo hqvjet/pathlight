@@ -20,4 +20,5 @@ export const courseApi = {
   getLessonDetail: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}`),
   getLessonTest: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/test`),
   getFinalTest: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/final-test`),
+  finishLesson: (course_id: string, lesson_id: string) => apiClient.put(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/finish`),
 };

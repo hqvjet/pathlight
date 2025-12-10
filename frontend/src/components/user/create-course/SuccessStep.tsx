@@ -25,6 +25,19 @@ const levelLabel = (level?: number) => {
 export function SuccessStep({ draft, result, onRestart, onGoToCourses }: SuccessStepProps) {
   const jsonString = useMemo(() => (result ? JSON.stringify(result, null, 2) : ''), [result]);
 
+  const levelLabelMeta: Record<CourseDraftState['meta']['courseLevel'], string> = {
+    overview: 'Tổng quan',
+    intermediate: 'Trung cấp',
+    advance: 'Nâng cao',
+  };
+
+  const constraintLabel: Record<CourseDraftState['meta']['courseConstraint'], string> = {
+    professional: 'Chuyên nghiệp',
+    academic: 'Học thuật',
+    friendly: 'Gần gũi',
+    humorous: 'Dí dỏm',
+  };
+
   const handleCopy = async () => {
     if (!result) return;
     try {
@@ -47,23 +60,23 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
         <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Tóm tắt đầu vào</h3>
         <dl className="grid sm:grid-cols-2 gap-3 text-sm text-gray-800">
           <div>
-            <dt className="text-gray-500">User position</dt>
+            <dt className="text-gray-500">Vị trí người học</dt>
             <dd className="font-medium">{draft.meta.userPosition || '—'}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course level</dt>
-            <dd className="font-medium capitalize">{draft.meta.courseLevel}</dd>
+            <dt className="text-gray-500">Trình độ khóa học</dt>
+            <dd className="font-medium">{levelLabelMeta[draft.meta.courseLevel]}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course constraint</dt>
-            <dd className="font-medium capitalize">{draft.meta.courseConstraint}</dd>
+            <dt className="text-gray-500">Văn phong khóa học</dt>
+            <dd className="font-medium">{constraintLabel[draft.meta.courseConstraint]}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course duration</dt>
+            <dt className="text-gray-500">Thời lượng</dt>
             <dd className="font-medium">{draft.meta.durationDays} ngày</dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-gray-500">Short user prompt</dt>
+            <dt className="text-gray-500">Prompt ngắn</dt>
             <dd className="font-medium whitespace-pre-wrap leading-relaxed">{draft.meta.shortPrompt || '—'}</dd>
           </div>
           <div className="sm:col-span-2 flex flex-wrap gap-2 items-center text-xs text-gray-600">
@@ -82,14 +95,14 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Course Output</p>
+            <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Kết quả khóa học</p>
             <h3 className="text-2xl font-bold text-gray-900">{result?.course_title || 'Đang chờ phản hồi...'}</h3>
             <p className="text-gray-700 leading-relaxed max-w-3xl">{result?.course_overview || 'Hệ thống đang xử lý phản hồi.'}</p>
           </div>
           {result && (
             <div className="flex flex-col items-end gap-2 text-sm text-gray-700">
               <Badge className="bg-orange-500 text-white border-none">Level {result.course_level} · {levelLabel(result.course_level)}</Badge>
-              <span className="text-gray-600">Duration: {result.course_duration} ngày</span>
+              <span className="text-gray-600">Thời lượng: {result.course_duration} ngày</span>
             </div>
           )}
         </div>

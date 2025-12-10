@@ -22,11 +22,19 @@ export interface CourseCardData {
 
 interface CourseCardProps {
   course: CourseCardData;
+  onSelect?: (course: CourseCardData) => void;
 }
 
-export function CourseCard({ course }: CourseCardProps) {
+export function CourseCard({ course, onSelect }: CourseCardProps) {
   return (
-    <Card className="h-full border-gray-100 shadow-sm hover:shadow-lg transition-shadow bg-white">
+    <Card
+      className="h-full border-gray-100 shadow-sm hover:shadow-lg transition-all bg-white cursor-pointer focus-within:ring-2 focus-within:ring-orange-500/50 focus-within:ring-offset-2"
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      aria-pressed={false}
+      onClick={() => onSelect?.(course)}
+      onKeyDown={(e) => { if (onSelect && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSelect(course); } }}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -44,8 +52,8 @@ export function CourseCard({ course }: CourseCardProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="text-sm text-gray-700 leading-6 line-clamp-3">{course.description}</div>
+      <CardContent className="space-y-4 flex flex-col h-full">
+        <div className="text-sm text-gray-700 leading-6 line-clamp-3 min-h-[4.5rem]">{course.description}</div>
         <div className="space-y-2">
           <Progress value={course.progress} />
           <div className="flex justify-between text-xs text-gray-500">
@@ -60,10 +68,11 @@ export function CourseCard({ course }: CourseCardProps) {
           <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.language}</span>
           <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.totalLessons} bài</span>
         </div>
-        <div className="flex justify-between items-center pt-1">
+        <div className="flex justify-between items-center pt-1 mt-auto">
           <div className="text-sm text-gray-500">Tiếp tục từ bài {course.completedLessons + 1}</div>
           <Link
             href={`/user/my-courses/${course.id}`}
+            onClick={(e) => e.stopPropagation()}
             className="text-sm font-semibold text-orange-600 hover:text-orange-700"
           >
             Xem chi tiết →

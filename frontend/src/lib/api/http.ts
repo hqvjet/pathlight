@@ -220,11 +220,12 @@ export class ApiClient {
   put<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'PUT', body: data ? JSON.stringify(data) : undefined }); }
   patch<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'PATCH', body: data ? JSON.stringify(data) : undefined }); }
   delete<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'DELETE' }); }
-  async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}) {
+  async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}, fieldName = 'file') {
     const url = this.buildUrl(endpoint, config.baseURL);
-  const formData = new FormData(); formData.append('file', file, file.name);
-  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
-  return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+    const formData = new FormData(); formData.append(fieldName, file, file.name);
+    const method = (config.method || 'POST').toUpperCase();
+    const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    return this.executeWithRetry<T>(url, { ...config, method, body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);

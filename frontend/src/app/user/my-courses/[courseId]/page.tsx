@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { courseApi } from '@/lib/api/course';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
-import { LessonList } from '@/components/user/courses/LessonList';
-import type { CourseModule } from '@/components/user/courses/LessonList';
+import { LessonList, type CourseModule } from '@/components/user/courses/LessonList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { showToast } from '@/utils/toast';
 
 interface LessonDetailApi {
   lesson_id: string;
@@ -15,6 +18,7 @@ interface LessonDetailApi {
   description: string;
   content: string;
   finish: boolean;
+  order?: number;
 }
 
 interface CourseFullInfoApi {
@@ -39,7 +43,7 @@ interface LessonListResponseApi {
 }
 
 type CourseDetailPageProps = {
-  params?: Promise<{ courseId: string }>;
+  params: Promise<{ courseId: string }>;
 };
 
 const minutesToWeeksLabel = (minutes: number) => {
@@ -51,11 +55,12 @@ const minutesToWeeksLabel = (minutes: number) => {
 };
 
 export default function CourseDetailPage({ params }: CourseDetailPageProps) {
-  const courseId = (params as unknown as { courseId: string } | undefined)?.courseId;
+  const { courseId } = use(params);
   const [hero, setHero] = useState<CourseHeroData | null>(null);
   const [lessons, setLessons] = useState<LessonDetailApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -103,95 +108,209 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         };
 
         if (!cancelled) {
+          const parseOrder = (title: string, idx: number) => {
+            const match = title.match(/^(\d+)/);
+            return match ? Number(match[1]) : idx + 1;
+          };
+
+          const normalizedLessons = (lessonData?.lessons || infoData.info.lesson || []).map((l, idx) => ({
+            ...l,
+            order: parseOrder(l.title, idx),
+          })).sort((a, b) => (a.order || 0) - (b.order || 0));
+
           setHero(mappedHero);
-          setLessons(lessonData?.lessons || []);
+          setLessons(normalizedLessons);
         }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Không thể tải dữ liệu khóa học';
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Không thể tải thông tin khóa học';
         if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
+
     load();
     return () => {
       cancelled = true;
     };
   }, [courseId]);
 
-  const modules: CourseModule[] = useMemo(() => {
-    if (!lessons.length) return [];
+  const currentLessonId = useMemo(() => {
+    if (!lessons.length) return null;
+    const firstIncomplete = lessons.find((lesson) => !lesson.finish);
+    return firstIncomplete?.lesson_id || lessons[lessons.length - 1]?.lesson_id || null;
+  }, [lessons]);
+
+  const modules = useMemo<CourseModule[]>(() => {
+    let locked = false;
     return [
       {
         id: 'main',
-        title: 'Nội dung khóa học',
-        lessons: lessons.map((lesson, idx): CourseModule['lessons'][number] => ({
-          id: lesson.lesson_id,
-          title: `${idx + 1}. ${lesson.title}`,
-          duration: '—',
-          status: lesson.finish ? 'completed' : 'locked',
-          summary: lesson.description,
-          isCurrent: !lesson.finish && idx === lessons.findIndex((l) => !l.finish),
-        })),
+        title: 'Lộ trình khóa học',
+        lessons: lessons.map((lesson, idx) => {
+          let status: 'completed' | 'in-progress' | 'locked';
+          if (lesson.finish) {
+            status = 'completed';
+          } else if (!locked) {
+            status = 'in-progress';
+            locked = true;
+          } else {
+            status = 'locked';
+          }
+
+          return {
+            id: lesson.lesson_id,
+            title: lesson.title,
+            duration: '—',
+            status,
+            order: idx + 1,
+            isCurrent: status === 'in-progress',
+          };
+        }),
       },
     ];
   }, [lessons]);
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {loading && (
+  const continueLessonId = useMemo(() => {
+    const firstUnlocked = modules[0]?.lessons.find((lesson) => lesson.status !== 'locked');
+    return firstUnlocked?.id || null;
+  }, [modules]);
+
+  const handleSelectLesson = (lessonId: string) => {
+    const selected = modules[0]?.lessons.find((lesson) => lesson.id === lessonId);
+    if (!selected) return;
+    if (selected.status === 'locked') {
+      showToast.info('Hoàn thành bài trước để mở khóa bài này');
+      return;
+    }
+    router.push(`/user/my-courses/${courseId}/lessons/${lessonId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="bg-white rounded-xl p-10 text-center border border-gray-100 shadow-sm">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto" />
           <p className="mt-4 text-gray-600">Đang tải khóa học...</p>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {!loading && error && (
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="bg-red-50 text-red-700 rounded-xl p-4 border border-red-200 text-sm">{error}</div>
-      )}
+      </div>
+    );
+  }
 
-      {!loading && !error && hero && (
-        <>
-          <CourseHero course={hero} />
+  if (!hero) return null;
 
-          <div className="grid gap-6 lg:grid-cols-[1.6fr,1fr]">
-            <LessonList modules={modules} />
-            <Card className="shadow-sm border-gray-100">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-gray-900">Thông tin khóa học</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm text-gray-700">
-                <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-1">
-                  <p className="text-xs text-gray-500">Tổng quan</p>
-                  <p className="font-medium text-gray-900 leading-6">{hero.subtitle}</p>
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="flex items-center gap-3 text-sm text-gray-600">
+        <Link href="/user/my-courses" className="text-orange-600 font-semibold hover:text-orange-700">← Quay lại danh sách</Link>
+        <span className="text-gray-400">/</span>
+        <span className="font-semibold text-gray-800">{hero.title}</span>
+      </div>
+
+      <CourseHero course={hero} />
+
+      <div className="grid gap-6 lg:grid-cols-[300px,1fr,320px]">
+        <div className="space-y-3">
+          <Card className="shadow-sm border-gray-100 sticky top-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-gray-900">Mục lục</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-700 font-semibold">Tiến độ</span>
+                <span className="text-gray-600">{hero.progress}%</span>
+              </div>
+              <Progress value={hero.progress} />
+              <LessonList modules={modules} selectedId={currentLessonId} onSelect={handleSelectLesson} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <Card className="shadow-sm border-gray-100">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg text-gray-900">Nội dung chi tiết</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-gray-700">
+              <p>Chọn một bài học trong mục lục để mở trang nội dung và bài test toàn màn hình.</p>
+              <Link
+                href={continueLessonId ? `/user/my-courses/${courseId}/lessons/${continueLessonId}` : '#'}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-orange-500 text-white font-semibold hover:bg-orange-600 disabled:opacity-50"
+              >
+                Tiếp tục học bài hiện tại
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <Card className="shadow-sm border-gray-100">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-gray-900">Thông tin khóa học</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-gray-700">
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-1">
+                <p className="text-xs text-gray-500">Tổng quan</p>
+                <p className="font-medium text-gray-900 leading-6">{hero.subtitle}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg border border-gray-100 bg-white">
+                  <p className="text-xs text-gray-500">Cấp độ</p>
+                  <p className="font-semibold text-gray-900">{hero.level || 'N/A'}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                    <p className="text-xs text-gray-500">Cấp độ</p>
-                    <p className="font-semibold text-gray-900">{hero.level || 'N/A'}</p>
-                  </div>
-                  <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                    <p className="text-xs text-gray-500">Thời lượng</p>
-                    <p className="font-semibold text-gray-900">{hero.durationLabel}</p>
-                  </div>
-                  <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                    <p className="text-xs text-gray-500">Tiến độ</p>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-orange-500 text-white border-none">{hero.progress}%</Badge>
-                      <span className="text-gray-700">{hero.completedLessons}/{hero.totalLessons} bài</span>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                    <p className="text-xs text-gray-500">Ngôn ngữ</p>
-                    <p className="font-semibold text-gray-900">{hero.language || 'N/A'}</p>
+                <div className="p-3 rounded-lg border border-gray-100 bg-white">
+                  <p className="text-xs text-gray-500">Thời lượng</p>
+                  <p className="font-semibold text-gray-900">{hero.durationLabel}</p>
+                </div>
+                <div className="p-3 rounded-lg border border-gray-100 bg-white">
+                  <p className="text-xs text-gray-500">Tiến độ</p>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-orange-500 text-white border-none">{hero.progress}%</Badge>
+                    <span className="text-gray-700">{hero.completedLessons}/{hero.totalLessons} bài</span>
                   </div>
                 </div>
-                <div className="text-xs text-gray-500">Dữ liệu hiển thị từ API course-service.</div>
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
+                <div className="p-3 rounded-lg border border-gray-100 bg-white">
+                  <p className="text-xs text-gray-500">Ngôn ngữ</p>
+                  <p className="font-semibold text-gray-900">{hero.language || 'N/A'}</p>
+                </div>
+              </div>
+              {hero.progress >= 100 && (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm font-semibold text-emerald-800">
+                    <span>Bài test cuối khóa</span>
+                    <Badge className="bg-emerald-500 text-white border-none">Sẵn sàng</Badge>
+                  </div>
+                  <p className="text-xs text-emerald-700">Hoàn thành ít nhất 80% điểm để nhận chứng nhận và mở khóa toàn bộ nội dung.</p>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-md bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600"
+                    onClick={() => showToast.info('Đi tới bài test cuối khóa (đang thiết kế)')}
+                  >
+                    Làm bài test cuối khóa
+                  </button>
+                </div>
+              )}
+              <div className="text-xs text-gray-500">Dữ liệu hiển thị từ API course-service.</div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm border-gray-100">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-gray-900">Hướng dẫn</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-gray-700">
+              <p>Chọn bài học ở mục lục bên trái. Khi nhấn, trang lesson mở mới với nội dung và bài test toàn màn hình.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

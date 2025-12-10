@@ -53,7 +53,10 @@ export function CreateCourseWizard() {
       clearInterval(progressTimer);
     } catch (e: unknown) {
       clearInterval(progressTimer);
-      setDraft(d => ({ ...d, uploading: d.uploading.map(u => ({ ...u, status: 'error', progress: 0 })) }));
+      setDraft(d => ({
+        ...d,
+        uploading: d.uploading.map(u => uploading.find(x => x.id === u.id) ? { ...u, status: 'error', progress: 0 } : u),
+      }));
       showToast.error(e instanceof Error ? e.message : 'Tải tài liệu thất bại');
     }
   };
@@ -62,30 +65,45 @@ export function CreateCourseWizard() {
     setDraft(d => ({ ...d, documents: d.documents.filter(doc => doc.id !== id) }));
   };
 
-  const retryUpload = (file: File) => {
+  const retryUpload = (file: File, id?: string) => {
+    if (id) {
+      setDraft(d => ({ ...d, uploading: d.uploading.filter(u => u.id !== id) }));
+    }
     simulateUpload([file]);
   };
 
   const setMeta = (meta: CourseDraftState['meta']) => setDraft(d => ({ ...d, meta }));
 
+  const validateMeta = (meta: CourseDraftState['meta']) => {
+    const missing: string[] = [];
+    if (!meta.userPosition.trim()) missing.push('Vị trí người học');
+    if (!meta.shortPrompt.trim()) missing.push('Prompt ngắn');
+    if (!meta.courseLevel) missing.push('Trình độ khóa học');
+    if (!meta.courseConstraint) missing.push('Văn phong khóa học');
+    if (!meta.durationDays || meta.durationDays < 1) missing.push('Thời lượng (ngày)');
+
+    if (missing.length) {
+      showToast.error(`Thiếu thông tin: ${missing.join(', ')}`);
+      return false;
+    }
+
+    return true;
+  };
+
   const next = () => setDraft(d => ({ ...d, step: Math.min(d.step + 1, 3) }));
   const back = () => setDraft(d => ({ ...d, step: Math.max(d.step - 1, 1) }));
   const setStep = (step: number) => setDraft(d => ({ ...d, step }));
+
+  const nextFromMeta = () => {
+    if (validateMeta(draft.meta)) next();
+  };
 
   const submit = async () => {
     if (isSubmitting) return;
     setResult(null);
     setIsSubmitting(true);
     try {
-      const missing: string[] = [];
-      if (!draft.meta.userPosition.trim()) missing.push('User position');
-      if (!draft.meta.shortPrompt.trim()) missing.push('Short user prompt');
-      if (!draft.meta.courseLevel) missing.push('Course level');
-      if (!draft.meta.courseConstraint) missing.push('Course constraint');
-      if (!draft.meta.durationDays || draft.meta.durationDays < 1) missing.push('Course duration');
-
-      if (missing.length) {
-        showToast.error(`Thiếu thông tin: ${missing.join(', ')}`);
+      if (!validateMeta(draft.meta)) {
         setIsSubmitting(false);
         return;
       }
@@ -146,7 +164,7 @@ export function CreateCourseWizard() {
                 meta={draft.meta}
                 onChange={setMeta}
                 onBack={back}
-                onNext={next}
+                onNext={nextFromMeta}
               />
             )}
             {draft.step === 3 && (

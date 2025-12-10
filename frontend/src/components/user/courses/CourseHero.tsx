@@ -1,3 +1,4 @@
+import { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
@@ -18,9 +19,10 @@ export interface CourseHeroData {
 
 interface CourseHeroProps {
   course: CourseHeroData;
+  actions?: ReactNode;
 }
 
-export function CourseHero({ course }: CourseHeroProps) {
+export function CourseHero({ course, actions }: CourseHeroProps) {
   return (
     <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50 via-white to-blue-50 border border-orange-100 shadow-sm">
       <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-orange-100/60 to-transparent" aria-hidden />
@@ -64,6 +66,7 @@ export function CourseHero({ course }: CourseHeroProps) {
               <div className="font-semibold text-gray-900">{course.language}</div>
             </div>
           </div>
+          {actions && <div className="pt-2 flex justify-end">{actions}</div>}
         </div>
       </div>
     </section>

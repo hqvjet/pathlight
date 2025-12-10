@@ -5,6 +5,7 @@ import { courseApi } from '@/lib/api/course';
 import { CourseCard, CourseCardData } from '@/components/user/courses/CourseCard';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 type SortOption = 'latest' | 'progress_desc' | 'title_asc';
 
@@ -57,6 +58,7 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Chào buổi sáng';
@@ -103,7 +105,21 @@ export default function MyCoursesPage() {
     return list;
   }, [courses, search, sort]);
 
-  const highlight = filtered[0] || courses[0];
+  const heroCourse = selectedId ? filtered.find((c) => c.id === selectedId) : null;
+  const remaining = heroCourse ? filtered.filter((c) => c.id !== heroCourse.id) : filtered;
+
+  useEffect(() => {
+    if (selectedId && !filtered.find((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [filtered, selectedId]);
+
+  const handleSelect = (course: CourseCardData) => {
+    setSelectedId(course.id);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -135,7 +151,7 @@ export default function MyCoursesPage() {
             </a>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex flex-wrap items-center gap-3 justify-between mt-2">
           <div className="relative flex-1 min-w-[240px]">
             <input
               value={search}
@@ -148,7 +164,6 @@ export default function MyCoursesPage() {
             </svg>
           </div>
           <div className="relative">
-            <span className="absolute -top-5 left-0 text-[11px] font-semibold text-gray-500 tracking-wide uppercase">Sắp xếp</span>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
@@ -165,8 +180,20 @@ export default function MyCoursesPage() {
         </div>
       </header>
 
-      {highlight && (
-        <CourseHero course={highlight} />
+      {heroCourse && (
+        <div className="transition-all duration-500 ease-out" key={heroCourse.id}>
+          <CourseHero
+            course={heroCourse}
+            actions={(
+              <Link
+                href={`/user/my-courses/${heroCourse.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
+              >
+                Xem chi tiết →
+              </Link>
+            )}
+          />
+        </div>
       )}
 
       <section className="space-y-4">
@@ -182,11 +209,16 @@ export default function MyCoursesPage() {
         )}
 
         {!loading && !error && (
-          <div className="grid gap-5 md:grid-cols-2">
-            {filtered.map((course) => (
-              <CourseCard key={course.id} course={course} />
+          <div className="grid gap-5 md:grid-cols-2 auto-rows-fr">
+            {remaining.map((course) => (
+              <div
+                key={course.id}
+                className="transition-all duration-300 ease-in-out hover:-translate-y-0.5"
+              >
+                <CourseCard course={course} onSelect={handleSelect} />
+              </div>
             ))}
-            {filtered.length === 0 && (
+            {remaining.length === 0 && (
               <div className="bg-white rounded-xl p-10 text-center border border-dashed border-gray-300">
                 <p className="text-gray-600">Không tìm thấy khóa học phù hợp.</p>
               </div>

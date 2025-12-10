@@ -105,7 +105,7 @@ export const userService = {
    * Upload user avatar
    */
   async uploadAvatar(file: File) {
-  return api.uploadFile('/user/avatar', file);
+    return api.uploadFile('/user/avatar', file, { method: 'PUT' }, 'avatar_file');
   },
 
   /**
