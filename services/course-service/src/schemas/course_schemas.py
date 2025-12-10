@@ -130,6 +130,30 @@ class FinalTestResponse(BaseModel):
     final_test: FinalTestDetail
 
 
+# ---- Upload presign schemas ----
+
+class PresignUploadItem(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+
+
+class PresignUploadRequest(BaseModel):
+    items: List[PresignUploadItem]
+
+
+class PresignUploadItemResponse(BaseModel):
+    key: str
+    upload_url: str
+    headers: dict | None = None
+
+
+class PresignUploadResponse(BaseModel):
+    status: int
+    items: List[PresignUploadItemResponse] | None = None
+    message: str | None = None
+
+
 # ---- Mutation request schemas ----
 
 class FinishCourseRequest(BaseModel):

@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 from src.config import config
 from src.controllers.course_controller import (
     upload_files_docs,
+    presign_upload_urls,
     delete_single_course,
     delete_all_courses,
     get_course_full_info_controller,
@@ -37,6 +38,8 @@ from src.schemas.course_schemas import (
     FinalTestQA,
     FinishCourseRequest,
     FinishLessonRequest,
+    PresignUploadRequest,
+    PresignUploadResponse,
 )
 import os
 import uuid
@@ -47,6 +50,11 @@ router = APIRouter(prefix="", tags=["Course"])
 @router.post("/upload/file")
 async def upload_files(request: Request, files: List[UploadFile] = File(...), _auth=Depends(require_bearer)):
     return await upload_files_docs(request, files)
+
+
+@router.post("/upload/presign", response_model=PresignUploadResponse)
+async def presign_upload(request: Request, body: PresignUploadRequest, _auth=Depends(require_bearer)):
+    return await presign_upload_urls(request, body)
 
 @router.delete("/delete")
 async def delete_course(request: Request, course_id: Optional[str] = Query(default=None), _auth=Depends(require_bearer)):

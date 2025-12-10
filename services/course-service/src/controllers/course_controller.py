@@ -28,6 +28,8 @@ from src.schemas.course_schemas import (
 	FinalTestQA,
 	FinishCourseRequest,
 	FinishLessonRequest,
+	PresignUploadRequest,
+	PresignUploadResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,68 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 	rand = _random_value(8)
 	base = _sanitize_filename_base(original_name)
 	return f"{rand}-{short}-{base}{ext}"
+
+
+async def presign_upload_urls(request: Request, body: PresignUploadRequest) -> PresignUploadResponse | dict:
+	"""Return presigned PUT URLs for direct-to-S3 uploads (single-part).
+
+	Validations:
+	- Auth required
+	- Allowed extensions: pdf, doc, docx, ppt, pptx
+	- Total size must be <= 25MB
+	"""
+	user_id = _verify_token(request)
+	if not user_id:
+		logger.warning("Presign aborted: unauthorized (missing/invalid bearer token)")
+		return {"status": 401, "message": "Unauthorized"}
+
+	items = body.items or []
+	if not items:
+		return {"status": 400, "message": "No files to presign"}
+
+	allowed_ext = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
+	max_total_bytes = 25 * 1024 * 1024
+	total = 0
+	for it in items:
+		ext = "." + it.filename.rsplit(".", 1)[1].lower() if "." in it.filename else ""
+		if ext not in allowed_ext:
+			logger.warning("Presign failed: unsupported extension '%s' for file '%s' (user_id=%s)", ext, it.filename, user_id)
+			return {"status": 400, "message": "Định dạng file không được hỗ trợ"}
+		total += int(it.size or 0)
+		if total > max_total_bytes:
+			logger.warning("Presign failed: total size %d exceeds 25MB (user_id=%s)", total, user_id)
+			return {"status": 400, "message": "Tổng dung lượng vượt 25MB"}
+
+	s3 = _get_s3_client()
+	bucket = config.S3_BUCKET_NAME
+	if not bucket:
+		logger.error("Presign failed: S3_BUCKET_NAME is not configured")
+		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
+
+	results = []
+	for it in items:
+		key = _encrypted_filename(user_id, it.filename)
+		try:
+			url = s3.generate_presigned_url(
+				ClientMethod="put_object",
+				Params={
+					"Bucket": bucket,
+					"Key": key,
+					"ContentType": it.content_type or "application/octet-stream",
+				},
+				ExpiresIn=900,
+			)
+			results.append({
+				"key": key,
+				"upload_url": url,
+				"headers": {"Content-Type": it.content_type or "application/octet-stream"},
+			})
+		except Exception as e:
+			logger.error("Failed to presign for file %s: %s", it.filename, e)
+			return {"status": 500, "message": "Không tạo được URL tải lên"}
+
+	logger.info("Presign success (user_id=%s): %d file(s)", user_id, len(results))
+	return {"status": 200, "items": results}
 
 
 async def upload_files_docs(request: Request, files: List[UploadFile]):
