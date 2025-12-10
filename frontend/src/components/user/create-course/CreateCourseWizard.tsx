@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createEmptyDraft, CourseDraftDocumentMeta, CourseDraftState, UploadingFile } from '@/types/create-course';
+import { createEmptyDraft, CourseDraftState, UploadingFile } from '@/types/create-course';
 import { Stepper } from './Stepper';
 import { UploadStep } from './UploadStep';
 import { MetaStep } from './MetaStep';

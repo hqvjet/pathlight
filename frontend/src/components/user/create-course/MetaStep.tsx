@@ -11,16 +11,19 @@ interface MetaStepProps {
 
 export function MetaStep({ meta, onChange, onBack, onNext }: MetaStepProps) {
   const update = (patch: Partial<typeof meta>) => onChange({ ...meta, ...patch });
-  const positionOptions = [
-    { value: '', label: 'Chọn vị trí' },
-    { value: 'Học sinh', label: 'Học sinh' },
-    { value: 'Sinh viên', label: 'Sinh viên' },
-    { value: 'Lập trình viên', label: 'Lập trình viên' },
-    { value: 'Quản lý', label: 'Quản lý' },
-    { value: 'Sales', label: 'Sales' },
-    { value: 'Marketing', label: 'Marketing' },
-    { value: 'Khác', label: 'Khác (tự nhập)' },
-  ];
+  const positionOptions = useMemo(
+    () => [
+      { value: '', label: 'Chọn vị trí' },
+      { value: 'Học sinh', label: 'Học sinh' },
+      { value: 'Sinh viên', label: 'Sinh viên' },
+      { value: 'Lập trình viên', label: 'Lập trình viên' },
+      { value: 'Quản lý', label: 'Quản lý' },
+      { value: 'Sales', label: 'Sales' },
+      { value: 'Marketing', label: 'Marketing' },
+      { value: 'Khác', label: 'Khác (tự nhập)' },
+    ],
+    [],
+  );
 
   const knownPositions = useMemo(() => positionOptions.map((p) => p.value).filter((v) => v && v !== 'Khác'), [positionOptions]);
   const isCustomPosition = meta.userPosition.trim() !== '' && !knownPositions.includes(meta.userPosition);

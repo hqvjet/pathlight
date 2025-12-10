@@ -114,23 +114,23 @@ export function useActivity() {
    useEffect(() => {
      if (!canUseStorage) return;
      try { const saved = window.localStorage.getItem('pathlight_activity_data'); if (saved) setActivityData(JSON.parse(saved)); } catch {}
-   }, []);
+   }, [canUseStorage]);
 
    useEffect(() => {
      if (Object.keys(activityData).length === 0) return;
      if (!canUseStorage) return;
      const timeoutId = setTimeout(() => { try { window.localStorage.setItem('pathlight_activity_data', JSON.stringify(activityData)); } catch {} }, 500);
      return () => clearTimeout(timeoutId);
-   }, [activityData]);
+   }, [activityData, canUseStorage]);
 
-   const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
-      const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
-      const newActivityData = { ...activityData, [dateKey]: newLevel };
-      setActivityData(newActivityData);
-      if (!canUseStorage) return;
-      if (window?.requestIdleCallback) window.requestIdleCallback(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)));
-      else setTimeout(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)),0);
-    }, [activityData]);
+  const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
+    const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
+    const newActivityData = { ...activityData, [dateKey]: newLevel };
+    setActivityData(newActivityData);
+    if (!canUseStorage) return;
+    if (window?.requestIdleCallback) window.requestIdleCallback(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)));
+    else setTimeout(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)),0);
+   }, [activityData, canUseStorage]);
 
    const generateYearActivityData = useMemo(() => (year: number) => {
       const activities = [] as { date: Date; level: number; count: number; isCurrentYear: boolean; dateKey: string }[];

@@ -135,10 +135,10 @@ export default function LessonDetailPage({ params }: PageProps) {
         const testData = testResp.data as LessonTestResponseApi;
         const listData = listResp.data as LessonListResponseApi;
 
-        if ((detailData as any)?.status && (detailData as any).status !== 200) {
-          throw new Error((detailData as any).message || 'Không thể tải bài học');
+        if (detailData.status && detailData.status !== 200) {
+          throw new Error(detailData.message || 'Không thể tải bài học');
         }
-        const detailAssessments = (detailData as any)?.lesson_assessments;
+        const detailAssessments = detailData.lesson_assessments;
         if (testData?.status !== 200 && (!detailAssessments || detailAssessments.length === 0)) {
           throw new Error(testData?.message || 'Không thể tải bài test');
         }
@@ -156,7 +156,7 @@ export default function LessonDetailPage({ params }: PageProps) {
           const mergedTest = testData?.test
             ? {
                 ...testData.test,
-                lesson_assessments: testData.test.lesson_assessments || (detailData as any)?.lesson_assessments,
+                lesson_assessments: testData.test.lesson_assessments || detailData.lesson_assessments,
               }
             : null;
 
@@ -209,7 +209,7 @@ export default function LessonDetailPage({ params }: PageProps) {
           id: qa.qa_id || `qa-${idx}`,
           question: qa.question,
           options: optionKeys
-            .map((key, oIdx) => ({
+            .map((key) => ({
               id: key,
               content: qa[key],
               isCorrect: qa.correct_answer ? qa.correct_answer === key : false,
@@ -537,7 +537,7 @@ export default function LessonDetailPage({ params }: PageProps) {
           </div>
         </CardHeader>
         <CardContent className="text-sm text-gray-600">
-          Nhấn "Bắt đầu test" để mở bài kiểm tra ở chế độ toàn màn hình. Kết quả sẽ được dùng để mở khóa bài tiếp theo.
+          Nhấn &quot;Bắt đầu test&quot; để mở bài kiểm tra ở chế độ toàn màn hình. Kết quả sẽ được dùng để mở khóa bài tiếp theo.
         </CardContent>
       </Card>
 

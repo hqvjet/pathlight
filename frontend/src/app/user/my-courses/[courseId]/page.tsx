@@ -13,10 +13,10 @@ import { showToast } from '@/utils/toast';
 
 interface LessonDetailApi {
   lesson_id: string;
-  course_id: string;
+  course_id?: string;
   title: string;
-  description: string;
-  content: string;
+  description?: string;
+  content?: string;
   finish: boolean;
   order?: number;
 }
