@@ -98,6 +98,19 @@ class AdminUsersResponse(BaseModel):
     users: Optional[List[AdminUserItem]] = None
     message: Optional[str] = None
 
+
+class AdminLogItem(BaseModel):
+    timestamp: str
+    type: str
+    log: str
+    source: str
+
+
+class AdminLogsResponse(BaseModel):
+    status: int
+    logs: Optional[List[AdminLogItem]] = None
+    message: Optional[str] = None
+
 class TestStatsRequest(BaseModel):
     """Request schema for testing user stats and experience"""
     current_exp: Optional[int] = None

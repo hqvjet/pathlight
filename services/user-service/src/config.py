@@ -40,6 +40,7 @@ class Config:
     AWS_SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
     AWS_REGION: str = "ap-northeast-1"
     S3_USER_BUCKET_NAME: str = os.getenv("S3_USER_BUCKET_NAME", "")
+    CLOUDWATCH_LOG_GROUP_NAME: str = os.getenv("CLOUDWATCH_LOG_GROUP_NAME", os.getenv("LOG_GROUP_NAME", ""))
 
     # File upload configuration
     UPLOAD_DIR: str = "./uploads"
