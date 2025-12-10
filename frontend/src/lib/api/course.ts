@@ -8,9 +8,29 @@ export interface CreateCourseRequest {
   duration?: number; // default 1200
 }
 
+export interface PresignUploadRequestItem {
+  filename: string;
+  content_type: string;
+  size: number;
+}
+
+export interface PresignUploadResponseItem {
+  key: string;
+  upload_url: string;
+  headers?: Record<string, string>;
+}
+
+export interface PresignUploadResponse {
+  status: number;
+  items?: PresignUploadResponseItem[];
+  message?: string;
+}
+
 export const courseApi = {
   // Course Service endpoints
   uploadFiles: (files: File[]) => apiClient.uploadFiles<{ status: number; uploaded_file: string[] }>(`/course/upload/file`, files),
+  presignUploads: (items: PresignUploadRequestItem[]) =>
+    apiClient.post<PresignUploadResponse>(`/course/upload/presign`, { items }),
   requestCreate: (payload: CreateCourseRequest) => apiClient.post<{ status: number; message?: string; sqs_message_id?: string }>(`/course/create`, payload),
   getStatus: (course_id: string) => apiClient.get<{ status: number; body?: unknown; message?: string }>(`/course/status?course_id=${encodeURIComponent(course_id)}`),
   getById: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}`),

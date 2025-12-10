@@ -9,7 +9,7 @@ import { ReviewStep } from './ReviewStep';
 import { SuccessStep } from './SuccessStep';
 import { v4 as uuid } from 'uuid';
 import { showToast } from '@/utils/toast';
-import { courseApi } from '@/lib/api/course';
+import { courseApi, PresignUploadResponseItem } from '@/lib/api/course';
 import { agenticApi, AgenticCourseResponse, CreateAgenticCourseRequest } from '@/lib/api/agentic';
 import { ApiErrorClass } from '@/lib/api/http';
 import { API_CONFIG } from '@/config/env';
@@ -20,44 +20,94 @@ export function CreateCourseWizard() {
   const [result, setResult] = useState<AgenticCourseResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Real uploading to backend
+  // Direct-to-S3 via presigned PUT (single-part) to avoid API Gateway 10MB limit
+  const uploadWithPresigned = (url: string, file: File, headers?: Record<string, string>, onProgress?: (p: number) => void) => {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', url, true);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+          onProgress(percent);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (onProgress) onProgress(100);
+          resolve();
+        } else {
+          reject(new Error(`Upload failed (${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onabort = () => reject(new Error('Upload aborted'));
+      if (headers) {
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+      }
+      if (!headers || !headers['Content-Type']) xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.send(file);
+    });
+  };
+
   const simulateUpload = async (files: FileList | File[] | null) => {
     if (!files) return;
     const fileArr = Array.from(files as File[]);
-    const uploading: UploadingFile[] = fileArr.map(f => ({ id: uuid(), file: f, progress: 0, status: 'pending' }));
+    const uploading: UploadingFile[] = fileArr.map(f => ({ id: uuid(), file: f, progress: 0, status: 'uploading' }));
     setDraft(d => ({ ...d, uploading: [...d.uploading, ...uploading] }));
-    // Start progress animation
-    uploading.forEach(item => { item.status = 'uploading'; });
-    const progressTimer = setInterval(() => {
-      setDraft(d => {
-        const updated = d.uploading.map(u => ({ ...u, progress: Math.min(u.progress + Math.random()*18 + 5, 95) }));
-        return { ...d, uploading: updated };
-      });
-    }, 300);
+
     try {
-      const resp = await courseApi.uploadFiles(fileArr);
-      const uploadedNames = resp.data?.uploaded_file ?? [];
-      // Map original files to returned S3 keys by order
-      setDraft(d => {
-        const newDocs: CourseDraftDocumentMeta[] = uploadedNames.map((key: string, idx: number) => ({
-          id: uploading[idx]?.id || uuid(),
-          name: fileArr[idx]?.name || key,
-          size: fileArr[idx]?.size || 0,
-          type: fileArr[idx]?.type || 'application/octet-stream',
-          uploadedAt: new Date(),
-          url: `${API_CONFIG.COURSE_SERVICE_URL}/s3/${encodeURIComponent(key)}`,
-          s3Key: key,
-        }));
-        return { ...d, documents: [...d.documents, ...newDocs], uploading: d.uploading.filter(u => !uploading.find(x => x.id === u.id)) };
-      });
-      clearInterval(progressTimer);
+      const presignResp = await courseApi.presignUploads(
+        fileArr.map((f) => ({ filename: f.name, content_type: f.type || 'application/octet-stream', size: f.size }))
+      );
+      const items = presignResp?.data?.items || [];
+      if (items.length !== fileArr.length) {
+        throw new Error('Không lấy được đủ URL tải lên');
+      }
+
+      for (let i = 0; i < fileArr.length; i += 1) {
+        const file = fileArr[i];
+        const meta: PresignUploadResponseItem = items[i];
+        const targetId = uploading[i]?.id;
+        const updateProgress = (progress: number) => {
+          if (!targetId) return;
+          setDraft(d => ({
+            ...d,
+            uploading: d.uploading.map(u => u.id === targetId ? { ...u, progress } : u),
+          }));
+        };
+
+        try {
+          await uploadWithPresigned(meta.upload_url, file, meta.headers, updateProgress);
+          setDraft(d => ({
+            ...d,
+            uploading: d.uploading.filter(u => u.id !== targetId),
+            documents: [
+              ...d.documents,
+              {
+                id: targetId || uuid(),
+                name: file.name,
+                size: file.size,
+                type: file.type || 'application/octet-stream',
+                uploadedAt: new Date(),
+                url: `${API_CONFIG.COURSE_SERVICE_URL}/s3/${encodeURIComponent(meta.key)}`,
+                s3Key: meta.key,
+              },
+            ],
+          }));
+        } catch (err) {
+          setDraft(d => ({
+            ...d,
+            uploading: d.uploading.map(u => u.id === targetId ? { ...u, status: 'error', progress: 0, error: (err as Error).message } : u),
+          }));
+          showToast.error((err as Error).message || 'Tải tài liệu thất bại');
+        }
+      }
     } catch (e: unknown) {
-      clearInterval(progressTimer);
       setDraft(d => ({
         ...d,
         uploading: d.uploading.map(u => uploading.find(x => x.id === u.id) ? { ...u, status: 'error', progress: 0 } : u),
       }));
-      showToast.error(e instanceof Error ? e.message : 'Tải tài liệu thất bại');
+      showToast.error(e instanceof Error ? e.message : 'Không thể khởi tạo URL tải lên');
     }
   };
 
