@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 from src.config import config
 from src.controllers.course_controller import (
     upload_files_docs,
+    presign_upload_urls,
     delete_single_course,
     delete_all_courses,
     get_course_full_info_controller,
@@ -37,8 +38,11 @@ from src.schemas.course_schemas import (
     FinalTestQA,
     FinishCourseRequest,
     FinishLessonRequest,
+    PresignUploadRequest,
+    PresignUploadResponse,
 )
 import os
+import uuid
 
 router = APIRouter(prefix="", tags=["Course"])
 
@@ -46,6 +50,11 @@ router = APIRouter(prefix="", tags=["Course"])
 @router.post("/upload/file")
 async def upload_files(request: Request, files: List[UploadFile] = File(...), _auth=Depends(require_bearer)):
     return await upload_files_docs(request, files)
+
+
+@router.post("/upload/presign", response_model=PresignUploadResponse)
+async def presign_upload(request: Request, body: PresignUploadRequest, _auth=Depends(require_bearer)):
+    return await presign_upload_urls(request, body)
 
 @router.delete("/delete")
 async def delete_course(request: Request, course_id: Optional[str] = Query(default=None), _auth=Depends(require_bearer)):
@@ -104,47 +113,56 @@ async def request_create_course(
 ):
     """Create a course by vectorizing S3 documents and running generation in one job.
 
-        Request body (JSON):
+    Request body (JSON):
       {
-        "course_id": "course-123",
-        "s3_key": ["path/to/file1.pdf", "path/to/file2.docx"],
+        "short_user_prompt": "...",  # required
+        "user_position": "Software Engineer",
+        "course_duration": 30,
+        "course_level": "overview | intermediate | advance",
+        "course_constraint": "professional | academic | friendly | humorous",
         "difficulty": "medium",
-        "duration": 1200
+        "duration": 1200,
+        "course_id": "optional-predefined-id",
+        "s3_key": ["path/to/file1.pdf"]  # optional
       }
 
     Constraints:
-            - s3_key must not be empty
-            - Each file must be <= 15MB
+        - Each referenced S3 file must be <= 15MB
+        - Allow prompt-only creation when no s3_key provided
     """
     queue_url = os.getenv("SQS_QUEUE_URL")
     if not queue_url:
         return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
 
-    if not body.s3_key:
-        return {"status": 400, "message": "s3_key must contain at least one key"}
+    if not body.short_user_prompt or not body.short_user_prompt.strip():
+        return {"status": 400, "message": "short_user_prompt is required"}
 
-    # Validate S3 object sizes
+    course_id = body.course_id or f"course-{uuid.uuid4()}"
+    s3_keys = body.s3_key or []
+
+    # Validate S3 object sizes only when keys are provided
     region = getattr(config, "REGION", None) or os.getenv("REGION") or "ap-northeast-1"
-    bucket = getattr(config, "S3_BUCKET_NAME", None) or os.getenv("S3_BUCKET_NAME")
-    if not bucket:
-        return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
+    if s3_keys:
+        bucket = getattr(config, "S3_BUCKET_NAME", None) or os.getenv("S3_BUCKET_NAME")
+        if not bucket:
+            return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
-    s3 = boto3.client("s3", region_name=region)
-    max_bytes = 15 * 1024 * 1024  # 15MB
-    try:
-        for key in body.s3_key:
-            try:
-                head = s3.head_object(Bucket=bucket, Key=key)
-            except ClientError as ce:
-                code = ce.response.get("Error", {}).get("Code")
-                if code in ("404", "NoSuchKey", "NotFound"):
-                    return {"status": 400, "message": f"S3 key not found: {key}"}
-                raise
-            size = int(head.get("ContentLength", 0))
-            if size > max_bytes:
-                return {"status": 400, "message": f"File exceeds 15MB: {key}"}
-    except Exception as e:
-        return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
+        s3 = boto3.client("s3", region_name=region)
+        max_bytes = 15 * 1024 * 1024  # 15MB
+        try:
+            for key in s3_keys:
+                try:
+                    head = s3.head_object(Bucket=bucket, Key=key)
+                except ClientError as ce:
+                    code = ce.response.get("Error", {}).get("Code")
+                    if code in ("404", "NoSuchKey", "NotFound"):
+                        return {"status": 400, "message": f"S3 key not found: {key}"}
+                    raise
+                size = int(head.get("ContentLength", 0))
+                if size > max_bytes:
+                    return {"status": 400, "message": f"File exceeds 15MB: {key}"}
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
     from src.controllers.course_controller import _verify_token
     user_id = _verify_token(request)
@@ -154,15 +172,20 @@ async def request_create_course(
     try:
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
-            course_id=body.course_id,
-            s3_keys=body.s3_key,
+            course_id=course_id,
+            s3_keys=s3_keys,
             difficulty=body.difficulty,
             duration=body.duration,
+            short_user_prompt=body.short_user_prompt,
+            user_position=body.user_position,
+            course_level=body.course_level,
+            course_constraint=body.course_constraint,
+            course_duration=body.course_duration,
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),
         )
-        return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId")}
+        return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
     except Exception as e:
         return {"status": 500, "message": f"Failed to submit job: {e}"}
 

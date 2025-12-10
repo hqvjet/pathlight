@@ -26,11 +26,16 @@ def _session(region: str | None, profile: str | None = None) -> boto3.Session:
 def send_generate_with_vectorize(
     queue_url: str,
     course_id: str,
-    s3_keys: List[str],
+    s3_keys: Optional[List[str]],
     difficulty: str,
     duration: int,
     *,
-    user_id: str,
+    short_user_prompt: str,
+    user_position: Optional[str] = None,
+    course_duration: int,
+    course_level: str,
+    course_constraint: str,
+    user_id: Optional[str] = None,
     region: Optional[str] = None,
     group_id: Optional[str] = None,
 ) -> dict:
@@ -38,19 +43,25 @@ def send_generate_with_vectorize(
     session = _session(region)
     sqs = session.client("sqs", region_name=region)
 
-    # Build message inline (avoid importing agentic package here)
+    payload = {
+        "id": course_id,
+        "difficulty": difficulty,
+        "duration": duration,
+        "s3_keys": s3_keys or [],
+        "user_id": user_id,
+        "short_user_prompt": short_user_prompt,
+        "user_position": user_position,
+        "course_duration": course_duration,
+        "course_level": course_level,
+        "course_constraint": course_constraint,
+    }
+
     body = json.dumps(
         {
             "type": "GENERATE_COURSE_WITH_VECTORIZE",
             "correlation_id": str(uuid.uuid4()),
             "timestamp": _iso_now(),
-            "payload": {
-                "id": course_id,
-                "difficulty": difficulty,
-                "duration": duration,
-                "s3_keys": s3_keys,
-                "user_id": user_id,
-            },
+            "payload": payload,
         }
     )
 

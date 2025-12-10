@@ -19,8 +19,13 @@ class CourseUpdate(BaseModel):
 
 
 class CreateCourseRequest(BaseModel):
-    course_id: str = Field(..., description="Course ID to create")
-    s3_key: List[str] = Field(..., description="Array of S3 object keys to vectorize")
+    course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
+    s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
+    user_position: Optional[str] = Field(default=None, description="User position / role")
+    short_user_prompt: str = Field(..., description="Short prompt guiding course generation")
+    course_duration: int = Field(..., description="Desired course duration in days")
+    course_level: str = Field(..., description="overview | intermediate | advance")
+    course_constraint: str = Field(..., description="professional | academic | friendly | humorous")
     difficulty: str = Field(default="medium")
     duration: int = Field(default=1200)
 
@@ -123,6 +128,30 @@ class FinalTestDetail(BaseModel):
 class FinalTestResponse(BaseModel):
     status: int
     final_test: FinalTestDetail
+
+
+# ---- Upload presign schemas ----
+
+class PresignUploadItem(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+
+
+class PresignUploadRequest(BaseModel):
+    items: List[PresignUploadItem]
+
+
+class PresignUploadItemResponse(BaseModel):
+    key: str
+    upload_url: str
+    headers: dict | None = None
+
+
+class PresignUploadResponse(BaseModel):
+    status: int
+    items: List[PresignUploadItemResponse] | None = None
+    message: str | None = None
 
 
 # ---- Mutation request schemas ----
