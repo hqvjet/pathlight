@@ -26,11 +26,7 @@ def _session(region: str | None, profile: str | None = None) -> boto3.Session:
 def send_generate_with_vectorize(
     queue_url: str,
     course_id: str,
-    s3_keys: List[str],
-    difficulty: str,
-    duration: int,
-    *,
-    s3_keys: Optional[List[str]] = None,
+    s3_keys: Optional[List[str]],
     difficulty: str,
     duration: int,
     *,
@@ -39,31 +35,35 @@ def send_generate_with_vectorize(
     course_duration: int,
     course_level: str,
     course_constraint: str,
+    user_id: Optional[str] = None,
+    region: Optional[str] = None,
+    group_id: Optional[str] = None,
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
     sqs = session.client("sqs", region_name=region)
 
-    # Build message inline (avoid importing agentic package here)
+    payload = {
+        "id": course_id,
+        "difficulty": difficulty,
+        "duration": duration,
+        "s3_keys": s3_keys or [],
+        "user_id": user_id,
+        "short_user_prompt": short_user_prompt,
+        "user_position": user_position,
+        "course_duration": course_duration,
+        "course_level": course_level,
+        "course_constraint": course_constraint,
+    }
+
     body = json.dumps(
         {
             "type": "GENERATE_COURSE_WITH_VECTORIZE",
             "correlation_id": str(uuid.uuid4()),
             "timestamp": _iso_now(),
-            "payload": {
-                "id": course_id,
-                "difficulty": difficulty,
-                "duration": duration,
-                "s3_keys": s3_keys,
-                "user_id": user_id,
-            },
-                "s3_keys": s3_keys or [],
+            "payload": payload,
+        }
     )
-                "short_user_prompt": short_user_prompt,
-                "user_position": user_position,
-                "course_duration": course_duration,
-                "course_level": course_level,
-                "course_constraint": course_constraint,
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
