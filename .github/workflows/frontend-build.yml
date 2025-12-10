@@ -5,10 +5,6 @@ on:
     branches: [ develop, main ]
     paths:
       - 'frontend/**'
-  push:
-    branches: [ develop, main ]
-    paths:
-      - 'frontend/**'
 
 concurrency:
   group: frontend-build-${{ github.ref }}
