@@ -10,6 +10,7 @@ from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnect
 from fastapi import Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from jose import jwt
+import os
 
 from src.config import config
 from src.schemas.course_schemas import (
