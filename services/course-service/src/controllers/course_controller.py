@@ -122,6 +122,22 @@ def _encrypted_filename(user_id: str, original_name: str) -> str:
 	return f"{rand}-{short}-{base}{ext}"
 
 
+def _user_prefix(user_id: str) -> str:
+	return f"users/{user_id}"
+
+
+def _ensure_prefix(s3, bucket: str, prefix: str):
+	"""Create a zero-byte prefix marker to make the 'folder' appear in S3 consoles.
+
+	S3 is flat, but creating prefix/ helps visibility; ignore errors silently.
+	"""
+	key = prefix.rstrip("/") + "/"
+	try:
+		s3.put_object(Bucket=bucket, Key=key, Body=b"")
+	except Exception:
+		return
+
+
 async def presign_upload_urls(request: Request, body: PresignUploadRequest) -> PresignUploadResponse | dict:
 	"""Return presigned PUT URLs for direct-to-S3 uploads (single-part).
 
@@ -158,9 +174,12 @@ async def presign_upload_urls(request: Request, body: PresignUploadRequest) -> P
 		logger.error("Presign failed: S3_BUCKET_NAME is not configured")
 		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
+	prefix = _user_prefix(user_id)
+	_ensure_prefix(s3, bucket, prefix)
+
 	results = []
 	for it in items:
-		key = _encrypted_filename(user_id, it.filename)
+		key = f"{prefix}/{_encrypted_filename(user_id, it.filename)}"
 		try:
 			url = s3.generate_presigned_url(
 				ClientMethod="put_object",
@@ -190,6 +209,8 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		logger.warning("Upload aborted: unauthorized (missing/invalid bearer token)")
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Unauthorized"})
 
+	prefix = _user_prefix(user_id)
+
 	allowed_ext = {".pdf", ".pptx", ".docx", ".doc"}
 	total_size = 0
 	file_payloads = []
@@ -213,6 +234,8 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 		logger.error("Upload failed: S3_BUCKET_NAME is not configured")
 		return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
+	_ensure_prefix(s3, bucket, prefix)
+
 	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
@@ -235,7 +258,7 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 
 	uploaded_names = []
 	for f, body, enc_name in file_payloads:
-		key = enc_name
+		key = f"{prefix}/{enc_name}"
 		try:
 			s3.put_object(
 				Bucket=bucket,
