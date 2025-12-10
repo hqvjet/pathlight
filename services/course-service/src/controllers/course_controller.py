@@ -131,6 +131,8 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 
 	S3 is flat, but creating prefix/ helps visibility; ignore errors silently.
 	"""
+	if not os.getenv("CREATE_USER_PREFIX_MARKER"):
+		return
 	key = prefix.rstrip("/") + "/"
 	try:
 		s3.put_object(Bucket=bucket, Key=key, Body=b"")
