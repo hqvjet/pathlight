@@ -20,7 +20,6 @@ export function MetaStep({ meta, onChange, onBack, onNext }: MetaStepProps) {
       { value: 'Quản lý', label: 'Quản lý' },
       { value: 'Sales', label: 'Sales' },
       { value: 'Marketing', label: 'Marketing' },
-      { value: 'Khác', label: 'Khác (tự nhập)' },
     ],
     [],
   );

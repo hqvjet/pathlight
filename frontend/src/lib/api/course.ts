@@ -14,6 +14,11 @@ export interface PresignUploadRequestItem {
   size: number;
 }
 
+export interface PresignUploadRequest {
+  user_id?: string;
+  items: PresignUploadRequestItem[];
+}
+
 export interface PresignUploadResponseItem {
   key: string;
   upload_url: string;
@@ -29,8 +34,8 @@ export interface PresignUploadResponse {
 export const courseApi = {
   // Course Service endpoints
   uploadFiles: (files: File[]) => apiClient.uploadFiles<{ status: number; uploaded_file: string[] }>(`/course/upload/file`, files),
-  presignUploads: (items: PresignUploadRequestItem[]) =>
-    apiClient.post<PresignUploadResponse>(`/course/upload/presign`, { items }),
+  presignUploads: (items: PresignUploadRequestItem[], userId?: string) =>
+    apiClient.post<PresignUploadResponse>(`/course/upload/presign`, { user_id: userId, items }),
   requestCreate: (payload: CreateCourseRequest) => apiClient.post<{ status: number; message?: string; sqs_message_id?: string }>(`/course/create`, payload),
   getStatus: (course_id: string) => apiClient.get<{ status: number; body?: unknown; message?: string }>(`/course/status?course_id=${encodeURIComponent(course_id)}`),
   getById: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}`),

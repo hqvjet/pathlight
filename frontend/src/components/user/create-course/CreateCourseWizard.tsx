@@ -13,9 +13,11 @@ import { courseApi, PresignUploadResponseItem } from '@/lib/api/course';
 import { agenticApi, AgenticCourseResponse, CreateAgenticCourseRequest } from '@/lib/api/agentic';
 import { ApiErrorClass } from '@/lib/api/http';
 import { API_CONFIG } from '@/config/env';
+import { useAuthContext } from '@/context/AuthContext';
 
 export function CreateCourseWizard() {
   const router = useRouter();
+  const { user } = useAuthContext();
   const [draft, setDraft] = useState<CourseDraftState>(createEmptyDraft());
   const [result, setResult] = useState<AgenticCourseResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,13 +53,18 @@ export function CreateCourseWizard() {
 
   const simulateUpload = async (files: FileList | File[] | null) => {
     if (!files) return;
+    if (!user?.id) {
+      showToast.error('Không xác định được người dùng, vui lòng đăng nhập lại.');
+      return;
+    }
     const fileArr = Array.from(files as File[]);
     const uploading: UploadingFile[] = fileArr.map(f => ({ id: uuid(), file: f, progress: 0, status: 'uploading' }));
     setDraft(d => ({ ...d, uploading: [...d.uploading, ...uploading] }));
 
     try {
       const presignResp = await courseApi.presignUploads(
-        fileArr.map((f) => ({ filename: f.name, content_type: f.type || 'application/octet-stream', size: f.size }))
+        fileArr.map((f) => ({ filename: f.name, content_type: f.type || 'application/octet-stream', size: f.size })),
+        user.id,
       );
       const items = presignResp?.data?.items || [];
       if (items.length !== fileArr.length) {
