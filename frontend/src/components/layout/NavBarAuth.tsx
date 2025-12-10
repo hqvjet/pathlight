@@ -4,7 +4,7 @@ import BrandLogo from '@/components/common/BrandLogo';
 import Avatar from '@/components/common/Avatar';
 import { LogoutIcon } from '@/components/icons';
 
-interface AvatarUser { name?: string; avatar_url?: string; avatarKey?: number }
+interface AvatarUser { id?: string; name?: string; avatar_url?: string; google_avatar_url?: string; avatarKey?: number; rank?: number }
 interface NavBarAuthProps { user?: AvatarUser | null; onLogout?: () => void; showLogoutButton?: boolean }
 
 export default function NavBarAuth({ user, onLogout, showLogoutButton = true }: NavBarAuthProps) {

@@ -129,6 +129,10 @@ export function CreateCourseWizard() {
     simulateUpload([file]);
   };
 
+  const removeUploading = (id: string) => {
+    setDraft(d => ({ ...d, uploading: d.uploading.filter(u => u.id !== id) }));
+  };
+
   const setMeta = (meta: CourseDraftState['meta']) => setDraft(d => ({ ...d, meta }));
 
   const validateMeta = (meta: CourseDraftState['meta']) => {
@@ -208,6 +212,7 @@ export function CreateCourseWizard() {
                 uploading={draft.uploading}
                 onFiles={simulateUpload}
                 onRetry={retryUpload}
+                onRemoveUploading={removeUploading}
                 onRemove={removeDoc}
                 onNext={next}
                 onCancel={() => {

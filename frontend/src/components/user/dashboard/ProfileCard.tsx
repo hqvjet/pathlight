@@ -4,6 +4,11 @@ import { UserProfile } from './types';
 import React from 'react';
 
 export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
+  const expPercent = (() => {
+    if (!user.require_exp || user.require_exp <= 0) return 0;
+    return Math.min(100, Math.round(((user.current_exp || 0) / user.require_exp) * 100));
+  })();
+  const expLabel = `${user.current_exp || 0} / ${user.require_exp || 0} EXP`;
   return (
     <Card className="bg-[#111827] border-none text-white shadow-md md:col-span-1">
       <CardContent className="p-5 space-y-6">
@@ -30,15 +35,15 @@ export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[10px] text-gray-400">
-            <span>Tiến độ khóa học</span>
-            <span className="font-medium text-gray-200">{user.total_courses ? Math.round((user.completed_courses!/user.total_courses!)*100) : 0}%</span>
+            <span>Kinh nghiệm</span>
+            <span className="font-medium text-gray-200">{expPercent}%</span>
           </div>
-          <div className="h-2.5 bg-gray-700/70 rounded">
-            <div className="h-2.5 rounded bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-400" style={{ width: `${user.total_courses ? Math.round((user.completed_courses!/user.total_courses!)*100) : 0}%` }} />
+          <div className="h-2.5 bg-gray-700/70 rounded overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500" style={{ width: `${expPercent}%` }} />
           </div>
           <div className="flex justify-between text-[10px] text-gray-500">
-            <span>{user.completed_courses} / {user.total_courses}</span>
-            <span>{(user.current_exp||0).toLocaleString()} EXP</span>
+            <span>{expLabel}</span>
+            <span>Lv {user.level || 1}</span>
           </div>
         </div>
       </CardContent>

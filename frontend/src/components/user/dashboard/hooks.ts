@@ -11,6 +11,40 @@ export function useDashboard(onLogout: () => void) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const normalizeAvatarUrl = useCallback((id?: string, avatarUrl?: string) => {
+    if (id) return `/api/users/avatar?user-id=${encodeURIComponent(id)}`;
+    return '/assets/images/default_avatar.png';
+  }, []);
+
+  const normalizeLeaderboard = useCallback((list: LeaderboardUser[] | undefined | null) => {
+    if (!Array.isArray(list)) return [] as LeaderboardUser[];
+    return list.map((u, idx) => {
+      const normalizedId = (u as LeaderboardUser & { user_id?: string }).user_id || u.id;
+      const googleAvatar = (u as { google_avatar_url?: string }).google_avatar_url || u.avatar_url;
+      return {
+        ...u,
+        id: normalizedId,
+        avatar_url: normalizeAvatarUrl(normalizedId, u.avatar_url),
+        google_avatar_url: googleAvatar,
+        avatarKey: Date.now() + idx,
+      };
+    });
+  }, [normalizeAvatarUrl]);
+
+  const normalizeProfile = useCallback((raw: UserProfile) => {
+    if (!raw) return raw;
+    const normalized = {
+      ...raw,
+      avatar_url: normalizeAvatarUrl(raw.id, raw.avatar_url),
+      google_avatar_url: (raw as { google_avatar_url?: string }).google_avatar_url || raw.avatar_url,
+      avatarKey: Date.now(),
+    } as UserProfile & { user_top_rank?: LeaderboardUser[] };
+    if ((raw as { user_top_rank?: LeaderboardUser[] }).user_top_rank) {
+      normalized.user_top_rank = normalizeLeaderboard((raw as { user_top_rank?: LeaderboardUser[] }).user_top_rank);
+    }
+    return normalized;
+  }, [normalizeAvatarUrl, normalizeLeaderboard]);
+
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
   const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -64,8 +98,7 @@ export function useDashboard(onLogout: () => void) {
         const userInfo: UserProfile = (raw && typeof raw === 'object' && 'info' in raw)
           ? (raw as { info?: UserProfile }).info || { email: '', name: '', id: '' }
           : (raw as UserProfile);
-        const dashboardInfo: DashboardData = { info: userInfo as UserProfile & { user_top_rank?: LeaderboardUser[] } };
-        setDashboardData(dashboardInfo);
+        const leaderboard = normalizeLeaderboard(userInfo.user_top_rank);
         const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
         const profileData: UserProfile = {
           id: userInfo.id || '',
@@ -73,7 +106,8 @@ export function useDashboard(onLogout: () => void) {
           name: fullName,
           given_name: userInfo.given_name,
           family_name: userInfo.family_name,
-          avatar_url: userInfo.avatar_url ? userInfo.avatar_url : (userInfo.id ? `/user/avatar?user-id=${userInfo.id}` : undefined),
+          avatar_url: normalizeAvatarUrl(userInfo.id, userInfo.avatar_url),
+          avatarKey: Date.now(),
           remind_time: userInfo.remind_time,
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,
@@ -85,7 +119,10 @@ export function useDashboard(onLogout: () => void) {
           average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
           rank: userInfo.rank || 1,
           user_num: userInfo.user_num || 1,
+          user_top_rank: leaderboard,
         };
+        const dashboardInfo: DashboardData = { info: { ...(profileData as UserProfile), user_top_rank: leaderboard } as UserProfile & { user_top_rank?: LeaderboardUser[] } };
+        setDashboardData(dashboardInfo);
         setUser(profileData);
         setLoading(false);
         if (canUseStorage) {

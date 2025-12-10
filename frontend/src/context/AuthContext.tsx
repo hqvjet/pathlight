@@ -13,7 +13,13 @@ export interface AuthUser {
   first_name?: string;
   last_name?: string;
   avatar_url?: string;
+  google_avatar_url?: string;
   name?: string; // derived full name for convenience
+  level?: number;
+  current_exp?: number;
+  require_exp?: number;
+  remind_time?: string;
+  rank?: number;
 }
 
 interface AuthContextValue {
@@ -58,13 +64,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const emailKeys = ['email','user_email','mail'];
     const avatarKeys = ['avatar_url','avatar','picture','photo'];
     const usernameKeys = ['username','user_name','name','display_name','full_name','fullName'];
+    const levelKeys = ['level'];
+    const currentExpKeys = ['current_exp','currentExp'];
+    const requireExpKeys = ['require_exp','requireExp'];
+    const remindKeys = ['remind_time','remindTime'];
+    const rankKeys = ['rank','user_rank','userRank'];
 
     let first = '';
     let last = '';
     let email: string | undefined;
     let avatar_url: string | undefined;
+    let google_avatar_url: string | undefined;
     let id: string | undefined;
     let derivedName: string | undefined;
+    let level: number | undefined;
+    let current_exp: number | undefined;
+    let require_exp: number | undefined;
+    let remind_time: string | undefined;
+    let rank: number | undefined;
 
     const dfs = (obj: unknown) => {
       if (!obj || typeof obj !== 'object' || visited.has(obj)) return;
@@ -76,15 +93,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!first && candidateKeys.includes(key) && typeof v === 'string') first = v;
         if (!last && lastKeys.includes(key) && typeof v === 'string') last = v;
         if (!email && emailKeys.includes(key) && typeof v === 'string') email = v;
-        if (!avatar_url && avatarKeys.includes(key) && typeof v === 'string') avatar_url = v;
+        if (!avatar_url && avatarKeys.includes(key) && typeof v === 'string') {
+          avatar_url = v;
+          if (!google_avatar_url) google_avatar_url = v; // preserve as secondary fallback
+        }
         if (!derivedName && usernameKeys.includes(key) && typeof v === 'string') derivedName = v;
         if (!id && key === 'id' && typeof v === 'string') id = v;
+        if (level === undefined && levelKeys.includes(key) && typeof v === 'number') level = v;
+        if (current_exp === undefined && currentExpKeys.includes(key) && typeof v === 'number') current_exp = v;
+        if (require_exp === undefined && requireExpKeys.includes(key) && typeof v === 'number') require_exp = v;
+        if (!remind_time && remindKeys.includes(key) && typeof v === 'string') remind_time = v;
+        if (rank === undefined && rankKeys.includes(key) && typeof v === 'number') rank = v;
       }
     };
     dfs(raw);
     const nameComposite = [first, last].filter(Boolean).join(' ').trim();
     const name = nameComposite || derivedName || email || 'User';
-    return { id, email, first_name: first, last_name: last, avatar_url, name };
+    const normalizedAvatar = id ? `/api/users/avatar?user-id=${encodeURIComponent(id)}` : avatar_url;
+    return { id, email, first_name: first, last_name: last, avatar_url: normalizedAvatar, google_avatar_url, name, level, current_exp, require_exp, remind_time, rank };
   };
 
   const refreshUser = useCallback(async (): Promise<AuthUser | null> => {

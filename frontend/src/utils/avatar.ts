@@ -2,23 +2,27 @@ export interface AvatarUser {
   id?: string;
   avatar_url?: string;
   avatar_id?: string;
+  google_avatar_url?: string;
 }
 
-export const getAvatarUrl = (user: AvatarUser): string => {
-  if (!user) return '/assets/images/default_avatar.png';
+// Return ordered avatar sources: S3 proxy (by id), then explicit avatar_url, then default
+export const getAvatarSources = (user: AvatarUser): string[] => {
+  const sources: string[] = [];
+  if (!user) return ['/assets/images/default_avatar.png'];
 
-  // 1. If explicit avatar_url provided, use it as-is (relative or absolute)
-  if (user.avatar_url) {
-    return user.avatar_url;
-  }
-
-  // 2. Fallback build canonical endpoint from id
   if (user.id) {
-  return `/api/users/avatar?user-id=${user.id}`;
+    sources.push(`/api/users/avatar?user-id=${encodeURIComponent(user.id)}`);
   }
 
-  // 3. Default placeholder
-  return '/assets/images/default_avatar.png';
+  if (!sources.includes('/assets/images/default_avatar.png')) {
+    sources.push('/assets/images/default_avatar.png');
+  }
+  return sources;
+};
+
+export const getAvatarUrl = (user: AvatarUser): string => {
+  const sources = getAvatarSources(user);
+  return sources[0];
 };
 
 export const getUserInitials = (name: string): string => {

@@ -15,6 +15,13 @@ export function useProfileData() {
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarKey, setAvatarKey] = useState(0);
   const [formData, setFormData] = useState<ProfileFormData>({ given_name: '', family_name: '', birth_date: '', sex: '', bio: '' });
+  const [remindTime, setRemindTime] = useState('');
+  const [remindSaving, setRemindSaving] = useState(false);
+
+  const normalizeAvatarUrl = useCallback((id?: string, avatarUrl?: string) => {
+    if (id) return `/api/users/avatar?user-id=${encodeURIComponent(id)}`;
+    return '/assets/images/default_avatar.png';
+  }, []);
 
   const loadUserProfile = useCallback(async () => {
     try {
@@ -33,13 +40,12 @@ export function useProfileData() {
         }
         const userObj = userData as UserProfile;
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
-        // Normalize avatar_url for profile page
-        if (userObj.id && !userObj.avatar_url) {
-          userObj.avatar_url = `/user/avatar?user-id=${userObj.id}`;
-        } else if (!userObj.avatar_url) {
-          userObj.avatar_url = '/user/avatar';
-        }
+        const googleAvatar = (userObj as { google_avatar_url?: string }).google_avatar_url || userObj.avatar_url;
+        // Normalize avatar_url for profile page through the Next.js proxy
+        userObj.avatar_url = normalizeAvatarUrl(userObj.id, userObj.avatar_url);
+        userObj.google_avatar_url = googleAvatar;
         setUser(userObj);
+        setRemindTime(userObj.remind_time || '');
         setFormData({
           given_name: userObj.given_name || '',
           family_name: userObj.family_name || '',
@@ -51,7 +57,7 @@ export function useProfileData() {
       } else showToast.authError('Không thể tải thông tin hồ sơ');
     } catch { showToast.authError('Không thể tải thông tin hồ sơ'); }
     finally { setLoading(false); }
-  }, [router]);
+  }, [router, normalizeAvatarUrl]);
 
   const updateProfile = async (form: ProfileFormData) => {
     setSaving(true);
@@ -82,7 +88,7 @@ export function useProfileData() {
         showToast.authSuccess('Cập nhật ảnh đại diện thành công!');
         const avatarData = response.data as { avatar_url?: string; avatar_id?: string } | undefined;
         if (avatarData && (avatarData.avatar_url || avatarData.avatar_id)) {
-          setUser(prev => prev ? { ...prev, avatar_url: avatarData.avatar_url || prev.avatar_url, avatar_id: avatarData.avatar_id || prev.avatar_id } : prev);
+          setUser(prev => prev ? { ...prev, avatar_url: normalizeAvatarUrl(prev.id, avatarData.avatar_url || prev.avatar_url), avatar_id: avatarData.avatar_id || prev.avatar_id } : prev);
           setAvatarKey(k => k + 1); // bump version immediately
         }
         setTimeout(async () => { await loadUserProfile(); setAvatarKey(k => k + 1); }, 500);
@@ -93,7 +99,26 @@ export function useProfileData() {
     finally { setUploading(false); setAvatarLoading(false); }
   };
 
-  return { loading, saving, user, editMode, setEditMode, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar };
+  const updateRemindTime = async (time: string) => {
+    if (!time) { showToast.authError('Vui lòng chọn giờ nhắc nhở'); return; }
+    setRemindSaving(true);
+    try {
+      const response = await api.user.setNotifyTime({ remind_time: time });
+      if (response.status === 200) {
+        setRemindTime(time);
+        setUser(prev => prev ? { ...prev, remind_time: time } : prev);
+        showToast.authSuccess('Đã cập nhật thời gian nhắc nhở');
+      } else {
+        showToast.authError('Cập nhật thời gian nhắc nhở thất bại');
+      }
+    } catch {
+      showToast.authError('Lỗi kết nối. Vui lòng thử lại.');
+    } finally {
+      setRemindSaving(false);
+    }
+  };
+
+  return { loading, saving, user, editMode, setEditMode, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar, remindTime, setRemindTime, updateRemindTime, remindSaving };
 }
 
 function formatInitialBirthDate(user: UserProfile) {

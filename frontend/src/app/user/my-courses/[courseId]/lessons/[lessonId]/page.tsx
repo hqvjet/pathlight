@@ -69,7 +69,8 @@ interface LessonListItemApi {
 
 type ContentBlock =
   | { type: 'heading'; level: number; text: string; id: string }
-  | { type: 'paragraph'; text: string };
+  | { type: 'paragraph'; text: string }
+  | { type: 'code'; text: string; lang: string };
 
 interface LessonListResponseApi {
   status: number;
@@ -350,21 +351,35 @@ export default function LessonDetailPage({ params }: PageProps) {
 
   const contentBlocks = useMemo<ContentBlock[]>(() => {
     const raw = lesson?.content || '';
-    const lines = raw.split('\n');
-    const blocks: ContentBlock[] = [];
-    lines.forEach((line, idx) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      if (trimmed.startsWith('#')) {
-        const level = trimmed.match(/^#+/)?.[0].length || 1;
-        const text = trimmed.replace(/^#+\s*/, '') || `Mục ${idx + 1}`;
-        const id = `section-${idx}-${text.toLowerCase().replace(/\s+/g, '-')}`;
-        blocks.push({ type: 'heading', level, text, id });
+    if (!raw.trim()) return [{ type: 'paragraph', text: 'Nội dung sẽ được cập nhật.' }];
+
+    const parts: ContentBlock[] = [];
+    const segments = raw.split(/```/);
+    segments.forEach((seg, idx) => {
+      if (idx % 2 === 1) {
+        const trimmed = seg.trim();
+        const [firstLine, ...rest] = trimmed.split('\n');
+        const isLang = /^(json|xml|html|yaml|yml)$/i.test(firstLine.trim());
+        const lang = isLang ? firstLine.trim().toUpperCase() : 'CODE';
+        const code = isLang ? rest.join('\n') : trimmed;
+        parts.push({ type: 'code', text: code, lang });
       } else {
-        blocks.push({ type: 'paragraph', text: line });
+        const lines = seg.split('\n');
+        lines.forEach((line, lineIdx) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
+          if (trimmed.startsWith('#')) {
+            const level = trimmed.match(/^#+/)?.[0].length || 1;
+            const text = trimmed.replace(/^#+\s*/, '') || `Mục ${lineIdx + 1}`;
+            const id = `section-${idx}-${lineIdx}-${text.toLowerCase().replace(/\s+/g, '-')}`;
+            parts.push({ type: 'heading', level, text, id });
+          } else {
+            parts.push({ type: 'paragraph', text: line });
+          }
+        });
       }
     });
-    return blocks.length ? blocks : [{ type: 'paragraph', text: raw || 'Nội dung sẽ được cập nhật.' }];
+    return parts.length ? parts : [{ type: 'paragraph', text: raw }];
   }, [lesson?.content]);
 
   const tocHeadings = useMemo(
@@ -509,6 +524,17 @@ export default function LessonDetailPage({ params }: PageProps) {
                       {number && <span className="text-sm text-gray-500 font-semibold">{number}</span>}
                       <span>{block.text}</span>
                     </Tag>
+                  );
+                }
+                if (block.type === 'code') {
+                  return (
+                    <pre
+                      key={`code-${idx}`}
+                      className="mt-4 rounded-lg border border-gray-200 bg-gray-900 text-gray-100 text-sm overflow-x-auto"
+                    >
+                      <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-400 border-b border-gray-800">{block.lang}</div>
+                      <code className="block px-3 py-3 whitespace-pre">{block.text}</code>
+                    </pre>
                   );
                 }
                 return (

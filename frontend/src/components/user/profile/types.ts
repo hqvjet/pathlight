@@ -10,6 +10,7 @@ export interface UserProfile {
   bio?: string;
   avatar_id?: string;
   avatar_url?: string;
+  google_avatar_url?: string;
   level?: number;
   current_exp?: number;
   require_exp?: number;
@@ -20,6 +21,7 @@ export interface UserProfile {
   total_quizzes?: number;
   lesson_num?: number;
   created_at?: string;
+  remind_time?: string;
 }
 
 export interface ProfileFormData {

@@ -20,10 +20,17 @@ interface LayoutProps {
   children: React.ReactNode;
   title: string;
   user?: {
+    id?: string;
     avatar_url?: string;
+    google_avatar_url?: string;
     name?: string;
     email?: string;
     avatarKey?: number; // cache busting key
+    level?: number;
+    current_exp?: number;
+    require_exp?: number;
+    remind_time?: string;
+    rank?: number;
   };
 }
 
@@ -38,11 +45,12 @@ const menuItems = [
 export default function Layout({ children, title, user }: LayoutProps) {
   const { user: ctxUser } = useAuthContext();
   // Prefer explicit user prop; fallback to context
-  const effectiveUser = user || (ctxUser ? { name: ctxUser.name, email: ctxUser.email, avatar_url: ctxUser.avatar_url } : undefined);
+  const effectiveUser = user || (ctxUser ? { id: ctxUser.id, name: ctxUser.name, email: ctxUser.email, avatar_url: ctxUser.avatar_url || (ctxUser.id ? `/api/users/avatar?user-id=${encodeURIComponent(ctxUser.id)}` : undefined), google_avatar_url: undefined, level: ctxUser.level, current_exp: ctxUser.current_exp, require_exp: ctxUser.require_exp, remind_time: ctxUser.remind_time, rank: ctxUser.rank } : undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [cachedProgress, setCachedProgress] = useState<{ level?: number; current_exp?: number; require_exp?: number; rank?: number }>({});
   const router = useRouter();
   const pathname = usePathname();
 
@@ -80,6 +88,22 @@ export default function Layout({ children, title, user }: LayoutProps) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const cached = window.localStorage.getItem('pathlight_dashboard_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const info = parsed?.dashboardData?.info || parsed?.user;
+        if (info) {
+          setCachedProgress({ level: info.level, current_exp: info.current_exp, require_exp: info.require_exp, rank: info.rank });
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handleLogout = () => {
     storage.removeToken();
     router.push('/auth/signin');
@@ -87,6 +111,67 @@ export default function Layout({ children, title, user }: LayoutProps) {
 
   const sidebarExpandedDesktop = !isMobile && sidebarOpen;
   const mainOffsetClasses = isMobile ? '' : sidebarExpandedDesktop ? 'lg:ml-64' : 'lg:ml-16';
+
+  const expPercent = (() => {
+    const current = effectiveUser?.current_exp ?? cachedProgress.current_exp ?? 0;
+    const need = effectiveUser?.require_exp ?? cachedProgress.require_exp ?? 0;
+    if (!need || need <= 0) return 0;
+    const pct = current / need;
+    return Math.max(0, Math.min(1, pct));
+  })();
+
+  const renderAvatarWithRing = () => {
+    const ringSizeOuter = 46;
+    const ringSizeInner = 40;
+    const strokeOuter = 4;
+    const strokeInner = 3;
+    const radiusOuter = (ringSizeOuter - strokeOuter) / 2;
+    const radiusInner = (ringSizeInner - strokeInner) / 2;
+    const circOuter = 2 * Math.PI * radiusOuter;
+    const circInner = 2 * Math.PI * radiusInner;
+    const dashOuter = circOuter; // full outer ring
+    const dashInner = circInner * expPercent;
+    const offsetInner = circInner - dashInner;
+    return (
+      <div className="relative" style={{ width: ringSizeOuter, height: ringSizeOuter }}>
+        <svg className="absolute inset-0 -rotate-90" width={ringSizeOuter} height={ringSizeOuter}>
+          <defs>
+            <linearGradient id="xpOuter" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#3b82f6" />
+              <stop offset="100%" stopColor="#22d3ee" />
+            </linearGradient>
+            <linearGradient id="xpInner" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#06b6d4" />
+              <stop offset="100%" stopColor="#2563eb" />
+            </linearGradient>
+          </defs>
+          <circle cx={ringSizeOuter/2} cy={ringSizeOuter/2} r={radiusOuter} stroke="url(#xpOuter)" strokeWidth={strokeOuter} fill="none" opacity={0.35} />
+          <circle cx={ringSizeOuter/2} cy={ringSizeOuter/2} r={radiusInner} stroke="rgba(0,0,0,0.08)" strokeWidth={strokeInner} fill="none" />
+          <circle
+            cx={ringSizeOuter/2}
+            cy={ringSizeOuter/2}
+            r={radiusInner}
+            stroke="url(#xpInner)"
+            strokeWidth={strokeInner}
+            strokeLinecap="round"
+            strokeDasharray={`${dashInner} ${circInner}`}
+            strokeDashoffset={offsetInner}
+            fill="none"
+          />
+        </svg>
+        <div className="absolute inset-[7px] flex items-center justify-center rounded-full bg-white shadow-sm">
+          <Avatar
+            user={effectiveUser || {}}
+            size={ringSizeInner - 10}
+            className="w-8 h-8"
+            displayName={effectiveUser?.name || effectiveUser?.email || 'User'}
+            showInitialsFallback={true}
+            cacheKey={effectiveUser?.avatarKey}
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -207,17 +292,18 @@ export default function Layout({ children, title, user }: LayoutProps) {
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500/40 ${userMenuOpen ? 'bg-gray-100' : ''}`}
                   >
-                    <Avatar
-                      user={effectiveUser || {}}
-                      size={28}
-                      className="w-7 h-7"
-                      displayName={effectiveUser?.name || effectiveUser?.email || 'User'}
-                      showInitialsFallback={true}
-                      cacheKey={effectiveUser?.avatarKey}
-                    />
-                    <div className="hidden sm:block text-left max-w-28 lg:max-w-36">
-                      <div className="text-xs font-medium text-gray-500 leading-none truncate">{effectiveUser?.email || ''}</div>
-                      <div className="text-sm font-semibold text-gray-900 truncate">{effectiveUser?.name || 'User'}</div>
+                    <div className="flex items-center gap-2">
+                      {renderAvatarWithRing()}
+                      <div className="flex flex-col leading-tight">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Lv {effectiveUser?.level ?? cachedProgress.level ?? 1}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold"># {effectiveUser?.rank ?? cachedProgress.rank ?? '—'}</span>
+                        </div>
+                        <div className="hidden sm:block text-left max-w-28 lg:max-w-36">
+                          <div className="text-xs font-medium text-gray-500 leading-none truncate">{effectiveUser?.email || ''}</div>
+                          <div className="text-sm font-semibold text-gray-900 truncate">{effectiveUser?.name || 'User'}</div>
+                        </div>
+                      </div>
                     </div>
                     <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
