@@ -22,6 +22,7 @@ export interface UserProfile {
   lesson_num?: number;
   created_at?: string;
   remind_time?: string;
+  rank?: number;
 }
 
 export interface ProfileFormData {

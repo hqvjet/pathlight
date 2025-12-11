@@ -24,22 +24,40 @@ export function useProfileData() {
   }, []);
 
   const loadUserProfile = useCallback(async () => {
+    const hydrateFromDashboard = async (profile: UserProfile): Promise<UserProfile> => {
+      try {
+        const dashResponse = await api.user.getDashboard();
+        if (dashResponse.status === 401) { storage.removeToken(); router.push('/auth/signin'); return profile; }
+        if (dashResponse.status !== 200) return profile;
+        const dashProfile = extractProfileFromResponse(dashResponse.data);
+        if (!dashProfile) return profile;
+        const merged = { ...profile } as UserProfile;
+        if (dashProfile.rank !== undefined && dashProfile.rank !== null) merged.rank = dashProfile.rank;
+        if (merged.level === undefined && dashProfile.level !== undefined) merged.level = dashProfile.level;
+        if (merged.current_exp === undefined && dashProfile.current_exp !== undefined) merged.current_exp = dashProfile.current_exp;
+        if (merged.require_exp === undefined && dashProfile.require_exp !== undefined) merged.require_exp = dashProfile.require_exp;
+        if (merged.remind_time === undefined && dashProfile.remind_time !== undefined) merged.remind_time = dashProfile.remind_time;
+        return merged;
+      } catch { return profile; }
+    };
+
     try {
-      let response = await api.user.getInfo();
+      let response = await api.user.getDashboard();
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
+
       if (response.status !== 200) {
-        response = await api.user.getDashboard();
+        response = await api.user.getInfo();
         if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
       }
+
       if (response.status === 200) {
-        const responseData = response.data as unknown;
-        let userData: unknown = responseData;
-        if (responseData && typeof responseData === 'object') {
-          if ('info' in responseData) userData = (responseData as { info: UserProfile }).info;
-          else if ('Info' in responseData) userData = (responseData as { Info: UserProfile }).Info;
-        }
-        const userObj = userData as UserProfile;
+        let userObj = extractProfileFromResponse(response.data);
         if (!userObj || (!userObj.email && !userObj.id)) { showToast.authError('Dữ liệu người dùng không hợp lệ'); return; }
+
+        if (userObj.rank === undefined || userObj.rank === null) {
+          userObj = await hydrateFromDashboard(userObj);
+        }
+
         const googleAvatar = (userObj as { google_avatar_url?: string }).google_avatar_url || userObj.avatar_url;
         // Normalize avatar_url for profile page through the Next.js proxy
         userObj.avatar_url = normalizeAvatarUrl(userObj.id, userObj.avatar_url);
@@ -119,9 +137,16 @@ export function useProfileData() {
   };
 
   return { loading, saving, user, editMode, setEditMode, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar, remindTime, setRemindTime, updateRemindTime, remindSaving };
-}
+  }
 
-function formatInitialBirthDate(user: UserProfile) {
+  function extractProfileFromResponse(responseData: unknown): UserProfile | null {
+    if (!responseData || typeof responseData !== 'object') return null;
+    if ('info' in responseData) return (responseData as { info?: UserProfile }).info || null;
+    if ('Info' in responseData) return (responseData as { Info?: UserProfile }).Info || null;
+    return responseData as UserProfile;
+  }
+
+  function formatInitialBirthDate(user: UserProfile) {
   const dobValue = user.dob || user.birth_date || '';
   if (!dobValue) return '';
   try {

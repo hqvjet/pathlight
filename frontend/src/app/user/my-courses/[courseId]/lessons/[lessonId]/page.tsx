@@ -490,7 +490,7 @@ export default function LessonDetailPage({ params }: PageProps) {
             {tocOpen && (
               <aside className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2 text-xs text-gray-700 h-fit sticky top-4 self-start">
                 <p className="font-semibold text-gray-900 text-sm">Mục trong bài</p>
-                <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
+                <div className="space-y-2 max-h-[720px] overflow-auto pr-1">
                   {tocEntries.map((h) => (
                     <button
                       key={h.id}
@@ -564,6 +564,12 @@ export default function LessonDetailPage({ params }: PageProps) {
         </CardHeader>
         <CardContent className="text-sm text-gray-600">
           Nhấn &quot;Bắt đầu test&quot; để mở bài kiểm tra ở chế độ toàn màn hình. Kết quả sẽ được dùng để mở khóa bài tiếp theo.
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-700">
+            <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700 font-semibold">EXP hiện có: {availableExp}</span>
+            <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-700">Lv {playerLevel}</span>
+            <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-700">Cần {requireExp} EXP lên Lv {playerLevel + 1}</span>
+            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700">Gợi ý: -50 EXP/lần</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -630,12 +636,14 @@ export default function LessonDetailPage({ params }: PageProps) {
                           <span className="text-sm font-semibold text-orange-600">Câu {currentQuestion + 1}.</span>
                           <div className="space-y-1">
                             <p className="text-base font-semibold text-gray-900 leading-6">{questions[currentQuestion].question}</p>
-                            {questions[currentQuestion].level && (
-                              <Badge variant="outline" className="border-orange-200 text-orange-700">Độ khó {questions[currentQuestion].level}/5</Badge>
+                            {(questions[currentQuestion].level || questions[currentQuestion].difficult_level_id) && (
+                              <Badge variant="outline" className="border-orange-200 text-orange-700">
+                                Độ khó {questions[currentQuestion].level ? `${questions[currentQuestion].level}/5` : questions[currentQuestion].difficult_level_id}
+                              </Badge>
                             )}
                           </div>
                         </div>
-                        {questions[currentQuestion].hint && (
+                            {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
                           <button
                             type="button"
                             onClick={() => handleShowHint(questions[currentQuestion].id)}
@@ -647,14 +655,18 @@ export default function LessonDetailPage({ params }: PageProps) {
                                 : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'
                             )}
                           >
-                            {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-1 EXP)' : 'Hiện gợi ý (-1 EXP)'}
+                            {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
                           </button>
                         )}
                       </div>
 
                       {visibleHints[questions[currentQuestion].id] && questions[currentQuestion].hint && (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                          Gợi ý: {questions[currentQuestion].hint}
+                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 space-y-1">
+                          <div className="font-semibold">Gợi ý</div>
+                          <div>{questions[currentQuestion].hint}</div>
+                          {questions[currentQuestion].explanation && (
+                            <div className="text-amber-900/90">Giải thích: {questions[currentQuestion].explanation}</div>
+                          )}
                         </div>
                       )}
 
@@ -701,7 +713,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                       <div className="flex items-center justify-between pt-2 text-sm text-gray-600">
                         <span>
                           Đã trả lời {answeredCount}/{totalQuestions}
-                          {hintPenalty > 0 && ` · Đang trừ ${hintPenalty} EXP do xem gợi ý`}
+                          {hintSpent > 0 && ` · Đã dùng ${hintSpent} EXP cho gợi ý (còn ${availableExp})`}
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -720,7 +732,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                           </button>
                         </div>
                       </div>
-                      {questions[currentQuestion].explanation && (reviewMode || answers[questions[currentQuestion].id]) && (
+                      {questions[currentQuestion].explanation && (reviewMode || visibleHints[questions[currentQuestion].id]) && (
                         <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
                           <p className="font-semibold">Giải thích</p>
                           <p className="leading-6">{questions[currentQuestion].explanation}</p>
@@ -756,7 +768,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                     Điểm: {score}% {passed ? '(Đạt yêu cầu)' : '(Chưa đạt)'}
                   </span>
                   <span className="text-blue-700">EXP: {earnedExp ?? 0}</span>
-                  {hintPenalty > 0 && <span className="text-gray-500 font-normal">(-{hintPenalty} EXP do mở gợi ý)</span>}
+                  {hintSpent > 0 && <span className="text-gray-500 font-normal">(-{hintSpent} EXP do mở gợi ý)</span>}
                 </div>
               )}
               {passed && nextLessonId && (

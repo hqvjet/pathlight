@@ -7,7 +7,6 @@ import { courseApi } from '@/lib/api/course';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { LessonList, type CourseModule } from '@/components/user/courses/LessonList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { showToast } from '@/utils/toast';
 
@@ -217,7 +216,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
       <CourseHero course={hero} />
 
-      <div className="grid gap-6 lg:grid-cols-[300px,1fr,320px]">
+      <div className="grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
         <div className="space-y-3">
           <Card className="shadow-sm border-gray-100 sticky top-4">
             <CardHeader className="pb-3">
@@ -234,7 +233,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6 lg:col-span-1">
           <Card className="shadow-sm border-gray-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg text-gray-900">Nội dung chi tiết</CardTitle>
@@ -247,66 +246,6 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               >
                 Tiếp tục học bài hiện tại
               </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card className="shadow-sm border-gray-100">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-gray-900">Thông tin khóa học</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-gray-700">
-              <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-1">
-                <p className="text-xs text-gray-500">Tổng quan</p>
-                <p className="font-medium text-gray-900 leading-6">{hero.subtitle}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                  <p className="text-xs text-gray-500">Cấp độ</p>
-                  <p className="font-semibold text-gray-900">{hero.level || 'N/A'}</p>
-                </div>
-                <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                  <p className="text-xs text-gray-500">Thời lượng</p>
-                  <p className="font-semibold text-gray-900">{hero.durationLabel}</p>
-                </div>
-                <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                  <p className="text-xs text-gray-500">Tiến độ</p>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-orange-500 text-white border-none">{hero.progress}%</Badge>
-                    <span className="text-gray-700">{hero.completedLessons}/{hero.totalLessons} bài</span>
-                  </div>
-                </div>
-                <div className="p-3 rounded-lg border border-gray-100 bg-white">
-                  <p className="text-xs text-gray-500">Ngôn ngữ</p>
-                  <p className="font-semibold text-gray-900">{hero.language || 'N/A'}</p>
-                </div>
-              </div>
-              {hero.progress >= 100 && (
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 space-y-2">
-                  <div className="flex items-center justify-between text-sm font-semibold text-emerald-800">
-                    <span>Bài test cuối khóa</span>
-                    <Badge className="bg-emerald-500 text-white border-none">Sẵn sàng</Badge>
-                  </div>
-                  <p className="text-xs text-emerald-700">Hoàn thành ít nhất 80% điểm để nhận chứng nhận và mở khóa toàn bộ nội dung.</p>
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-md bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600"
-                    onClick={() => showToast.info('Đi tới bài test cuối khóa (đang thiết kế)')}
-                  >
-                    Làm bài test cuối khóa
-                  </button>
-                </div>
-              )}
-              <div className="text-xs text-gray-500">Dữ liệu hiển thị từ API course-service.</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm border-gray-100">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-gray-900">Hướng dẫn</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-gray-700">
-              <p>Chọn bài học ở mục lục bên trái. Khi nhấn, trang lesson mở mới với nội dung và bài test toàn màn hình.</p>
             </CardContent>
           </Card>
         </div>

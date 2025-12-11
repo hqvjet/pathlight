@@ -553,6 +553,9 @@ def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str)
 				option2=getattr(qa, "option2"),
 				option3=getattr(qa, "option3"),
 				option4=getattr(qa, "option4"),
+				answer=getattr(qa, "answer"),
+				explanation=getattr(qa, "explanation"),
+				difficult_level_id=getattr(qa, "difficult_level_id", None),
 			)
 			for qa in qas
 		]
@@ -594,6 +597,8 @@ def get_final_test_controller(request: Request, course_id: str) -> FinalTestResp
 				option2=getattr(qa, "option2"),
 				option3=getattr(qa, "option3"),
 				option4=getattr(qa, "option4"),
+				answer=getattr(qa, "answer"),
+				explanation=getattr(qa, "explanation"),
 			)
 			for qa in qas
 		]

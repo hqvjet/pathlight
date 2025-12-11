@@ -90,6 +90,9 @@ class LessonTestQA(BaseModel):
     option2: str
     option3: str
     option4: str
+    answer: str
+    explanation: str
+    difficult_level_id: str | None = None
 
 
 class LessonTest(BaseModel):
@@ -114,6 +117,8 @@ class FinalTestQA(BaseModel):
     option2: str
     option3: str
     option4: str
+    answer: str
+    explanation: str
 
 
 class FinalTestDetail(BaseModel):
