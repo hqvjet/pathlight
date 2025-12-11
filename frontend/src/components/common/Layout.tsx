@@ -127,9 +127,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
     const strokeInner = 3;
     const radiusOuter = (ringSizeOuter - strokeOuter) / 2;
     const radiusInner = (ringSizeInner - strokeInner) / 2;
-    const circOuter = 2 * Math.PI * radiusOuter;
     const circInner = 2 * Math.PI * radiusInner;
-    const dashOuter = circOuter; // full outer ring
     const dashInner = circInner * expPercent;
     const offsetInner = circInner - dashInner;
     return (

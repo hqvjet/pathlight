@@ -20,6 +20,7 @@ export function useProfileData() {
 
   const normalizeAvatarUrl = useCallback((id?: string, avatarUrl?: string) => {
     if (id) return `/api/users/avatar?user-id=${encodeURIComponent(id)}`;
+    if (avatarUrl) return avatarUrl;
     return '/assets/images/default_avatar.png';
   }, []);
 

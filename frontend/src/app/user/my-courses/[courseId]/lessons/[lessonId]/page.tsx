@@ -41,6 +41,11 @@ interface LessonTestQA {
   option3: string;
   option4: string;
   correct_answer?: string;
+  answer?: string;
+  hint?: string;
+  explanation?: string;
+  answer_explanation?: string;
+  difficult_level_id?: number;
 }
 
 interface LessonTestApi {
@@ -93,7 +98,13 @@ type NormalizedQuestion = {
   hint?: string;
   explanation?: string;
   level?: number;
+  difficult_level_id?: number;
 };
+
+const HINT_COST = 50;
+const BASE_EXP_PER_CORRECT = 20;
+const PASS_BONUS = 50;
+const requiredExpForLevel = (level: number) => 200 + 75 * Math.max(0, level - 1);
 
 export default function LessonDetailPage({ params }: PageProps) {
   const { courseId, lessonId } = use(params);
@@ -114,6 +125,9 @@ export default function LessonDetailPage({ params }: PageProps) {
   const [reviewMode, setReviewMode] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
   const [visibleHints, setVisibleHints] = useState<Record<string, boolean>>({});
+  const [playerLevel, setPlayerLevel] = useState(1);
+  const [playerExp, setPlayerExp] = useState(200);
+  const [requireExp, setRequireExp] = useState(() => requiredExpForLevel(1));
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +210,7 @@ export default function LessonDetailPage({ params }: PageProps) {
         hint: a.assessment_hint,
         explanation: a.assessment_explanation,
         level: a.assessment_level,
+        difficult_level_id: (a as { difficult_level_id?: number }).difficult_level_id,
         options: (a.assessment_options || []).map((opt, oIdx) => ({
           id: `opt-${idx}-${oIdx}`,
           content: opt.option_content,
@@ -206,14 +221,19 @@ export default function LessonDetailPage({ params }: PageProps) {
     if (test?.qas?.length) {
       return test.qas.map((qa, idx) => {
         const optionKeys = ['option1', 'option2', 'option3', 'option4'] as const;
+        const correctKey = qa.correct_answer || qa.answer;
+        const explanation = qa.explanation || qa.answer_explanation;
         return {
           id: qa.qa_id || `qa-${idx}`,
           question: qa.question,
+          hint: qa.hint,
+          explanation,
+          difficult_level_id: qa.difficult_level_id,
           options: optionKeys
             .map((key) => ({
               id: key,
               content: qa[key],
-              isCorrect: qa.correct_answer ? qa.correct_answer === key : false,
+              isCorrect: correctKey ? correctKey === key : false,
             }))
             .filter((opt) => Boolean(opt.content)),
         } as NormalizedQuestion;
@@ -229,7 +249,9 @@ export default function LessonDetailPage({ params }: PageProps) {
     [answers, questions],
   );
 
-  const hintPenalty = useMemo(() => Object.values(visibleHints).filter(Boolean).length, [visibleHints]);
+  const hintCount = useMemo(() => Object.values(visibleHints).filter(Boolean).length, [visibleHints]);
+  const hintSpent = useMemo(() => hintCount * HINT_COST, [hintCount]);
+  const availableExp = useMemo(() => Math.max(0, playerExp - hintSpent), [playerExp, hintSpent]);
 
   const handleAnswer = (qaId: string, option: string) => {
     setAnswers((prev) => ({ ...prev, [qaId]: option }));
@@ -247,8 +269,9 @@ export default function LessonDetailPage({ params }: PageProps) {
     const total = questions.length;
     const correct = questions.reduce((acc, q) => acc + (q.options.some((o) => o.isCorrect && answers[q.id] === o.id) ? 1 : 0), 0);
     const calculated = Math.round((correct / total) * 100);
-    const baseExp = correct; // EXP dựa trên số câu đúng
-    const earned = Math.max(0, baseExp - hintPenalty); // trừ EXP nếu xem gợi ý
+    const baseExp = correct * BASE_EXP_PER_CORRECT;
+    const bonusExp = calculated >= 80 ? PASS_BONUS : 0;
+    const earned = Math.max(0, baseExp + bonusExp - hintSpent);
 
     setScore(calculated);
     setEarnedExp(earned);
@@ -267,6 +290,19 @@ export default function LessonDetailPage({ params }: PageProps) {
     } finally {
       setSubmitting(false);
     }
+
+    // Update EXP/level locally for the game-like experience
+    let expPool = playerExp + earned;
+    let nextLevel = playerLevel;
+    let nextRequireExp = requireExp;
+    while (expPool >= nextRequireExp) {
+      expPool -= nextRequireExp;
+      nextLevel += 1;
+      nextRequireExp = requiredExpForLevel(nextLevel);
+    }
+    setPlayerExp(expPool);
+    setPlayerLevel(nextLevel);
+    setRequireExp(nextRequireExp);
   };
 
   const goNext = () => {
@@ -299,6 +335,11 @@ export default function LessonDetailPage({ params }: PageProps) {
   };
 
   const handleShowHint = (questionId: string) => {
+    if (visibleHints[questionId]) return;
+    if (availableExp < HINT_COST) {
+      showToast.warning('Không đủ EXP để mở gợi ý (-50 EXP)');
+      return;
+    }
     setVisibleHints((prev) => (prev[questionId] ? prev : { ...prev, [questionId]: true }));
   };
 
@@ -643,7 +684,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                             )}
                           </div>
                         </div>
-                            {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
+                        {questions[currentQuestion].hint && (
                           <button
                             type="button"
                             onClick={() => handleShowHint(questions[currentQuestion].id)}

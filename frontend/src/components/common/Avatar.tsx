@@ -49,7 +49,7 @@ export default function Avatar({
     setRetryNonce(0);
     setRetryCount(0);
     if (timerId) window.clearTimeout(timerId);
-  }, [user?.id, user?.avatar_url, user?.avatar_id, cacheKey]);
+  }, [user?.id, user?.avatar_url, user?.avatar_id, cacheKey, timerId]);
 
   useEffect(() => {
     if (!sources[sourceIndex] || hasError) return;

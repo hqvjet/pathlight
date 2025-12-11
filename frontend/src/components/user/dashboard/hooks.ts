@@ -13,6 +13,7 @@ export function useDashboard(onLogout: () => void) {
 
   const normalizeAvatarUrl = useCallback((id?: string, avatarUrl?: string) => {
     if (id) return `/api/users/avatar?user-id=${encodeURIComponent(id)}`;
+    if (avatarUrl) return avatarUrl;
     return '/assets/images/default_avatar.png';
   }, []);
 
@@ -30,20 +31,6 @@ export function useDashboard(onLogout: () => void) {
       };
     });
   }, [normalizeAvatarUrl]);
-
-  const normalizeProfile = useCallback((raw: UserProfile) => {
-    if (!raw) return raw;
-    const normalized = {
-      ...raw,
-      avatar_url: normalizeAvatarUrl(raw.id, raw.avatar_url),
-      google_avatar_url: (raw as { google_avatar_url?: string }).google_avatar_url || raw.avatar_url,
-      avatarKey: Date.now(),
-    } as UserProfile & { user_top_rank?: LeaderboardUser[] };
-    if ((raw as { user_top_rank?: LeaderboardUser[] }).user_top_rank) {
-      normalized.user_top_rank = normalizeLeaderboard((raw as { user_top_rank?: LeaderboardUser[] }).user_top_rank);
-    }
-    return normalized;
-  }, [normalizeAvatarUrl, normalizeLeaderboard]);
 
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
   const CACHE_EXPIRY_MS = 5 * 60 * 1000;
@@ -139,7 +126,7 @@ export function useDashboard(onLogout: () => void) {
       }
     };
     fetchProfile();
-  }, [CACHE_EXPIRY_MS, onLogout, router]);
+  }, [CACHE_EXPIRY_MS, normalizeAvatarUrl, normalizeLeaderboard, onLogout, router]);
 
   return { user, dashboardData, loading };
 }
