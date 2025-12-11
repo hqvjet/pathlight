@@ -5,18 +5,6 @@ import { usePathname } from 'next/navigation';
 import Layout from '@/components/common/Layout';
 import { useAuthContext } from '@/context/AuthContext';
 
-// Root layout now injects a top NavBar; this layout focuses on sidebar + page framing.
-// Simple title mapping based on current pathname. Extend if new pages are added.
-const titleMap: Record<string, string> = {
-  '/user/dashboard': 'Trang Chủ',
-  '/user/my-courses': 'Khóa Học Của Tôi',
-  '/user/my-quizzes': 'Quiz Của Tôi',
-  '/user/profile': 'Hồ Sơ',
-  '/user/create-course': 'Tạo Khóa Học',
-  '/user/create-quiz': 'Tạo Quiz',
-  '/user/study-time-setup': 'Thiết Lập Thời Gian Học',
-};
-
 interface UserSectionLayoutProps {
   children: React.ReactNode;
 }
@@ -25,15 +13,33 @@ export default function UserSectionLayout({ children }: UserSectionLayoutProps) 
   const pathname = usePathname();
 
   // Derive the title from the current path (fallback generic)
-  const title = titleMap[pathname] || 'PathLight';
+  const title = useMemo(() => {
+    if (!pathname) return 'PathLight';
+    if (pathname.startsWith('/user/my-courses')) return 'Khóa Học';
+    if (pathname.startsWith('/user/my-quizzes')) return 'Quiz';
+    if (pathname.startsWith('/user/dashboard')) return 'Trang Chủ';
+    if (pathname.startsWith('/user/profile')) return 'Hồ Sơ';
+    if (pathname.startsWith('/user/create-course')) return 'Tạo Khóa Học';
+    if (pathname.startsWith('/user/create-quiz')) return 'Tạo Quiz';
+    if (pathname.startsWith('/user/study-time-setup')) return 'Thiết Lập Thời Gian Học';
+    if (pathname.startsWith('/user/generation-tracking')) return 'Theo Dõi Tiến Trình';
+    return 'PathLight';
+  }, [pathname]);
 
   const { user: authUser } = useAuthContext();
   const user = useMemo(() => {
     if (!authUser) return undefined;
     return {
+      id: authUser.id,
       name: authUser.name,
       email: authUser.email,
       avatar_url: authUser.avatar_url,
+      google_avatar_url: authUser.google_avatar_url,
+      level: authUser.level,
+      current_exp: authUser.current_exp,
+      require_exp: authUser.require_exp,
+      remind_time: authUser.remind_time,
+      rank: authUser.rank,
     };
   }, [authUser]);
 

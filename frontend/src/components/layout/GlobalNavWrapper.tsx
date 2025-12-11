@@ -21,7 +21,7 @@ export default function GlobalNavWrapper() {
 
   if (isAuthenticated) {
     // user?.name might be undefined until first profile fetch resolves; NavBarAuth shows skeleton then
-    const avatarUser = user ? { name: user.name, avatar_url: user.avatar_url } : undefined;
+    const avatarUser = user ? { id: user.id, name: user.name, avatar_url: user.avatar_url, google_avatar_url: user.google_avatar_url, rank: (user as { rank?: number }).rank } : undefined;
     return <NavBarAuth user={avatarUser} onLogout={logout} />;
   }
   return <NavBarPublic />;

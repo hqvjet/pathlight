@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CourseDraftState } from '@/types/create-course';
 import { AgenticCourseResponse } from '@/lib/api/agentic';
-import { showToast } from '@/utils/toast';
 
 interface SuccessStepProps {
   draft: CourseDraftState;
@@ -23,47 +22,86 @@ const levelLabel = (level?: number) => {
 };
 
 export function SuccessStep({ draft, result, onRestart, onGoToCourses }: SuccessStepProps) {
-  const jsonString = useMemo(() => (result ? JSON.stringify(result, null, 2) : ''), [result]);
+  const lessons = useMemo(() => result?.course_lessons || [], [result]);
+  const hasResult = Boolean(result);
+  const isPending = !result || lessons.length === 0;
 
-  const handleCopy = async () => {
-    if (!result) return;
-    try {
-      await navigator.clipboard.writeText(jsonString);
-      showToast.success('Đã sao chép dữ liệu khóa học.');
-    } catch {
-      showToast.error('Không thể sao chép, vui lòng thử lại.');
-    }
+  const renderContent = (content: string) => {
+    const segments = content.split(/```/);
+    return segments.map((seg, idx) => {
+      const key = `${idx}-${seg.slice(0, 10)}`;
+      if (idx % 2 === 1) {
+        const trimmed = seg.trim();
+        const [firstLine, ...rest] = trimmed.split('\n');
+        const isLang = /^(json|xml|html|yaml|yml)$/i.test(firstLine.trim());
+        const lang = isLang ? firstLine.trim().toUpperCase() : 'CODE';
+        const code = isLang ? rest.join('\n') : trimmed;
+        return (
+          <pre key={key} className="rounded-lg border border-gray-200 bg-gray-900 text-gray-100 text-sm overflow-x-auto">
+            <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-400 border-b border-gray-800">{lang}</div>
+            <code className="block px-3 py-3 whitespace-pre">{code}</code>
+          </pre>
+        );
+      }
+      const paragraphs = seg.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+      return paragraphs.map((p, pIdx) => (
+        <p key={`${key}-p-${pIdx}`} className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+          {p}
+        </p>
+      ));
+    });
+  };
+
+  const levelLabelMeta: Record<CourseDraftState['meta']['courseLevel'], string> = {
+    overview: 'Tổng quan',
+    intermediate: 'Trung cấp',
+    advance: 'Nâng cao',
+  };
+
+  const constraintLabel: Record<CourseDraftState['meta']['courseConstraint'], string> = {
+    professional: 'Chuyên nghiệp',
+    academic: 'Học thuật',
+    friendly: 'Gần gũi',
+    humorous: 'Dí dỏm',
   };
 
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold text-gray-900">Hoàn tất! Đã nhận phản hồi từ hệ thống</h2>
-        <p className="text-sm text-gray-600">Khóa học bên dưới được hiển thị trực tiếp từ dữ liệu hệ thống trả về. Bạn không cần biết JSON để xem.</p>
+        <h2 className="text-2xl font-semibold text-gray-900">Hoàn tất! {hasResult ? 'Khóa học đã sẵn sàng' : 'Đã gửi yêu cầu'}</h2>
+        <p className="text-sm text-gray-600">{hasResult ? 'Dưới đây là bản tóm tắt và nội dung khóa học.' : 'Hệ thống đang xử lý, bạn có thể ở lại trang này hoặc quay lại sau.'}</p>
       </div>
 
       {/* Input recap */}
       <div className="grid gap-4 rounded-xl border border-gray-200 bg-white p-6">
-        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Tóm tắt đầu vào</h3>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Tóm tắt đầu vào</h3>
+            <p className="text-xs text-gray-500">Thông tin bạn đã cung cấp để sinh khóa học.</p>
+          </div>
+          <Badge className={hasResult ? 'bg-emerald-500 text-white border-none' : 'bg-orange-100 text-orange-700 border-none'}>
+            {hasResult ? 'Đã tạo khóa học' : 'Đang xử lý'}
+          </Badge>
+        </div>
         <dl className="grid sm:grid-cols-2 gap-3 text-sm text-gray-800">
           <div>
-            <dt className="text-gray-500">User position</dt>
+            <dt className="text-gray-500">Vị trí người học</dt>
             <dd className="font-medium">{draft.meta.userPosition || '—'}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course level</dt>
-            <dd className="font-medium capitalize">{draft.meta.courseLevel}</dd>
+            <dt className="text-gray-500">Trình độ khóa học</dt>
+            <dd className="font-medium">{levelLabelMeta[draft.meta.courseLevel]}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course constraint</dt>
-            <dd className="font-medium capitalize">{draft.meta.courseConstraint}</dd>
+            <dt className="text-gray-500">Văn phong khóa học</dt>
+            <dd className="font-medium">{constraintLabel[draft.meta.courseConstraint]}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Course duration</dt>
+            <dt className="text-gray-500">Thời lượng</dt>
             <dd className="font-medium">{draft.meta.durationDays} ngày</dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-gray-500">Short user prompt</dt>
+            <dt className="text-gray-500">Prompt ngắn</dt>
             <dd className="font-medium whitespace-pre-wrap leading-relaxed">{draft.meta.shortPrompt || '—'}</dd>
           </div>
           <div className="sm:col-span-2 flex flex-wrap gap-2 items-center text-xs text-gray-600">
@@ -82,21 +120,28 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Course Output</p>
+            <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Kết quả khóa học</p>
             <h3 className="text-2xl font-bold text-gray-900">{result?.course_title || 'Đang chờ phản hồi...'}</h3>
             <p className="text-gray-700 leading-relaxed max-w-3xl">{result?.course_overview || 'Hệ thống đang xử lý phản hồi.'}</p>
           </div>
-          {result && (
-            <div className="flex flex-col items-end gap-2 text-sm text-gray-700">
-              <Badge className="bg-orange-500 text-white border-none">Level {result.course_level} · {levelLabel(result.course_level)}</Badge>
-              <span className="text-gray-600">Duration: {result.course_duration} ngày</span>
-            </div>
-          )}
+          <div className="flex flex-col items-end gap-2 text-sm text-gray-700">
+            <Badge className={result ? 'bg-orange-500 text-white border-none' : 'bg-gray-200 text-gray-700 border-none'}>
+              {result ? `Level ${result.course_level} · ${levelLabel(result.course_level)}` : 'Đang tạo' }
+            </Badge>
+            <span className="text-gray-600">Thời lượng: {result?.course_duration ? `${result.course_duration} ngày` : 'Đang tính toán'}</span>
+          </div>
         </div>
 
-        {result && (
+        {isPending && (
+          <div className="flex items-center justify-center gap-3 rounded-lg border border-dashed border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+            <span className="inline-flex h-3 w-3 rounded-full bg-orange-500 animate-pulse" aria-hidden />
+            Hệ thống đang xử lý khóa học của bạn. Bạn có thể ở lại trang này hoặc quay lại sau.
+          </div>
+        )}
+
+        {lessons.length > 0 && (
           <div className="space-y-4">
-            {result.course_lessons.map((lesson, idx) => (
+            {lessons.map((lesson, idx) => (
               <div key={lesson.lesson_title + idx} className="rounded-lg border border-gray-200 p-4 bg-gray-50 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -105,8 +150,8 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
                   </div>
                   <Badge variant="outline" className="border-gray-300 text-gray-700">Level {lesson.lesson_level}</Badge>
                 </div>
-                <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-gray-200 rounded-lg p-3">
-                  {lesson.lesson_content}
+                <div className="space-y-3 bg-white border border-gray-200 rounded-lg p-3">
+                  {renderContent(lesson.lesson_content || '')}
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-gray-800">Assessments</p>
@@ -144,19 +189,6 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
       </div>
 
       {/* Structured data (JSON) */}
-      <div className="rounded-xl border border-gray-900 bg-gray-950 text-gray-50">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 text-sm">
-          <span className="font-semibold">Dữ liệu chi tiết (máy đọc)</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Dữ liệu đã cấu trúc sẵn; hệ thống dùng để hiển thị. Bạn có thể sao chép nếu cần chuyển sang nơi khác.</span>
-            <Button size="sm" variant="secondary" onClick={handleCopy} disabled={!result}>
-              Sao chép dữ liệu
-            </Button>
-          </div>
-        </div>
-        <pre className="p-4 overflow-x-auto text-xs whitespace-pre-wrap">{jsonString || 'Đang chờ phản hồi...'}</pre>
-      </div>
-
       <div className="flex flex-wrap justify-center gap-3">
         <Button onClick={onGoToCourses} className="bg-orange-500 hover:bg-orange-600 text-white">Về trang khóa học</Button>
         <Button variant="outline" onClick={onRestart} className="border-gray-200">Tạo khóa học khác</Button>

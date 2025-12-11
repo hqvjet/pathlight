@@ -8,13 +8,14 @@ interface UploadStepProps {
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
   onFiles: (files: FileList | File[] | null) => void | Promise<void>;
-  onRetry: (file: File) => void;
+  onRetry: (file: File, id?: string) => void;
+  onRemoveUploading: (id: string) => void;
   onRemove: (id: string) => void;
   onNext: () => void;
   onCancel: () => void;
 }
 
-export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, onNext, onCancel }: UploadStepProps) {
+export function UploadStep({ documents, uploading, onFiles, onRetry, onRemoveUploading, onRemove, onNext, onCancel }: UploadStepProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -48,7 +49,7 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
     <div className="space-y-8">
       <div className="text-center space-y-2">
         <h2 className="text-lg font-semibold text-gray-800">Thêm tài liệu (tuỳ chọn)</h2>
-        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Có thể bỏ qua bước này và chỉ dùng Short user prompt.</p>
+        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Có thể bỏ qua bước này và chỉ dùng Prompt ngắn.</p>
       </div>
 
       <div
@@ -73,7 +74,10 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
           multiple
           accept=".pdf,.doc,.docx,.ppt,.pptx"
           className="hidden"
-          onChange={(e) => validateAndSend(e.target.files)}
+          onChange={(e) => {
+            validateAndSend(e.target.files);
+            if (inputRef.current) inputRef.current.value = '';
+          }}
         />
         {!hasFiles && (
           <div className="space-y-4">
@@ -108,10 +112,20 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
                       <span className="text-[10px] uppercase tracking-wide text-red-600 font-semibold">Lỗi</span>
                       <button
                         type="button"
-                        onClick={() => onRetry(f.file)}
+                        onClick={() => onRetry(f.file, f.id)}
                         className="px-2 py-1 text-xs rounded-md bg-orange-500 text-white hover:bg-orange-600"
                       >
                         Thử lại
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => f.id && onRemoveUploading(f.id)}
+                        className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        aria-label="Xóa file lỗi"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                       </button>
                     </div>
                   )}
@@ -153,7 +167,7 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemove, o
             uploading.length === 0 ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-400'
           )}
         >
-          Tiếp tục (không cần file)
+          {hasFiles ? 'Tiếp tục' : 'Tiếp tục (không cần file)'}
         </button>
       </div>
     </div>

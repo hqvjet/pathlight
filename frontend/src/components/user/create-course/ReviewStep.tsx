@@ -8,6 +8,19 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ draft, onBack, onSubmit }: ReviewStepProps) {
+  const levelLabel: Record<CourseDraftState['meta']['courseLevel'], string> = {
+    overview: 'Tổng quan',
+    intermediate: 'Trung cấp',
+    advance: 'Nâng cao',
+  };
+
+  const constraintLabel: Record<CourseDraftState['meta']['courseConstraint'], string> = {
+    professional: 'Chuyên nghiệp',
+    academic: 'Học thuật',
+    friendly: 'Gần gũi',
+    humorous: 'Dí dỏm',
+  };
+
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -19,25 +32,25 @@ export function ReviewStep({ draft, onBack, onSubmit }: ReviewStepProps) {
           <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Thông tin khóa học</h3>
           <dl className="grid sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-gray-500">User position</dt>
+              <dt className="text-gray-500">Vị trí người học</dt>
               <dd className="font-medium text-gray-800">{draft.meta.userPosition || '—'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Course level</dt>
-              <dd className="font-medium text-gray-800 capitalize">{draft.meta.courseLevel}</dd>
+              <dt className="text-gray-500">Trình độ khóa học</dt>
+              <dd className="font-medium text-gray-800">{levelLabel[draft.meta.courseLevel]}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Course constraint</dt>
-              <dd className="font-medium text-gray-800 capitalize">{draft.meta.courseConstraint}</dd>
+              <dt className="text-gray-500">Văn phong khóa học</dt>
+              <dd className="font-medium text-gray-800">{constraintLabel[draft.meta.courseConstraint]}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Course duration (ngày)</dt>
+              <dt className="text-gray-500">Thời lượng (ngày)</dt>
               <dd className="font-medium text-gray-800">{draft.meta.durationDays}</dd>
             </div>
           </dl>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Short user prompt</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Prompt ngắn</h3>
           <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{draft.meta.shortPrompt || '—'}</p>
         </div>
         <div>

@@ -9,6 +9,24 @@ import React from 'react';
 import GlobalNavWrapper from '@/components/layout/GlobalNavWrapper';
 import { AuthProvider } from '@/context/AuthContext';
 
+// Harden runtime against environments exposing a broken global localStorage (e.g. dev nodes started with --localstorage-file).
+if (typeof globalThis !== 'undefined') {
+  const g = globalThis as unknown as { localStorage?: Storage };
+  const ls = g.localStorage as Storage | undefined;
+  const needsPolyfill = !ls || typeof ls.getItem !== 'function';
+  if (needsPolyfill) {
+    const store = new Map<string, string>();
+    g.localStorage = {
+      getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+      setItem: (key: string, value: string) => { store.set(key, String(value)); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => { store.clear(); },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() { return store.size; },
+    } as Storage;
+  }
+}
+
 const montserrat = Montserrat({
   subsets: ['latin'],
   variable: '--font-montserrat',

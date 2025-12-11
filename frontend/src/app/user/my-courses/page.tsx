@@ -5,6 +5,7 @@ import { courseApi } from '@/lib/api/course';
 import { CourseCard, CourseCardData } from '@/components/user/courses/CourseCard';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 type SortOption = 'latest' | 'progress_desc' | 'title_asc';
 
@@ -57,6 +58,7 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Chào buổi sáng';
@@ -103,47 +105,32 @@ export default function MyCoursesPage() {
     return list;
   }, [courses, search, sort]);
 
-  const highlight = filtered[0] || courses[0];
+  const heroCourse = selectedId ? filtered.find((c) => c.id === selectedId) : null;
+  const remaining = heroCourse ? filtered.filter((c) => c.id !== heroCourse.id) : filtered;
+
+  useEffect(() => {
+    if (selectedId && !filtered.find((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [filtered, selectedId]);
+
+  const handleSelect = (course: CourseCardData) => {
+    setSelectedId(course.id);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {highlight && (
-        <CourseHero course={highlight} />
-      )}
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3 justify-between">
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
           <div>
             <p className="text-sm text-gray-500">{greeting}</p>
             <h2 className="text-2xl font-semibold text-gray-900">Khóa Học Của Tôi</h2>
           </div>
+          <div className="flex-1" />
           <div className="flex items-center gap-2 text-sm">
-            <div className="relative">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm khóa học..."
-                className="w-72 sm:w-80 lg:w-96 h-11 pl-10 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
-              />
-              <svg className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <div className="relative">
-              <span className="absolute -top-5 left-0 text-[11px] font-semibold text-gray-500 tracking-wide uppercase">Sắp xếp</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortOption)}
-                className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
-              >
-                <option value="latest">Mới nhất</option>
-                <option value="progress_desc">Tiến độ cao</option>
-                <option value="title_asc">Tên A-Z</option>
-              </select>
-              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
             <a
               href="/user/generation-tracking"
               className="inline-flex items-center gap-2 px-5 h-11 rounded-full border border-gray-200 bg-white text-gray-900 font-semibold shadow-sm hover:shadow-md"
@@ -164,7 +151,52 @@ export default function MyCoursesPage() {
             </a>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-3 justify-between mt-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm khóa học..."
+              className="w-full h-11 pl-10 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
+            />
+            <svg className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
+            >
+              <option value="latest">Mới nhất</option>
+              <option value="progress_desc">Tiến độ cao</option>
+              <option value="title_asc">Tên A-Z</option>
+            </select>
+            <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </header>
 
+      {heroCourse && (
+        <div className="transition-all duration-500 ease-out" key={heroCourse.id}>
+          <CourseHero
+            course={heroCourse}
+            actions={(
+              <Link
+                href={`/user/my-courses/${heroCourse.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
+              >
+                Xem chi tiết →
+              </Link>
+            )}
+          />
+        </div>
+      )}
+
+      <section className="space-y-4">
         {loading && (
           <div className="bg-white rounded-xl p-10 text-center border border-gray-100 shadow-sm">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto" />
@@ -177,11 +209,16 @@ export default function MyCoursesPage() {
         )}
 
         {!loading && !error && (
-          <div className="grid gap-5 md:grid-cols-2">
-            {filtered.map((course) => (
-              <CourseCard key={course.id} course={course} />
+          <div className="grid gap-5 md:grid-cols-2 auto-rows-fr">
+            {remaining.map((course) => (
+              <div
+                key={course.id}
+                className="transition-all duration-300 ease-in-out hover:-translate-y-0.5"
+              >
+                <CourseCard course={course} onSelect={handleSelect} />
+              </div>
             ))}
-            {filtered.length === 0 && (
+            {remaining.length === 0 && (
               <div className="bg-white rounded-xl p-10 text-center border border-dashed border-gray-300">
                 <p className="text-gray-600">Không tìm thấy khóa học phù hợp.</p>
               </div>

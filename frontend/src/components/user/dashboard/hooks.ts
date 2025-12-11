@@ -11,6 +11,27 @@ export function useDashboard(onLogout: () => void) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const normalizeAvatarUrl = useCallback((id?: string, avatarUrl?: string) => {
+    if (id) return `/api/users/avatar?user-id=${encodeURIComponent(id)}`;
+    if (avatarUrl) return avatarUrl;
+    return '/assets/images/default_avatar.png';
+  }, []);
+
+  const normalizeLeaderboard = useCallback((list: LeaderboardUser[] | undefined | null) => {
+    if (!Array.isArray(list)) return [] as LeaderboardUser[];
+    return list.map((u, idx) => {
+      const normalizedId = (u as LeaderboardUser & { user_id?: string }).user_id || u.id;
+      const googleAvatar = (u as { google_avatar_url?: string }).google_avatar_url || u.avatar_url;
+      return {
+        ...u,
+        id: normalizedId,
+        avatar_url: normalizeAvatarUrl(normalizedId, u.avatar_url),
+        google_avatar_url: googleAvatar,
+        avatarKey: Date.now() + idx,
+      };
+    });
+  }, [normalizeAvatarUrl]);
+
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
   const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -33,21 +54,24 @@ export function useDashboard(onLogout: () => void) {
           onLogout();
           return;
         }
-        try {
-          const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
-          if (cached) {
-            const { data, timestamp } = JSON.parse(cached);
-            if (Date.now() - timestamp < CACHE_EXPIRY_MS) {
-              setUser(data.user);
-              setDashboardData(data.dashboardData);
-              setLoading(false);
-              return;
-            } else {
-              localStorage.removeItem(DASHBOARD_CACHE_KEY);
+        const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
+        if (canUseStorage) {
+          try {
+            const cached = window.localStorage.getItem(DASHBOARD_CACHE_KEY);
+            if (cached) {
+              const { data, timestamp } = JSON.parse(cached);
+              if (Date.now() - timestamp < CACHE_EXPIRY_MS) {
+                setUser(data.user);
+                setDashboardData(data.dashboardData);
+                setLoading(false);
+                return;
+              } else {
+                window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
+              }
             }
+          } catch (cacheError) {
+            if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
           }
-        } catch (cacheError) {
-          if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
         }
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
         const response = await Promise.race([api.user.getDashboard(), timeoutPromise]);
@@ -61,8 +85,7 @@ export function useDashboard(onLogout: () => void) {
         const userInfo: UserProfile = (raw && typeof raw === 'object' && 'info' in raw)
           ? (raw as { info?: UserProfile }).info || { email: '', name: '', id: '' }
           : (raw as UserProfile);
-        const dashboardInfo: DashboardData = { info: userInfo as UserProfile & { user_top_rank?: LeaderboardUser[] } };
-        setDashboardData(dashboardInfo);
+        const leaderboard = normalizeLeaderboard(userInfo.user_top_rank);
         const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
         const profileData: UserProfile = {
           id: userInfo.id || '',
@@ -70,7 +93,8 @@ export function useDashboard(onLogout: () => void) {
           name: fullName,
           given_name: userInfo.given_name,
           family_name: userInfo.family_name,
-          avatar_url: userInfo.avatar_url ? userInfo.avatar_url : (userInfo.id ? `/user/avatar?user-id=${userInfo.id}` : undefined),
+          avatar_url: normalizeAvatarUrl(userInfo.id, userInfo.avatar_url),
+          avatarKey: Date.now(),
           remind_time: userInfo.remind_time,
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,
@@ -82,10 +106,15 @@ export function useDashboard(onLogout: () => void) {
           average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
           rank: userInfo.rank || 1,
           user_num: userInfo.user_num || 1,
+          user_top_rank: leaderboard,
         };
+        const dashboardInfo: DashboardData = { info: { ...(profileData as UserProfile), user_top_rank: leaderboard } as UserProfile & { user_top_rank?: LeaderboardUser[] } };
+        setDashboardData(dashboardInfo);
         setUser(profileData);
         setLoading(false);
-        try { localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ user: profileData, dashboardData: dashboardInfo, timestamp: Date.now() })); } catch {}
+        if (canUseStorage) {
+          try { window.localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ user: profileData, dashboardData: dashboardInfo, timestamp: Date.now() })); } catch {}
+        }
         if (!userInfo.remind_time) setTimeout(() => router.replace('/user/study-time-setup'), 100);
       } catch (error) {
         setLoading(false);
@@ -97,31 +126,35 @@ export function useDashboard(onLogout: () => void) {
       }
     };
     fetchProfile();
-  }, [CACHE_EXPIRY_MS, onLogout, router]);
+  }, [CACHE_EXPIRY_MS, normalizeAvatarUrl, normalizeLeaderboard, onLogout, router]);
 
   return { user, dashboardData, loading };
 }
 
 export function useActivity() {
    const [activityData, setActivityData] = useState<Record<string, number>>({});
+   const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
 
    useEffect(() => {
-     try { const saved = localStorage.getItem('pathlight_activity_data'); if (saved) setActivityData(JSON.parse(saved)); } catch {}
-   }, []);
+     if (!canUseStorage) return;
+     try { const saved = window.localStorage.getItem('pathlight_activity_data'); if (saved) setActivityData(JSON.parse(saved)); } catch {}
+   }, [canUseStorage]);
 
    useEffect(() => {
      if (Object.keys(activityData).length === 0) return;
-     const timeoutId = setTimeout(() => { try { localStorage.setItem('pathlight_activity_data', JSON.stringify(activityData)); } catch {} }, 500);
+     if (!canUseStorage) return;
+     const timeoutId = setTimeout(() => { try { window.localStorage.setItem('pathlight_activity_data', JSON.stringify(activityData)); } catch {} }, 500);
      return () => clearTimeout(timeoutId);
-   }, [activityData]);
+   }, [activityData, canUseStorage]);
 
-   const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
-      const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
-      const newActivityData = { ...activityData, [dateKey]: newLevel };
-      setActivityData(newActivityData);
-      if (window?.requestIdleCallback) window.requestIdleCallback(()=> localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)));
-      else setTimeout(()=> localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)),0);
-    }, [activityData]);
+  const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
+    const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
+    const newActivityData = { ...activityData, [dateKey]: newLevel };
+    setActivityData(newActivityData);
+    if (!canUseStorage) return;
+    if (window?.requestIdleCallback) window.requestIdleCallback(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)));
+    else setTimeout(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)),0);
+   }, [activityData, canUseStorage]);
 
    const generateYearActivityData = useMemo(() => (year: number) => {
       const activities = [] as { date: Date; level: number; count: number; isCurrentYear: boolean; dateKey: string }[];
@@ -133,7 +166,7 @@ export function useActivity() {
       return activities;
     }, [activityData]);
 
-   const clearActivityData = () => { setActivityData({}); localStorage.removeItem('pathlight_activity_data'); };
+  const clearActivityData = () => { setActivityData({}); if (canUseStorage) window.localStorage.removeItem('pathlight_activity_data'); };
 
    return { activityData, handleActivityClick, generateYearActivityData, clearActivityData };
 }

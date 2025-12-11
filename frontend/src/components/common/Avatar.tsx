@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
-import { getAvatarUrl, getUserInitials, type AvatarUser } from '@/utils/avatar';
+import { getAvatarSources, getUserInitials, type AvatarUser } from '@/utils/avatar';
 
 interface AvatarProps {
   user: AvatarUser;
@@ -24,40 +24,71 @@ export default function Avatar({
   displayName,
   cacheKey
 }: AvatarProps) {
+  const [sourceIndex, setSourceIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
   const loadedRef = useRef(false);
-  
-  const avatarUrl = getAvatarUrl(user);
-  // Append version param if cacheKey provided (stable between renders until changed)
-  const versionedAvatarUrl = cacheKey !== undefined && cacheKey !== null
-    ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}v=${cacheKey}`
-    : avatarUrl;
-  const defaultAvatarUrl = '/assets/images/default_avatar.png';
+  const [timerId, setTimerId] = useState<number | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetriesPerSource = 2;
+
+  const rawSources = getAvatarSources(user);
+  const applyCache = (url: string) => {
+    if (!url) return url;
+    if (/^data:/.test(url)) return url;
+    const version = cacheKey !== undefined && cacheKey !== null ? cacheKey : '0';
+    return `${url}${url.includes('?') ? '&' : '?'}v=${version}-${retryNonce}`;
+  };
+  const sources = rawSources.map(applyCache);
   const finalAlt = alt || `${displayName || user.id || 'User'} avatar`;
-  
+
   useEffect(() => {
+    setSourceIndex(0);
     setHasError(false);
     loadedRef.current = false;
-  }, [user?.id, user?.avatar_url, user?.avatar_id]);
+    setRetryNonce(0);
+    setRetryCount(0);
+    if (timerId) window.clearTimeout(timerId);
+  }, [user?.id, user?.avatar_url, user?.avatar_id, cacheKey, timerId]);
 
-  // Client-side timeout safety: if avatar takes too long, fallback gracefully
   useEffect(() => {
-    if (!versionedAvatarUrl || hasError) return;
-    const timeoutMs = 5000; // 5s timeout for avatars
-    const timer = window.setTimeout(() => {
-      if (!loadedRef.current) {
-        setHasError(true);
-      }
+    if (!sources[sourceIndex] || hasError) return;
+    const timeoutMs = 7000;
+    const t = window.setTimeout(() => {
+      if (!loadedRef.current) handleImageError();
     }, timeoutMs);
-    return () => window.clearTimeout(timer);
+    setTimerId(t as unknown as number);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versionedAvatarUrl]);
-  
+  }, [sourceIndex, sources.join('|'), hasError, retryNonce]);
+
+  useEffect(() => {
+    setRetryCount(0);
+  }, [sourceIndex]);
+
   const handleImageError = () => {
-    setHasError(true);
+    const currentSrc = sources[sourceIndex] || '';
+    const isS3 = currentSrc.includes('/api/users/avatar');
+    if (isS3 && retryCount < maxRetriesPerSource) {
+      setRetryCount((r) => r + 1);
+      setRetryNonce((n) => n + 1); // cache-bust and retry same source
+      loadedRef.current = false;
+      return;
+    }
+    const nextIndex = sourceIndex + 1;
+    if (nextIndex < sources.length) {
+      setSourceIndex(nextIndex);
+      loadedRef.current = false;
+    } else {
+      setHasError(true);
+    }
   };
 
-  // Initials fallback if enabled and image failed
+  const handleLoad = () => {
+    loadedRef.current = true;
+    if (timerId) window.clearTimeout(timerId);
+  };
+
   if (showInitialsFallback && hasError) {
     const initials = getUserInitials(displayName || user.id || '?');
     return (
@@ -76,24 +107,20 @@ export default function Avatar({
     );
   }
 
-  // Image avatar with fallback to default
-  const srcToUse = hasError ? defaultAvatarUrl : versionedAvatarUrl;
+  const currentSrc = sources[sourceIndex] || '/assets/images/default_avatar.png';
 
   return (
     <Image
-      src={srcToUse}
+      src={currentSrc}
       alt={finalAlt}
       width={size}
       height={size}
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
-  onLoadingComplete={() => { loadedRef.current = true; }}
-  priority={size > 64}
-  // Avoid Next.js image optimization proxy to prevent upstream timeouts (504)
-  // when the avatar endpoint is slow. Let the browser fetch directly and
-  // fall back via onError to a local placeholder.
-  unoptimized
-  loading={size > 64 ? undefined : 'lazy'}
+      onLoad={handleLoad}
+      priority={size > 64}
+      unoptimized
+      loading={size > 64 ? undefined : 'lazy'}
     />
   );
 }

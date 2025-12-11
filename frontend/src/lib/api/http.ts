@@ -55,30 +55,41 @@ class TokenManager {
     return TokenManager.instance;
   }
   getToken() {
-    if (typeof window === 'undefined') return null;
+    const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
+    if (!canUseStorage) return null;
     // Prefer cookie-based token via unified storage util (auth_token or session_token)
     const cookieToken = storage.getToken();
     if (cookieToken) return cookieToken;
     // Fallback to legacy localStorage for backward compatibility
-    return localStorage.getItem(STORAGE_KEYS.TOKEN);
+    return window.localStorage.getItem(STORAGE_KEYS.TOKEN);
   }
   setToken(token: string) {
-    if (typeof window === 'undefined') return;
+    const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function';
+    if (!canUseStorage) return;
     // Write to cookies (session) for consistency; localStorage kept for backward compat.
     storage.setToken(token, true);
-    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+    window.localStorage.setItem(STORAGE_KEYS.TOKEN, token);
   }
   removeToken() {
-    if (typeof window === 'undefined') return;
-  // Clear cookie/session tokens via unified storage util first
-  try { storage.removeToken(); } catch {}
-  // Backward compatibility cleanup
-  localStorage.removeItem(STORAGE_KEYS.TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.USER);
+    const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.removeItem === 'function';
+    if (!canUseStorage) return;
+    // Clear cookie/session tokens via unified storage util first
+    try { storage.removeToken(); } catch {}
+    // Backward compatibility cleanup
+    window.localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    window.localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+    window.localStorage.removeItem(STORAGE_KEYS.USER);
   }
-  getRefreshToken() { return typeof window === 'undefined' ? null : localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN); }
-  setRefreshToken(token: string) { if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token); }
+  getRefreshToken() {
+    const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
+    if (!canUseStorage) return null;
+    return window.localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+  }
+  setRefreshToken(token: string) {
+    const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function';
+    if (!canUseStorage) return;
+    window.localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
+  }
   async refreshToken(): Promise<string> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = this.performTokenRefresh();
@@ -209,11 +220,12 @@ export class ApiClient {
   put<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'PUT', body: data ? JSON.stringify(data) : undefined }); }
   patch<T>(endpoint: string, data?: unknown, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'PATCH', body: data ? JSON.stringify(data) : undefined }); }
   delete<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'DELETE' }); }
-  async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}) {
+  async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}, fieldName = 'file') {
     const url = this.buildUrl(endpoint, config.baseURL);
-  const formData = new FormData(); formData.append('file', file, file.name);
-  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
-  return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
+    const formData = new FormData(); formData.append(fieldName, file, file.name);
+    const method = (config.method || 'POST').toUpperCase();
+    const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    return this.executeWithRetry<T>(url, { ...config, method, body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
