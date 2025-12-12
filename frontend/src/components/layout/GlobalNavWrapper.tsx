@@ -17,11 +17,21 @@ export default function GlobalNavWrapper() {
 
   if (!ready) return null; // avoid hydration mismatch
 
-  if (pathname.startsWith('/user/')) return null;
+  // Hide global nav on dashboard-like pages and auth flows to avoid stale header flashes
+  if (pathname.startsWith('/user/') || pathname.startsWith('/auth/')) return null;
 
   if (isAuthenticated) {
     // user?.name might be undefined until first profile fetch resolves; NavBarAuth shows skeleton then
-    const avatarUser = user ? { id: user.id, name: user.name, avatar_url: user.avatar_url, google_avatar_url: user.google_avatar_url, rank: (user as { rank?: number }).rank } : undefined;
+    const avatarUser = user
+      ? {
+          id: user.id,
+          name: user.name,
+          avatar_url: user.avatar_url,
+          google_avatar_url: user.google_avatar_url,
+          avatarKey: (user as { avatarKey?: number }).avatarKey,
+          rank: (user as { rank?: number }).rank,
+        }
+      : undefined;
     return <NavBarAuth user={avatarUser} onLogout={logout} />;
   }
   return <NavBarPublic />;

@@ -18,6 +18,8 @@ from schemas.user_schemas import (
     AdminUpdateEmailRequest,
     AdminCostResponse,
     AdminLogsResponse,
+    ExperienceAddRequest,
+    TestStatsResponse,
 )
 from models import User
 from controllers.user_controller import (
@@ -33,6 +35,7 @@ from controllers.user_controller import (
     admin_delete_user,
     get_admin_aws_costs,
     get_admin_logs,
+    add_experience,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 from services.avatar_service import get_avatar_bytes  # bytes version
@@ -175,6 +178,15 @@ async def get_dashboard(
     db: Session = Depends(get_db)
 ):
     return await get_user_dashboard(current_user, db)
+
+
+@router.post("/experience/add", response_model=TestStatsResponse)
+async def add_experience_endpoint(
+    request: ExperienceAddRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return await add_experience(request, current_user, db)
 
 # 2.8. Lưu cột mốc hoạt động của USER
 @router.post("/activity", response_model=MessageResponse)

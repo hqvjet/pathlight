@@ -21,6 +21,8 @@ class CourseConfig:
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://user-service:8001")
+
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 

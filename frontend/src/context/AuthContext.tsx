@@ -14,6 +14,7 @@ export interface AuthUser {
   last_name?: string;
   avatar_url?: string;
   google_avatar_url?: string;
+  avatarKey?: number;
   name?: string; // derived full name for convenience
   level?: number;
   current_exp?: number;
@@ -110,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nameComposite = [first, last].filter(Boolean).join(' ').trim();
     const name = nameComposite || derivedName || email || 'User';
     const normalizedAvatar = id ? `/api/users/avatar?user-id=${encodeURIComponent(id)}` : avatar_url;
-    return { id, email, first_name: first, last_name: last, avatar_url: normalizedAvatar, google_avatar_url, name, level, current_exp, require_exp, remind_time, rank };
+    return { id, email, first_name: first, last_name: last, avatar_url: normalizedAvatar, google_avatar_url, name, level, current_exp, require_exp, remind_time, rank, avatarKey: Date.now() } as AuthUser & { avatarKey?: number };
   };
 
   const refreshUser = useCallback(async (): Promise<AuthUser | null> => {

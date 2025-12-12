@@ -65,6 +65,38 @@ interface LessonTestResponseApi {
   message?: string;
 }
 
+interface LessonTestSubmitResultItemApi {
+  qa_id: string;
+  selected_answer: string;
+  correct_answer: string;
+  is_correct: boolean;
+  difficulty?: number | null;
+  gained_exp: number;
+  penalty_exp: number;
+}
+
+interface LessonTestSubmitResultApi {
+  score: number;
+  correct_count: number;
+  total: number;
+  earned_exp: number;
+  penalty_exp: number;
+  applied_exp: number;
+  passed: boolean;
+  pass_threshold: number;
+  level?: number | null;
+  current_exp?: number | null;
+  require_exp?: number | null;
+  level_up?: boolean | null;
+  answers: LessonTestSubmitResultItemApi[];
+}
+
+interface LessonTestSubmitResponseApi {
+  status: number;
+  result?: LessonTestSubmitResultApi;
+  message?: string;
+}
+
 interface LessonListItemApi {
   lesson_id: string;
   title: string;
@@ -102,8 +134,6 @@ type NormalizedQuestion = {
 };
 
 const HINT_COST = 50;
-const BASE_EXP_PER_CORRECT = 20;
-const PASS_BONUS = 50;
 const requiredExpForLevel = (level: number) => 200 + 75 * Math.max(0, level - 1);
 
 export default function LessonDetailPage({ params }: PageProps) {
@@ -119,6 +149,7 @@ export default function LessonDetailPage({ params }: PageProps) {
   const [score, setScore] = useState<number | null>(null);
   const [passed, setPassed] = useState(false);
   const [earnedExp, setEarnedExp] = useState<number | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<LessonTestSubmitResultApi | null>(null);
   const [showTest, setShowTest] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -222,6 +253,8 @@ export default function LessonDetailPage({ params }: PageProps) {
       return test.qas.map((qa, idx) => {
         const optionKeys = ['option1', 'option2', 'option3', 'option4'] as const;
         const correctKey = qa.correct_answer || qa.answer;
+        const isTextAnswer = Boolean(correctKey && correctKey.length > 1);
+        const normalizedCorrect = correctKey?.trim().toLowerCase();
         const explanation = qa.explanation || qa.answer_explanation;
         return {
           id: qa.qa_id || `qa-${idx}`,
@@ -230,11 +263,17 @@ export default function LessonDetailPage({ params }: PageProps) {
           explanation,
           difficult_level_id: qa.difficult_level_id,
           options: optionKeys
-            .map((key) => ({
-              id: key,
-              content: qa[key],
-              isCorrect: correctKey ? correctKey === key : false,
-            }))
+            .map((key) => {
+              const content = qa[key];
+              const isCorrect = isTextAnswer
+                ? Boolean(content && normalizedCorrect && content.trim().toLowerCase() === normalizedCorrect)
+                : Boolean(correctKey && correctKey === key);
+              return {
+                id: key,
+                content,
+                isCorrect,
+              };
+            })
             .filter((opt) => Boolean(opt.content)),
         } as NormalizedQuestion;
       });
@@ -249,6 +288,14 @@ export default function LessonDetailPage({ params }: PageProps) {
     [answers, questions],
   );
 
+  const answerMap = useMemo(() => {
+    if (!submissionResult) return {} as Record<string, LessonTestSubmitResultItemApi>;
+    return submissionResult.answers.reduce((acc, item) => {
+      acc[item.qa_id] = item;
+      return acc;
+    }, {} as Record<string, LessonTestSubmitResultItemApi>);
+  }, [submissionResult]);
+
   const hintCount = useMemo(() => Object.values(visibleHints).filter(Boolean).length, [visibleHints]);
   const hintSpent = useMemo(() => hintCount * HINT_COST, [hintCount]);
   const availableExp = useMemo(() => Math.max(0, playerExp - hintSpent), [playerExp, hintSpent]);
@@ -262,47 +309,50 @@ export default function LessonDetailPage({ params }: PageProps) {
       showToast.info('Bài học này chưa có câu hỏi');
       return;
     }
-    if (questions.some((q) => !q.options.some((o) => o.isCorrect))) {
-      showToast.info('Bài test chưa có đáp án đúng để chấm điểm');
+    if (answeredCount < questions.length) {
+      showToast.info('Vui lòng trả lời hết các câu hỏi');
       return;
     }
-    const total = questions.length;
-    const correct = questions.reduce((acc, q) => acc + (q.options.some((o) => o.isCorrect && answers[q.id] === o.id) ? 1 : 0), 0);
-    const calculated = Math.round((correct / total) * 100);
-    const baseExp = correct * BASE_EXP_PER_CORRECT;
-    const bonusExp = calculated >= 80 ? PASS_BONUS : 0;
-    const earned = Math.max(0, baseExp + bonusExp - hintSpent);
-
-    setScore(calculated);
-    setEarnedExp(earned);
-    const isPassed = calculated >= 80;
-    setPassed(isPassed);
     setSubmitting(true);
     try {
-      if (isPassed) {
-        await courseApi.finishLesson(courseId, lessonId);
-        showToast.success('Đạt yêu cầu 80%. Bạn có thể sang bài tiếp theo.');
-      } else {
-        showToast.error('Cần đạt tối thiểu 80% số câu để qua bài.');
+      const payload = {
+        answers: questions.map((q) => ({ qa_id: q.id, answer: answers[q.id] || '' })),
+      };
+      const resp = await courseApi.submitLessonTest(courseId, lessonId, payload);
+      const data = resp.data as LessonTestSubmitResponseApi;
+      if (data.status !== 200 || !data.result) {
+        throw new Error(data.message || 'Chấm bài không thành công');
+      }
+      const result = data.result;
+      setSubmissionResult(result);
+      setScore(result.score);
+      setPassed(result.passed);
+      const adjustedExp = Math.max(0, (result.applied_exp || 0) - hintSpent);
+      setEarnedExp(adjustedExp);
+      setReviewMode(true);
+      showToast.success(result.passed ? 'Đạt yêu cầu 80%. Bạn có thể sang bài tiếp theo.' : 'Chưa đạt 80%. Hãy thử lại.');
+
+      // Update EXP/level locally based on returned EXP and hint spending
+      let expPool = playerExp + adjustedExp;
+      let nextLevel = playerLevel;
+      let nextRequireExp = requireExp;
+      while (expPool >= nextRequireExp) {
+        expPool -= nextRequireExp;
+        nextLevel += 1;
+        nextRequireExp = requiredExpForLevel(nextLevel);
+      }
+      setPlayerExp(expPool);
+      setPlayerLevel(nextLevel);
+      setRequireExp(nextRequireExp);
+
+      if (result.passed) {
+        setShowTest(true);
       }
     } catch (e: unknown) {
-      showToast.error(e instanceof Error ? e.message : 'Không thể cập nhật tiến độ');
+      showToast.error(e instanceof Error ? e.message : 'Không thể chấm bài');
     } finally {
       setSubmitting(false);
     }
-
-    // Update EXP/level locally for the game-like experience
-    let expPool = playerExp + earned;
-    let nextLevel = playerLevel;
-    let nextRequireExp = requireExp;
-    while (expPool >= nextRequireExp) {
-      expPool -= nextRequireExp;
-      nextLevel += 1;
-      nextRequireExp = requiredExpForLevel(nextLevel);
-    }
-    setPlayerExp(expPool);
-    setPlayerLevel(nextLevel);
-    setRequireExp(nextRequireExp);
   };
 
   const goNext = () => {
@@ -316,6 +366,7 @@ export default function LessonDetailPage({ params }: PageProps) {
       return;
     }
     setReviewMode(false);
+    setSubmissionResult(null);
     setScore(null);
     setPassed(false);
     setEarnedExp(null);
@@ -330,6 +381,7 @@ export default function LessonDetailPage({ params }: PageProps) {
     setEarnedExp(null);
     setPassed(false);
     setReviewMode(false);
+    setSubmissionResult(null);
     setVisibleHints({});
     setCurrentQuestion(0);
   };
@@ -650,7 +702,8 @@ export default function LessonDetailPage({ params }: PageProps) {
                     {questions.map((q, idx) => {
                       const answered = Boolean(answers[q.id]);
                       const isCurrent = currentQuestion === idx;
-                      const isCorrect = reviewMode && q.options.some((o) => o.isCorrect && answers[q.id] === o.id);
+                      const serverItem = answerMap[q.id];
+                      const isCorrect = reviewMode && serverItem?.is_correct;
                       return (
                         <button
                           key={q.id}
@@ -712,13 +765,16 @@ export default function LessonDetailPage({ params }: PageProps) {
                       )}
 
                       <div className="grid sm:grid-cols-2 gap-3">
-                        {questions[currentQuestion].options.map((opt) => {
+                          {questions[currentQuestion].options.map((opt) => {
                           const q = questions[currentQuestion];
                           const userChoice = answers[q.id];
                           const isSelected = userChoice === opt.id;
                           const showReview = reviewMode;
-                          const showCorrect = showReview && opt.isCorrect;
-                          const showIncorrect = showReview && isSelected && !opt.isCorrect;
+                            const serverItem = answerMap[q.id];
+                            const serverCorrectId = serverItem?.correct_answer;
+                            const isCorrectOption = serverCorrectId ? serverCorrectId === opt.id : opt.isCorrect;
+                            const showCorrect = showReview && isCorrectOption;
+                            const showIncorrect = showReview && isSelected && !isCorrectOption;
                           return (
                             <label
                               key={opt.id}
@@ -808,8 +864,12 @@ export default function LessonDetailPage({ params }: PageProps) {
                   <span className={passed ? 'text-emerald-700' : 'text-red-600'}>
                     Điểm: {score}% {passed ? '(Đạt yêu cầu)' : '(Chưa đạt)'}
                   </span>
-                  <span className="text-blue-700">EXP: {earnedExp ?? 0}</span>
+                  {submissionResult && (
+                    <span className="text-blue-700">EXP hệ thống: {submissionResult.applied_exp}</span>
+                  )}
+                  <span className="text-blue-700">EXP sau gợi ý: {earnedExp ?? 0}</span>
                   {hintSpent > 0 && <span className="text-gray-500 font-normal">(-{hintSpent} EXP do mở gợi ý)</span>}
+                  <span className="text-gray-700">Lv {playerLevel} · Còn {requireExp - playerExp} EXP để lên Lv {playerLevel + 1}</span>
                 </div>
               )}
               {passed && nextLessonId && (

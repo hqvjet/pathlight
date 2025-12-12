@@ -18,14 +18,14 @@ export default function NavBarAuth({ user, onLogout, showLogoutButton = true }: 
             {user ? (
               <>
                 <div className="hidden sm:flex items-center gap-3">
-                  <Avatar user={avatarUser} size={40} className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-gray-200" displayName={avatarUser.name || 'User'} showInitialsFallback cacheKey={avatarUser.avatarKey} />
+                  <Avatar user={avatarUser} size={40} className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-gray-200" displayName={avatarUser.name || 'User'} showInitialsFallback cacheKey={avatarUser.avatarKey ?? avatarUser.id} />
                   <div className="hidden md:block">
                     <div className="text-sm text-gray-600">Xin chào,</div>
                     <div className="text-sm font-semibold text-gray-800 truncate max-w-32 lg:max-w-48">{avatarUser.name}</div>
                   </div>
                 </div>
                 <div className="sm:hidden">
-                  <Avatar user={avatarUser} size={32} className="w-8 h-8 border-2 border-gray-200" displayName={avatarUser.name || 'User'} showInitialsFallback cacheKey={avatarUser.avatarKey} />
+                  <Avatar user={avatarUser} size={32} className="w-8 h-8 border-2 border-gray-200" displayName={avatarUser.name || 'User'} showInitialsFallback cacheKey={avatarUser.avatarKey ?? avatarUser.id} />
                 </div>
               </>
             ) : (

@@ -44,7 +44,14 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
           />
         </svg>
         <div className="absolute inset-[7px] rounded-full bg-white shadow-lg flex items-center justify-center">
-          <Avatar user={{ ...user, avatar_url: user.id ? `/api/users/avatar?user-id=${encodeURIComponent(user.id)}` : '/assets/images/default_avatar.png' }} size={size} displayName={user.name} showInitialsFallback cacheKey={user.id} className="shadow-md" />
+          <Avatar
+            user={{ ...user, avatar_url: user.id ? `/api/users/avatar?user-id=${encodeURIComponent(user.id)}` : '/assets/images/default_avatar.png' }}
+            size={size}
+            displayName={user.name}
+            showInitialsFallback
+            cacheKey={user.avatarKey ?? user.id}
+            className="shadow-md"
+          />
         </div>
       </div>
     );
@@ -96,7 +103,7 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users
         {users.slice(3,10).map(u => (
           <tr key={u.rank} className="hover:bg-gray-50 transition-colors">
             <td className="py-3 px-4 font-medium text-gray-700">{u.rank}</td>
-            <td className="py-3 px-4"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.id} /></td>
+            <td className="py-3 px-4"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
             <td className="py-3 px-4 font-medium text-gray-800 truncate max-w-[140px]">{u.name}</td>
             <td className="py-3 px-4 font-semibold text-violet-600">{u.level}</td>
           </tr>

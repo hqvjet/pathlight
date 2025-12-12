@@ -147,3 +147,7 @@ class TestStatsResponse(BaseModel):
     status: int
     message: Optional[str] = None
     updated_stats: Optional[dict] = None
+
+
+class ExperienceAddRequest(BaseModel):
+    exp: int

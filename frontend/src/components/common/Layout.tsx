@@ -22,6 +22,7 @@ interface LayoutProps {
   user?: {
     id?: string;
     avatar_url?: string;
+    avatar_id?: string;
     google_avatar_url?: string;
     name?: string;
     email?: string;
@@ -45,12 +46,13 @@ const menuItems = [
 export default function Layout({ children, title, user }: LayoutProps) {
   const { user: ctxUser } = useAuthContext();
   // Prefer explicit user prop; fallback to context
-  const effectiveUser = user || (ctxUser ? { id: ctxUser.id, name: ctxUser.name, email: ctxUser.email, avatar_url: ctxUser.avatar_url || (ctxUser.id ? `/api/users/avatar?user-id=${encodeURIComponent(ctxUser.id)}` : undefined), google_avatar_url: undefined, level: ctxUser.level, current_exp: ctxUser.current_exp, require_exp: ctxUser.require_exp, remind_time: ctxUser.remind_time, rank: ctxUser.rank } : undefined);
+  const effectiveUser = user || (ctxUser ? { id: ctxUser.id, name: ctxUser.name, email: ctxUser.email, avatar_url: ctxUser.avatar_url || (ctxUser.id ? `/api/users/avatar?user-id=${encodeURIComponent(ctxUser.id)}` : undefined), avatar_id: (ctxUser as { avatar_id?: string }).avatar_id, google_avatar_url: undefined, avatarKey: ctxUser.avatarKey, level: ctxUser.level, current_exp: ctxUser.current_exp, require_exp: ctxUser.require_exp, remind_time: ctxUser.remind_time, rank: ctxUser.rank } : undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cachedProgress, setCachedProgress] = useState<{ level?: number; current_exp?: number; require_exp?: number; rank?: number }>({});
+  const [avatarVersion, setAvatarVersion] = useState<number | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -103,6 +105,11 @@ export default function Layout({ children, title, user }: LayoutProps) {
       /* ignore */
     }
   }, []);
+
+  // Bust avatar cache whenever the user avatar changes
+  useEffect(() => {
+    setAvatarVersion(Date.now());
+  }, [effectiveUser?.avatar_url, effectiveUser?.avatar_id, effectiveUser?.google_avatar_url]);
 
   const handleLogout = () => {
     storage.removeToken();
@@ -164,7 +171,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
             className="w-8 h-8"
             displayName={effectiveUser?.name || effectiveUser?.email || 'User'}
             showInitialsFallback={true}
-            cacheKey={effectiveUser?.avatarKey}
+            cacheKey={effectiveUser?.avatarKey ?? avatarVersion ?? undefined}
           />
         </div>
       </div>

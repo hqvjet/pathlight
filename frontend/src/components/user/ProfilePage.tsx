@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProfileData } from './profile/hooks';
 import { ProfileAvatar } from './profile/ProfileAvatar';
 import { ProfileFormData } from './profile/types';
@@ -22,13 +22,144 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); await updateProfile(formData as ProfileFormData); };
 
+  const currentExp = user?.current_exp ?? 0;
+  const requireExp = user?.require_exp ?? 0;
   const expPercent = (() => {
-    if (!user?.require_exp || user.require_exp <= 0) return 0;
-    return Math.min(100, Math.round(((user.current_exp || 0) / user.require_exp) * 100));
+    if (!requireExp || requireExp <= 0) return 0;
+    return Math.min(100, Math.round((currentExp / requireExp) * 100));
   })();
-
-  const remainingExp = Math.max((user?.require_exp || 0) - (user?.current_exp || 0), 0);
+  const remainingExp = Math.max(requireExp - currentExp, 0);
   const nextLevelLabel = (user?.level || 1) + 1;
+  const courseCount = user?.course_num ?? user?.total_courses ?? 0;
+  const lessonCount = user?.lesson_num ?? 0;
+  const completedCourses = user?.completed_courses ?? 0;
+  const HOURS = useMemo(() => Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0')), []);
+  const MINUTES = useMemo(() => Array.from({ length: 60 }).map((_, i) => String(i).padStart(2, '0')), []);
+  const presetTimes = useMemo(() => ['06:30', '07:00', '08:00', '12:00', '19:00', '21:30'], []);
+  const [hourIdx, setHourIdx] = useState(0);
+  const [minuteIdx, setMinuteIdx] = useState(0);
+  const hourIdxRef = useRef(0);
+  const minuteIdxRef = useRef(0);
+  const hourDrag = useRef({ active: false, startY: 0, startIdx: 0 });
+  const minuteDrag = useRef({ active: false, startY: 0, startIdx: 0, startHourIdx: 0 });
+  const rowHeight = 50;
+
+  const parseTime = (value: string) => {
+    const [h, m] = value.split(':');
+    const hour = Math.min(23, Math.max(0, Number(h) || 0));
+    const minute = Math.min(59, Math.max(0, Number(m) || 0));
+    return { hour, minute };
+  };
+
+  useEffect(() => {
+    const { hour, minute } = parseTime(remindTime || '00:00');
+    setHourIdx(hour);
+    setMinuteIdx(minute);
+    hourIdxRef.current = hour;
+    minuteIdxRef.current = minute;
+  }, [remindTime]);
+
+  const normalizedIndex = (idx: number, length: number) => ((idx % length) + length) % length;
+  const renderWindow = (list: string[], centerIdx: number, size = 3) => {
+    const half = Math.floor(size / 2);
+    return Array.from({ length: size }).map((_, offset) => {
+      const rel = offset - half;
+      const idx = normalizedIndex(centerIdx + rel, list.length);
+      return { val: list[idx], key: `${idx}-${rel}`, rel };
+    });
+  };
+
+  const normalizeHM = (h: number, m: number) => {
+    let total = h * 60 + m;
+    total = ((total % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const hh = Math.floor(total / 60);
+    const mm = total % 60;
+    return { h: hh, m: mm };
+  };
+
+  const setTimeSafe = useCallback((hIdx: number, mIdx: number) => {
+    const { h, m } = normalizeHM(hIdx, mIdx);
+    setHourIdx(h);
+    setMinuteIdx(m);
+    hourIdxRef.current = h;
+    minuteIdxRef.current = m;
+    setRemindTime(`${HOURS[h]}:${MINUTES[m]}`);
+  }, [HOURS, MINUTES, setRemindTime]);
+
+  const handleStepHour = useCallback((delta: number) => {
+    const step = delta > 0 ? 1 : -1;
+    setTimeSafe(hourIdxRef.current + step, minuteIdxRef.current);
+  }, [setTimeSafe]);
+
+  const handleStepMinute = useCallback((delta: number) => {
+    const step = delta > 0 ? 1 : -1;
+    setTimeSafe(hourIdxRef.current, minuteIdxRef.current + step);
+  }, [setTimeSafe]);
+
+  useEffect(() => {
+    const options: AddEventListenerOptions = { passive: false, capture: true };
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const wheelEl = target.closest('[data-kind]');
+      if (!wheelEl) return;
+      const kind = (wheelEl.getAttribute('data-kind') || '').toLowerCase();
+      if (kind !== 'hour' && kind !== 'minute') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (kind === 'hour') {
+        handleStepHour(e.deltaY);
+      } else {
+        handleStepMinute(e.deltaY);
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, options);
+    return () => window.removeEventListener('wheel', handleWheel, options);
+  }, [handleStepHour, handleStepMinute]);
+
+  const startDrag = (
+    dragRef: React.MutableRefObject<{ active: boolean; startY: number; startIdx: number; startHourIdx?: number }>,
+    currentIdx: number,
+    clientY: number,
+    startHourIdx?: number,
+  ) => {
+    dragRef.current = { active: true, startY: clientY, startIdx: currentIdx, startHourIdx };
+  };
+
+  const moveDrag = (
+    dragRef: React.MutableRefObject<{ active: boolean; startY: number; startIdx: number; startHourIdx?: number }>,
+    list: string[],
+    clientY: number,
+    kind: 'hour' | 'minute',
+  ) => {
+    if (!dragRef.current.active) return;
+    const delta = clientY - dragRef.current.startY;
+    const steps = Math.round(delta / rowHeight);
+    if (kind === 'hour') {
+      const nextIdx = normalizedIndex(dragRef.current.startIdx + steps, list.length);
+      setTimeSafe(nextIdx, minuteIdxRef.current);
+    } else {
+      const startHour = dragRef.current.startHourIdx ?? hourIdxRef.current;
+      const totalStart = startHour * 60 + dragRef.current.startIdx;
+      const total = totalStart + steps;
+      const { h, m } = normalizeHM(0, total);
+      setTimeSafe(h, m);
+    }
+  };
+
+  const endDrag = (dragRef: React.MutableRefObject<{ active: boolean; startY: number; startIdx: number; startHourIdx?: number }>) => {
+    dragRef.current.active = false;
+  };
+
+  const setHour = (v: string) => {
+    const { minute } = parseTime(remindTime || '00:00');
+    setRemindTime(`${v}:${String(minute).padStart(2, '0')}`);
+  };
+  const setMinute = (v: string) => {
+    const { hour } = parseTime(remindTime || '00:00');
+    setRemindTime(`${String(hour).padStart(2, '0')}:${v}`);
+  };
 
   if (loading) {
     return (
@@ -58,51 +189,163 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb]">
-      <div className="max-w-[1330px] mx-auto px-6 md:px-8 py-12">
-        <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-8 md:p-10">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
-            <div>
-              <h1 className="text-[26px] font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
+    <>
+      <div className="min-h-screen bg-[#f5f7fb]">
+        <div className="max-w-[1330px] mx-auto px-6 md:px-8 py-12">
+          <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-8 md:p-10">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+              <div>
+                <h1 className="text-[26px] font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
+              </div>
             </div>
-          </div>
 
           {user && (
             <div className="mb-8 grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-4">
-              <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-r from-[#ff8a4c] via-[#f05a8a] to-[#7c6ff9] text-white shadow-lg shadow-orange-500/15">
+              <div className="p-5 md:p-6 rounded-2xl bg-white border border-gray-100 shadow-sm text-gray-900">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xl font-semibold text-white/85">Hành trình của bạn</p>
+                    <p className="text-lg font-semibold text-gray-900">Hành trình của bạn</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="px-3 py-1 rounded-full bg-white/20 border border-white/25 text-sm font-semibold">Rank #{user.rank ?? '—'}</div>
-                    <div className="px-3 py-1 rounded-full bg-white/25 text-sm font-semibold">Lv {user.level || 1}</div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <div className="px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Rank #{user.rank ?? '—'}</div>
+                    <div className="px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Lv {user.level || 1}</div>
                   </div>
                 </div>
-                <div className="h-3 w-full bg-white/25 rounded-full overflow-hidden ring-1 ring-white/20">
-                  <div className="h-full bg-white shadow-sm shadow-black/10" style={{ width: `${expPercent}%` }} />
+                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                  <div className="h-full bg-orange-500" style={{ width: `${expPercent}%` }} />
                 </div>
-                <div className="mt-2 flex justify-between text-xs text-white/90">
-                  <span>{user.current_exp || 0} EXP</span>
-                  <span>{remainingExp} EXP nữa lên Lv {nextLevelLabel}</span>
+                <div className="mt-2 flex justify-between text-xs text-gray-600">
+                  <span>{currentExp} / {requireExp || 0} EXP</span>
+                  <span>Còn {remainingExp} EXP lên Lv {nextLevelLabel}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm text-gray-800">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] text-gray-500">Khóa học</div>
+                    <div className="font-semibold text-gray-900">{courseCount}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] text-gray-500">Bài học</div>
+                    <div className="font-semibold text-gray-900">{lessonCount}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] text-gray-500">Khóa đã hoàn thành</div>
+                    <div className="font-semibold text-gray-900">{completedCourses}</div>
+                  </div>
                 </div>
               </div>
-              <div className="p-5 md:p-6 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center shadow-inner">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a6 6 0 00-6 6v3.5L4 15.5a1 1 0 00.7 1.7h14.6a1 1 0 00.7-1.7L18 12.5V9a6 6 0 00-6-6Z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 19a2 2 0 004 0" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900">Thời gian nhắc học</div>
-                    <div className="text-xs text-gray-600">Chọn giờ để nhận thông báo học tập hằng ngày.</div>
-                  </div>
+              <div className="p-5 md:p-6 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center gap-4">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center border border-gray-200">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a6 6 0 00-6 6v3.5L4 15.5a1 1 0 00.7 1.7h14.6a1 1 0 00.7-1.7L18 12.5V9a6 6 0 00-6-6Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19a2 2 0 004 0" />
+                  </svg>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="time" value={remindTime} onChange={(e)=> setRemindTime(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm shadow-sm bg-white focus:border-orange-200 focus:ring-2 focus:ring-orange-100" />
-                  <button type="button" onClick={()=> updateRemindTime(remindTime)} disabled={remindSaving} className="px-3 py-2 bg-orange-500 text-white text-sm rounded-lg shadow hover:bg-orange-600 disabled:opacity-60">{remindSaving ? 'Đang lưu' : 'Lưu'}</button>
+                <div className="flex-1 flex flex-col gap-4">
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-sm font-semibold text-gray-900">Nhắc giờ học:</div>
+                    <div className="text-xs text-gray-600">Chọn giờ nhắc hằng ngày</div>
+                  </div>
+                  <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 w-full justify-end">
+                    <div className="flex gap-2" style={{ overscrollBehavior: 'contain' }}>
+                      {[
+                        { label: 'Giờ', baseList: HOURS, idx: hourIdx, setIdx: setHourIdx, setter: setHour, drag: hourDrag, kind: 'hour' as const },
+                        { label: 'Phút', baseList: MINUTES, idx: minuteIdx, setIdx: setMinuteIdx, setter: setMinute, drag: minuteDrag, kind: 'minute' as const },
+                      ].map(({ label, baseList, idx, setIdx, setter, drag, kind }) => (
+                        <div
+                          key={label}
+                          className="relative w-16 time-wheel"
+                          data-kind={kind}
+                          style={{ height: '150px', overscrollBehavior: 'contain' }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            if (kind === 'hour') {
+                              startDrag(drag, idx, e.clientY);
+                            } else {
+                              startDrag(drag, idx, e.clientY, hourIdxRef.current);
+                            }
+                          }}
+                          onMouseMove={(e) => {
+                            if (!drag.current.active) return;
+                            e.preventDefault();
+                            moveDrag(drag, baseList, e.clientY, kind);
+                          }}
+                          onMouseUp={() => endDrag(drag)}
+                          onMouseLeave={() => endDrag(drag)}
+                        >
+                          <div className="h-full overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm">
+                            <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 36px 36px -36px rgba(0,0,0,0.06), inset 0 -36px 36px -36px rgba(0,0,0,0.06)' }} />
+                            <div className="absolute left-0 right-0 border-y border-orange-200/70 pointer-events-none" style={{ top: '50%', height: `${rowHeight}px`, marginTop: `-${rowHeight/2}px` }} />
+                            <div className="h-full select-none">
+                              <div className="relative" style={{ height: '150px' }}>
+                                {renderWindow(baseList, idx, 3).map(({ val, key, rel }) => {
+                                  const isCenter = rel === 0;
+                                  return (
+                                    <div
+                                      key={key}
+                                      className={`absolute left-0 right-0 flex items-center justify-center text-sm font-semibold cursor-pointer select-none ${isCenter ? 'text-gray-900' : 'text-gray-500 opacity-60'}`}
+                                      style={{ height: `${rowHeight}px`, top: '50%', transform: `translateY(${rel * rowHeight - rowHeight / 2}px)` }}
+                                      onClick={() => {
+                                        const step = rel;
+                                        if (kind === 'hour') {
+                                          setTimeSafe(hourIdxRef.current + step, minuteIdxRef.current);
+                                        } else {
+                                          const total = hourIdxRef.current * 60 + minuteIdxRef.current + step;
+                                          const { h, m } = normalizeHM(0, total);
+                                          setTimeSafe(h, m);
+                                        }
+                                      }}
+                                    >
+                                      {val}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            max={baseList.length - 1}
+                            className="absolute left-0 right-0 mx-auto text-center text-sm font-semibold text-gray-900 rounded-md"
+                            style={{ width: '100%', top: '50%', height: `${rowHeight}px`, transform: 'translateY(-50%)', opacity: 0 }}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const raw = Number(e.target.value);
+                              if (Number.isNaN(raw)) return;
+                              const clamped = Math.min(baseList.length - 1, Math.max(0, raw));
+                              const formatted = String(clamped).padStart(2, '0');
+                              setIdx(clamped);
+                              setter(formatted);
+                            }}
+                            aria-label={label}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-3 min-w-[240px]">
+                      <div className="flex flex-wrap gap-2">
+                        {presetTimes.map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setRemindTime(t)}
+                            className={`px-3 py-2 rounded-lg text-sm border transition ${remindTime === t ? 'bg-orange-50 border-orange-200 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-200 hover:text-orange-700'}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 items-center flex-wrap">
+                        <input
+                          type="time"
+                          value={remindTime}
+                          onChange={(e)=> setRemindTime(e.target.value)}
+                          className="rounded-lg border border-gray-200 px-3 py-2 text-sm shadow-sm bg-white focus:border-orange-200 focus:ring-2 focus:ring-orange-100"
+                        />
+                        <button type="button" onClick={()=> updateRemindTime(remindTime)} disabled={remindSaving} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg shadow-sm hover:bg-orange-600 disabled:opacity-60 min-w-[72px]">{remindSaving ? 'Đang lưu' : 'Lưu'}</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -163,5 +406,10 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+      <style jsx global>{`
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
+    </>
   );
 }
