@@ -23,6 +23,7 @@ export interface UserProfile {
   created_at?: string;
   remind_time?: string;
   rank?: number;
+  avatarKey?: number;
 }
 
 export interface ProfileFormData {

@@ -10,6 +10,9 @@ export const getAvatarSources = (user: AvatarUser): string[] => {
   const sources: string[] = [];
   if (!user) return ['/assets/images/default_avatar.png'];
 
+  if (user.avatar_url) {
+    sources.push(user.avatar_url);
+  }
   if (user.id) {
     sources.push(`/api/users/avatar?user-id=${encodeURIComponent(user.id)}`);
   }

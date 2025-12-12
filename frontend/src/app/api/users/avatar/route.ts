@@ -41,7 +41,8 @@ async function proxyToUserService(
   console.log(`[USER AVATAR API] Proxying ${method} request to: ${userServiceUrl}`);
   // Add a timeout to avoid hanging image requests
   const controller = new AbortController();
-  const timeoutMs = 4500;
+  // Allow a bit more time; avatar images can be cold-started on upstream
+  const timeoutMs = 8000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(userServiceUrl, {
@@ -98,9 +99,8 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ detail: 'Thiếu user-id' }, { status: 400 });
     }
+    // Keep Authorization if present so private avatars behind auth still work
     const headers = createProxyHeaders(request);
-    // Remove auth header to make it public
-    delete headers.Authorization;
     try {
       const response = await proxyToUserService(`/avatar?user-id=${encodeURIComponent(userId)}`, 'GET', headers);
       // If upstream is slow or returns a non-OK, fallback to default avatar to keep UI responsive

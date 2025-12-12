@@ -4,16 +4,18 @@ import { storage } from '@/utils/api';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { ProfileFormData, UserProfile } from './types';
+import { useAuthContext } from '@/context/AuthContext';
 
 export function useProfileData() {
   const router = useRouter();
+  const { refreshUser } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [editMode, setEditMode] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
-  const [avatarKey, setAvatarKey] = useState(0);
+  const [avatarKey, setAvatarKey] = useState(() => Date.now());
   const [formData, setFormData] = useState<ProfileFormData>({ given_name: '', family_name: '', birth_date: '', sex: '', bio: '' });
   const [remindTime, setRemindTime] = useState('');
   const [remindSaving, setRemindSaving] = useState(false);
@@ -72,7 +74,7 @@ export function useProfileData() {
           sex: userObj.sex || '',
           bio: userObj.bio || ''
         });
-        setAvatarKey(k=>k); // keep current key (no change unless upload)
+        setAvatarKey(Date.now()); // refresh cache key on profile load
       } else showToast.authError('Không thể tải thông tin hồ sơ');
     } catch { showToast.authError('Không thể tải thông tin hồ sơ'); }
     finally { setLoading(false); }
@@ -108,9 +110,13 @@ export function useProfileData() {
         const avatarData = response.data as { avatar_url?: string; avatar_id?: string } | undefined;
         if (avatarData && (avatarData.avatar_url || avatarData.avatar_id)) {
           setUser(prev => prev ? { ...prev, avatar_url: normalizeAvatarUrl(prev.id, avatarData.avatar_url || prev.avatar_url), avatar_id: avatarData.avatar_id || prev.avatar_id } : prev);
-          setAvatarKey(k => k + 1); // bump version immediately
+          setAvatarKey(Date.now()); // bump version immediately
         }
-        setTimeout(async () => { await loadUserProfile(); setAvatarKey(k => k + 1); }, 500);
+        setTimeout(async () => {
+          await loadUserProfile();
+          await refreshUser();
+          setAvatarKey(Date.now());
+        }, 500);
       } else {
         const data = response.data as { message?: string } | undefined; let errorMsg = response.error || 'Tải ảnh lên thất bại'; if (data?.message) errorMsg = data.message; showToast.authError(errorMsg);
       }

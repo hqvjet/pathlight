@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProfileData } from './profile/hooks';
 import { ProfileAvatar } from './profile/ProfileAvatar';
 import { ProfileFormData } from './profile/types';
@@ -33,7 +33,6 @@ export default function ProfilePage() {
   const courseCount = user?.course_num ?? user?.total_courses ?? 0;
   const lessonCount = user?.lesson_num ?? 0;
   const completedCourses = user?.completed_courses ?? 0;
-  const rankDisplay = user?.rank ?? '—';
   const HOURS = useMemo(() => Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0')), []);
   const MINUTES = useMemo(() => Array.from({ length: 60 }).map((_, i) => String(i).padStart(2, '0')), []);
   const presetTimes = useMemo(() => ['06:30', '07:00', '08:00', '12:00', '19:00', '21:30'], []);
@@ -60,26 +59,6 @@ export default function ProfilePage() {
     minuteIdxRef.current = minute;
   }, [remindTime]);
 
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const wheelEl = target.closest('[data-kind]');
-      if (!wheelEl) return;
-      const kind = (wheelEl.getAttribute('data-kind') || '').toLowerCase();
-      if (kind !== 'hour' && kind !== 'minute') return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (kind === 'hour') {
-        handleStepHour(e.deltaY);
-      } else {
-        handleStepMinute(e.deltaY);
-      }
-    };
-
-    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-    return () => window.removeEventListener('wheel', handleWheel, { capture: true } as any);
-  }, []);
   const normalizedIndex = (idx: number, length: number) => ((idx % length) + length) % length;
   const renderWindow = (list: string[], centerIdx: number, size = 3) => {
     const half = Math.floor(size / 2);
@@ -98,24 +77,46 @@ export default function ProfilePage() {
     return { h: hh, m: mm };
   };
 
-  const setTimeSafe = (hIdx: number, mIdx: number) => {
+  const setTimeSafe = useCallback((hIdx: number, mIdx: number) => {
     const { h, m } = normalizeHM(hIdx, mIdx);
     setHourIdx(h);
     setMinuteIdx(m);
     hourIdxRef.current = h;
     minuteIdxRef.current = m;
     setRemindTime(`${HOURS[h]}:${MINUTES[m]}`);
-  };
+  }, [HOURS, MINUTES, setRemindTime]);
 
-  const handleStepHour = (delta: number) => {
+  const handleStepHour = useCallback((delta: number) => {
     const step = delta > 0 ? 1 : -1;
     setTimeSafe(hourIdxRef.current + step, minuteIdxRef.current);
-  };
+  }, [setTimeSafe]);
 
-  const handleStepMinute = (delta: number) => {
+  const handleStepMinute = useCallback((delta: number) => {
     const step = delta > 0 ? 1 : -1;
     setTimeSafe(hourIdxRef.current, minuteIdxRef.current + step);
-  };
+  }, [setTimeSafe]);
+
+  useEffect(() => {
+    const options: AddEventListenerOptions = { passive: false, capture: true };
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const wheelEl = target.closest('[data-kind]');
+      if (!wheelEl) return;
+      const kind = (wheelEl.getAttribute('data-kind') || '').toLowerCase();
+      if (kind !== 'hour' && kind !== 'minute') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (kind === 'hour') {
+        handleStepHour(e.deltaY);
+      } else {
+        handleStepMinute(e.deltaY);
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, options);
+    return () => window.removeEventListener('wheel', handleWheel, options);
+  }, [handleStepHour, handleStepMinute]);
 
   const startDrag = (
     dragRef: React.MutableRefObject<{ active: boolean; startY: number; startIdx: number; startHourIdx?: number }>,
