@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 import hashlib
 import secrets
@@ -14,27 +14,28 @@ import os
 
 from src.config import config
 from src.schemas.course_schemas import (
-	CourseFullInfo,
-	CourseFullInfoResponse,
-	LessonInfo,
-	CourseListResponse,
-	CourseSummary,
-	LessonListResponse,
-	LessonDetail,
-	LessonTestResponse,
-	LessonTest,
-	LessonTestQA,
-	LessonTestSubmitRequest,
-	LessonTestSubmitResponse,
-	LessonTestSubmitResult,
-	LessonTestSubmitResultItem,
-	FinalTestResponse,
-	FinalTestDetail,
-	FinalTestQA,
-	FinishCourseRequest,
-	FinishLessonRequest,
-	PresignUploadRequest,
-	PresignUploadResponse,
+    CourseFullInfo,
+    CourseFullInfoResponse,
+    LessonInfo,
+    CourseListResponse,
+    CourseSummary,
+    LessonListResponse,
+    LessonDetail,
+    AssessmentListResponse,
+    AssessmentItem,
+    AssessmentSubmitRequest,
+    AssessmentSubmitResponse,
+    AssessmentSubmitResult,
+    AssessmentSubmitResultItem,
+	QuizDetail,
+	QuizQAItem,
+	QuizResponse,
+	QuizSubmitRequest,
+	QuizSubmitResponse,
+    FinishCourseRequest,
+    FinishLessonRequest,
+    PresignUploadRequest,
+    PresignUploadResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -313,30 +314,21 @@ async def delete_single_course(request: Request, course_id: str | None):
 	if not course_id:
 		return _unauth_delete_response()
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
+	from src.models import Course, Lesson, Assessment, Quiz, QuizQA
 	session = SessionLocal()
 	try:
 		course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
 		if not course:
 			return _unauth_delete_response()
-		lesson_ids = [l.lesson_id for l in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
-		test_ids = [t.test_id for t in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
-		final_test_ids = [ft.final_test_id for ft in session.query(FinalTest.final_test_id).filter(FinalTest.course_id == course.course_id).all()]
-		if test_ids:
-			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
-		if final_test_ids:
-			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
-		if test_ids:
-			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
-		if final_test_ids:
-			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
+		lesson_ids = [l.lesson_id for (l,) in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
 		if lesson_ids:
+			session.query(Assessment).filter(Assessment.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
 			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
-		course_info_id = course.course_info_id
+		quiz_ids = [q.quiz_id for (q,) in session.query(Quiz.quiz_id).filter(Quiz.course_id == course.course_id).all()]
+		if quiz_ids:
+			session.query(QuizQA).filter(QuizQA.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+			session.query(Quiz).filter(Quiz.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
 		session.delete(course)
-		other = session.query(Course).filter(Course.course_info_id == course_info_id).first()
-		if not other:
-			session.query(CourseInfo).filter(CourseInfo.course_info_id == course_info_id).delete(synchronize_session=False)
 		session.commit()
 		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa khóa học thành công"})
 	except Exception as e:
@@ -353,32 +345,22 @@ async def delete_all_courses(request: Request):
 	if not user_id:
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Test, LessonQA, FinalTest, FinalQA, CourseInfo
+	from src.models import Course, Lesson, Assessment, Quiz, QuizQA
 	session = SessionLocal()
 	try:
 		courses = session.query(Course).filter(Course.user_id == user_id).all()
 		if not courses:
 			return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
 		course_ids = [c.course_id for c in courses]
-		course_info_ids = [c.course_info_id for c in courses]
 		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id.in_(course_ids)).all()]
-		test_ids = [tid for (tid,) in session.query(Test.test_id).filter(Test.lesson_id.in_(lesson_ids)).all()] if lesson_ids else []
-		final_test_ids = [fid for (fid,) in session.query(FinalTest.final_test_id).filter(FinalTest.course_id.in_(course_ids)).all()]
-		if test_ids:
-			session.query(LessonQA).filter(LessonQA.test_id.in_(test_ids)).delete(synchronize_session=False)
-		if final_test_ids:
-			session.query(FinalQA).filter(FinalQA.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
-		if test_ids:
-			session.query(Test).filter(Test.test_id.in_(test_ids)).delete(synchronize_session=False)
-		if final_test_ids:
-			session.query(FinalTest).filter(FinalTest.final_test_id.in_(final_test_ids)).delete(synchronize_session=False)
 		if lesson_ids:
+			session.query(Assessment).filter(Assessment.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
 			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		quiz_ids = [qid for (qid,) in session.query(Quiz.quiz_id).filter(Quiz.course_id.in_(course_ids)).all()]
+		if quiz_ids:
+			session.query(QuizQA).filter(QuizQA.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+			session.query(Quiz).filter(Quiz.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
 		session.query(Course).filter(Course.course_id.in_(course_ids), Course.user_id == user_id).delete(synchronize_session=False)
-		for ci in course_info_ids:
-			still = session.query(Course).filter(Course.course_info_id == ci).first()
-			if not still:
-				session.query(CourseInfo).filter(CourseInfo.course_info_id == ci).delete(synchronize_session=False)
 		session.commit()
 		return JSONResponse(status_code=200, content={"status": 200, "message": "Đã xóa toàn bộ khóa học thành công"})
 	except Exception as e:
@@ -392,45 +374,44 @@ async def delete_all_courses(request: Request):
 # ---------------- Retrieval Controllers ----------------
 
 def get_course_full_info_controller(request: Request, course_id: str) -> CourseFullInfoResponse:
-	from src.database import SessionLocal
-	from src.models import Course, CourseInfo, Lesson
+    from src.database import SessionLocal
+    from src.models import Course, Lesson
 
-	user_id = _verify_token(request)
-	if not user_id:
-		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-	session = SessionLocal()
-	try:
-		course = (
-			session.query(Course)
-			.filter(Course.course_id == course_id, Course.user_id == user_id)
-			.first()
-		)
-		if not course:
-			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-		info = session.query(CourseInfo).filter(CourseInfo.course_info_id == course.course_info_id).first()
-		lessons = (
-			session.query(Lesson.lesson_id, Lesson.title, Lesson.finish)
-			.filter(Lesson.course_id == course.course_id)
-			.order_by(Lesson.created_at.asc())
-			.all()
-		)
-		lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
-		course_full = CourseFullInfo(
-			title=getattr(info, "title", "") if info else "",
-			description=getattr(info, "description", "") if info else "",
-			duration=getattr(info, "duration", 0) if info else 0,
-			roadmap=getattr(info, "roadmap", None) if info else None,
-			lesson=lesson_models,
-			updated_at=course.updated_at.isoformat() if getattr(course, "updated_at", None) is not None else "",
-		)
-		return CourseFullInfoResponse(status=200, info=course_full)
-	finally:
-		session.close()
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+    session = SessionLocal()
+    try:
+        course = (
+            session.query(Course)
+            .filter(Course.course_id == course_id, Course.user_id == user_id)
+            .first()
+        )
+        if not course:
+            raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+        lessons = (
+            session.query(Lesson.lesson_id, Lesson.title, Lesson.finish)
+            .filter(Lesson.course_id == course.course_id)
+            .order_by(Lesson.created_at.asc())
+            .all()
+        )
+        lesson_models = [LessonInfo(lesson_id=l.lesson_id, title=l.title, finish=l.finish) for l in lessons]
+        course_full = CourseFullInfo(
+            title=getattr(course, "title", ""),
+            overview=getattr(course, "overview", ""),
+            level=getattr(course, "level", ""),
+            duration=getattr(course, "duration", 0) or 0,
+            lesson=lesson_models,
+            updated_at=course.created_at.isoformat() if getattr(course, "created_at", None) else "",
+        )
+        return CourseFullInfoResponse(status=200, info=course_full)
+    finally:
+        session.close()
 
 
 def get_all_courses_controller(request: Request) -> CourseListResponse:
 	from src.database import SessionLocal
-	from src.models import Course, CourseInfo, Lesson
+	from src.models import Course, Lesson
 
 	user_id = _verify_token(request)
 	if not user_id:
@@ -440,12 +421,13 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 		rows = (
 			session.query(
 				Course.course_id,
-				Course.updated_at,
-				CourseInfo.title,
-				CourseInfo.description,
-				CourseInfo.duration,
+				Course.created_at,
+				Course.title,
+				Course.overview,
+				Course.level,
+				Course.duration,
+				Course.finish,
 			)
-			.join(CourseInfo, Course.course_info_id == CourseInfo.course_info_id)
 			.filter(Course.user_id == user_id)
 			.all()
 		)
@@ -466,11 +448,13 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 			CourseSummary(
 				course_id=r.course_id,
 				title=r.title or "",
-				description=r.description or "",
+				overview=r.overview or "",
+				level=r.level or "",
 				duration=r.duration or 0,
+				finish=bool(r.finish),
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
-				updated_at=r.updated_at.isoformat() if r.updated_at else "",
+				updated_at=r.created_at.isoformat() if r.created_at else "",
 			)
 			for r in rows
 		]
@@ -499,8 +483,9 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 				lesson_id=getattr(l, "lesson_id"),
 				course_id=getattr(l, "course_id"),
 				title=getattr(l, "title"),
-				description=getattr(l, "description"),
+				overview=getattr(l, "overview", ""),
 				content=getattr(l, "content"),
+				duration=getattr(l, "duration", 0) or 0,
 				finish=getattr(l, "finish"),
 			)
 			for l in lessons
@@ -529,138 +514,98 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			lesson_id=getattr(lesson, "lesson_id"),
 			course_id=getattr(lesson, "course_id"),
 			title=getattr(lesson, "title"),
-			description=getattr(lesson, "description"),
+			overview=getattr(lesson, "overview", ""),
 			content=getattr(lesson, "content"),
+			duration=getattr(lesson, "duration", 0) or 0,
 			finish=getattr(lesson, "finish"),
 		)
 	finally:
 		session.close()
 
 
-def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str) -> LessonTestResponse:
+def get_assessment_list_controller(request: Request, course_id: str, lesson_id: str) -> AssessmentListResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Test, LessonQA
+	from src.models import Course, Lesson, Assessment
 
 	user_id = _verify_token(request)
 	if not user_id:
 		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
 	session = SessionLocal()
 	try:
-		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
-		if not owned:
+		course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not course:
 			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-		test = (
-			session.query(Test)
-			.filter(Test.lesson_id == lesson_id)
-			.order_by(Test.created_at.asc())
-			.first()
+		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
+		if not lesson:
+			raise HTTPException(status_code=404, detail="Lesson not found")
+		assessments = (
+			session.query(Assessment)
+			.filter(Assessment.lesson_id == lesson.lesson_id)
+			.order_by(Assessment.created_at.asc())
+			.all()
 		)
-		if not test:
-			raise HTTPException(status_code=404, detail="Test not found")
-		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
-		qa_models = [
-			LessonTestQA(
-				qa_id=getattr(qa, "qa_id"),
-				question=getattr(qa, "question"),
-				option1=getattr(qa, "option1"),
-				option2=getattr(qa, "option2"),
-				option3=getattr(qa, "option3"),
-				option4=getattr(qa, "option4"),
-				answer=getattr(qa, "answer"),
-				explanation=getattr(qa, "explanation"),
-				difficult_level_id=getattr(qa, "difficult_level_id", None),
+		items = [
+			AssessmentItem(
+				assessment_id=a.assessment_id,
+				lesson_id=a.lesson_id,
+				question=a.question,
+				hint=a.hint,
+				explanation=a.explanation,
+				difficulty=a.difficulty,
+				option1=a.option1,
+				option2=a.option2,
+				option3=a.option3,
+				option4=a.option4,
+				answer=a.answer,
 			)
-			for qa in qas
+			for a in assessments
 		]
-		test_model = LessonTest(
-			test_id=getattr(test, "test_id"),
-			title=getattr(test, "title"),
-			description=getattr(test, "description"),
-			duration=getattr(test, "duration"),
-			exp=getattr(test, "exp"),
-			finish=getattr(test, "finish"),
-			qas=qa_models,
-		)
-		return LessonTestResponse(status=200, test=test_model)
+		return AssessmentListResponse(status=200, assessments=items)
 	finally:
 		session.close()
 
 
-def _normalize_answer_value(raw: str | None) -> str:
-	return (raw or "").strip().lower()
-
-
-def submit_lesson_test_controller(request: Request, course_id: str, lesson_id: str, body: LessonTestSubmitRequest) -> LessonTestSubmitResponse:
+def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Test, LessonQA
+	from src.models import Course, Lesson, Assessment
 	import math
 
 	user_id = _verify_token(request)
 	if not user_id:
-		return LessonTestSubmitResponse(status=401, message="Bạn không có quyền làm bài test này")
+		return AssessmentSubmitResponse(status=401, message="Bạn không có quyền làm bài kiểm tra này")
 
 	session = SessionLocal()
 	try:
-		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
-		if not owned:
-			return LessonTestSubmitResponse(status=401, message="Bạn không có quyền làm bài test này")
-
-		test = (
-			session.query(Test)
-			.filter(Test.lesson_id == lesson_id)
-			.order_by(Test.created_at.asc())
-			.first()
-		)
-		if not test:
-			return LessonTestSubmitResponse(status=404, message="Không tìm thấy bài test")
-
-		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
-		qa_lookup = {getattr(qa, "qa_id"): qa for qa in qas}
+		course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not course:
+			return AssessmentSubmitResponse(status=401, message="Bạn không có quyền làm bài kiểm tra này")
+		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
+		if not lesson:
+			return AssessmentSubmitResponse(status=404, message="Không tìm thấy bài học")
+		qas = session.query(Assessment).filter(Assessment.lesson_id == lesson.lesson_id).all()
 		if not qas:
-			return LessonTestSubmitResponse(status=400, message="Bài test chưa có câu hỏi")
-
+			return AssessmentSubmitResponse(status=404, message="Bài kiểm tra chưa có câu hỏi")
+		qa_lookup = {a.assessment_id: a for a in qas}
 		if not body.answers or len(body.answers) < len(qas):
-			return LessonTestSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi trước khi nộp bài")
+			return AssessmentSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi trước khi nộp bài")
 
 		correct_count = 0
 		earned_exp = 0
 		penalty_exp = 0
-		answer_results: list[LessonTestSubmitResultItem] = []
+		answer_results: list[AssessmentSubmitResultItem] = []
 
 		for ans in body.answers:
-			qa = qa_lookup.get(ans.qa_id)
+			qa = qa_lookup.get(ans.assessment_id)
 			if not qa:
 				continue
-			options = {
-				"option1": getattr(qa, "option1", ""),
-				"option2": getattr(qa, "option2", ""),
-				"option3": getattr(qa, "option3", ""),
-				"option4": getattr(qa, "option4", ""),
-			}
-			# Determine correct option id
-			correct_answer_raw = getattr(qa, "answer", "")
-			correct_opt_id = correct_answer_raw if correct_answer_raw in options else None
-			if not correct_opt_id:
-				for key, val in options.items():
-					if _normalize_answer_value(val) == _normalize_answer_value(correct_answer_raw):
-						correct_opt_id = key
-						break
-			# Determine selected option id
-			selected_opt_id = ans.answer if ans.answer in options else None
-			if not selected_opt_id:
-				for key, val in options.items():
-					if _normalize_answer_value(val) == _normalize_answer_value(ans.answer):
-						selected_opt_id = key
-						break
-			selected_opt_id = selected_opt_id or ""
-			correct_opt_id = correct_opt_id or ""
-			is_correct = selected_opt_id == correct_opt_id and bool(correct_opt_id)
+			selected = int(ans.answer)
+			correct = int(qa.answer)
+			is_correct = selected == correct
 			if is_correct:
 				correct_count += 1
 
-			difficulty_val = getattr(qa, "difficult_level_id", None)
 			try:
-				difficulty_int = int(difficulty_val) if difficulty_val is not None else None
+				difficulty_int = int(qa.difficulty) if qa.difficulty is not None else None
 			except Exception:
 				difficulty_int = None
 			base_exp = DIFFICULTY_EXP.get(difficulty_int, DIFFICULTY_EXP[1])
@@ -673,10 +618,10 @@ def submit_lesson_test_controller(request: Request, course_id: str, lesson_id: s
 			earned_exp += gained
 			penalty_exp += penalty
 			answer_results.append(
-				LessonTestSubmitResultItem(
-					qa_id=ans.qa_id,
-					selected_answer=selected_opt_id,
-					correct_answer=correct_opt_id,
+				AssessmentSubmitResultItem(
+					assessment_id=qa.assessment_id,
+					selected_answer=selected,
+					correct_answer=correct,
 					is_correct=is_correct,
 					difficulty=difficulty_int,
 					gained_exp=gained,
@@ -689,22 +634,13 @@ def submit_lesson_test_controller(request: Request, course_id: str, lesson_id: s
 		applied_exp = max(0, earned_exp - penalty_exp)
 		passed = score >= PASS_THRESHOLD
 
-		# Only mark completion when passed. EXP/level will be handled client-side per requirement.
-		level = None
-		level_up = None
-		current_exp = None
-		require_exp = None
-
 		if passed:
-			lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
-			if lesson:
-				setattr(lesson, "finish", True)
-			setattr(test, "finish", True)
+			setattr(lesson, "finish", True)
 			session.commit()
 		else:
 			session.rollback()
 
-		result = LessonTestSubmitResult(
+		result = AssessmentSubmitResult(
 			score=score,
 			correct_count=correct_count,
 			total=total,
@@ -713,59 +649,153 @@ def submit_lesson_test_controller(request: Request, course_id: str, lesson_id: s
 			applied_exp=applied_exp if passed else 0,
 			passed=passed,
 			pass_threshold=PASS_THRESHOLD,
-			level=level,
-			current_exp=current_exp,
-			require_exp=require_exp,
-			level_up=level_up,
 			answers=answer_results,
 		)
-		return LessonTestSubmitResponse(status=200, result=result)
+		return AssessmentSubmitResponse(status=200, result=result)
 	except Exception as e:
-		logger.error("submit_lesson_test_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)
+		logger.error("submit_assessment_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)
 		session.rollback()
-		return LessonTestSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
+		return AssessmentSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
 	finally:
 		session.close()
 
 
-def get_final_test_controller(request: Request, course_id: str) -> FinalTestResponse:
+def get_quiz_controller(request: Request, course_id: str) -> QuizResponse:
 	from src.database import SessionLocal
-	from src.models import Course, FinalTest, FinalQA
+	from src.models import Course, Quiz, QuizQA
 
 	user_id = _verify_token(request)
 	if not user_id:
-		raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
+		return QuizResponse(status=401, message="Bạn không có quyền truy cập vào khóa học này")
 	session = SessionLocal()
 	try:
-		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
-		if not owned:
-			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
-		final_test = session.query(FinalTest).filter(FinalTest.course_id == course_id).first()
-		if not final_test:
-			raise HTTPException(status_code=404, detail="Final test not found")
-		qas = session.query(FinalQA).filter(FinalQA.final_test_id == final_test.final_test_id).all()
-		qa_models = [
-			FinalTestQA(
-				final_qa_id=getattr(qa, "final_qa_id"),
-				question=getattr(qa, "question"),
-				option1=getattr(qa, "option1"),
-				option2=getattr(qa, "option2"),
-				option3=getattr(qa, "option3"),
-				option4=getattr(qa, "option4"),
-				answer=getattr(qa, "answer"),
-				explanation=getattr(qa, "explanation"),
+		course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not course:
+			return QuizResponse(status=401, message="Bạn không có quyền truy cập vào khóa học này")
+		quiz = (
+			session.query(Quiz)
+			.filter(Quiz.course_id == course.course_id, Quiz.user_id == user_id)
+			.order_by(Quiz.created_at.desc())
+			.first()
+		)
+		if not quiz:
+			return QuizResponse(status=404, message="Không tìm thấy bài quiz")
+		qas = session.query(QuizQA).filter(QuizQA.quiz_id == quiz.quiz_id).order_by(QuizQA.created_at.asc()).all()
+		items = [
+			QuizQAItem(
+				qa_id=qa.qa_id,
+				quiz_id=qa.quiz_id,
+				question=qa.question,
+				explain=qa.explain,
+				option1=qa.option1,
+				option2=qa.option2,
+				option3=qa.option3,
+				option4=qa.option4,
+				answer=qa.answer,
 			)
 			for qa in qas
 		]
-		final_test_model = FinalTestDetail(
-			final_test_id=getattr(final_test, "final_test_id"),
-			title=getattr(final_test, "title"),
-			description=getattr(final_test, "description"),
-			duration=getattr(final_test, "duration"),
-			exp=getattr(final_test, "exp"),
-			qas=qa_models,
+		detail = QuizDetail(quiz_id=quiz.quiz_id, course_id=quiz.course_id, finish=quiz.finish, qas=items)
+		return QuizResponse(status=200, quiz=detail)
+	finally:
+		session.close()
+
+
+def submit_quiz_controller(request: Request, course_id: str, body: QuizSubmitRequest) -> QuizSubmitResponse:
+	from src.database import SessionLocal
+	from src.models import Course, Quiz, QuizQA, Lesson
+	import math
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return QuizSubmitResponse(status=401, message="Bạn không có quyền làm bài quiz này")
+	session = SessionLocal()
+	try:
+		course = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not course:
+			return QuizSubmitResponse(status=401, message="Bạn không có quyền làm bài quiz này")
+		quiz = (
+			session.query(Quiz)
+			.filter(Quiz.course_id == course.course_id, Quiz.user_id == user_id)
+			.order_by(Quiz.created_at.desc())
+			.first()
 		)
-		return FinalTestResponse(status=200, final_test=final_test_model)
+		if not quiz:
+			return QuizSubmitResponse(status=404, message="Không tìm thấy bài quiz")
+		qas = session.query(QuizQA).filter(QuizQA.quiz_id == quiz.quiz_id).all()
+		if not qas:
+			return QuizSubmitResponse(status=400, message="Quiz chưa có câu hỏi")
+		qa_lookup = {qa.qa_id: qa for qa in qas}
+		if not body.answers or len(body.answers) < len(qas):
+			return QuizSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi trước khi nộp bài")
+
+		correct_count = 0
+		earned_exp = 0
+		penalty_exp = 0
+		answer_results: list[AssessmentSubmitResultItem] = []
+
+		for ans in body.answers:
+			qa = qa_lookup.get(ans.qa_id)
+			if not qa:
+				continue
+			selected = int(ans.answer)
+			correct = int(qa.answer)
+			is_correct = selected == correct
+			if is_correct:
+				correct_count += 1
+
+			base_exp = DIFFICULTY_EXP[1]
+			if is_correct:
+				gained = base_exp
+				penalty = 0
+			else:
+				gained = 0
+				penalty = math.floor(base_exp * 0.5)
+			earned_exp += gained
+			penalty_exp += penalty
+			answer_results.append(
+				AssessmentSubmitResultItem(
+					assessment_id=qa.qa_id,
+					selected_answer=selected,
+					correct_answer=correct,
+					is_correct=is_correct,
+					difficulty=None,
+					gained_exp=gained,
+					penalty_exp=penalty,
+				)
+			)
+
+		total = len(qas)
+		score = round((correct_count / total) * 100, 2)
+		applied_exp = max(0, earned_exp - penalty_exp)
+		passed = score >= PASS_THRESHOLD
+
+		if passed:
+			setattr(quiz, "finish", True)
+			# If all lessons and quiz are finished, mark course finished
+			lessons = session.query(Lesson.finish).filter(Lesson.course_id == course.course_id).all()
+			if lessons and all(l.finish for l in lessons):
+				setattr(course, "finish", True)
+			session.commit()
+		else:
+			session.rollback()
+
+		result = AssessmentSubmitResult(
+			score=score,
+			correct_count=correct_count,
+			total=total,
+			earned_exp=earned_exp,
+			penalty_exp=penalty_exp,
+			applied_exp=applied_exp if passed else 0,
+			passed=passed,
+			pass_threshold=PASS_THRESHOLD,
+			answers=answer_results,
+		)
+		return QuizSubmitResponse(status=200, result=result)
+	except Exception as e:
+		logger.error("submit_quiz_controller error user=%s course=%s err=%s", user_id, course_id, e)
+		session.rollback()
+		return QuizSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
 	finally:
 		session.close()
 
@@ -773,15 +803,15 @@ def get_final_test_controller(request: Request, course_id: str) -> FinalTestResp
 # ---------------- Mutation Controllers ----------------
 
 def finish_course_controller(request: Request, payload: FinishCourseRequest):
-	"""Mark a course as finished if all its lessons and tests/final test are finished.
+	"""Mark a course as finished when all lessons (and any quizzes) are finished.
 
 	Business rule (current inferred):
 	- User must own course
 	- All lessons.finish == True
-	- (Optional) final tests existence not strictly enforced; if exists must have all qas done? Currently only have finish flag on Course, Lesson, Test. We'll require all Lessons.finish AND any Test / FinalTest under it have finish=True if present.
+	- If quizzes exist for this course/user, they must also be finished
 	"""
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Test
+	from src.models import Course, Lesson, Quiz
 
 	user_id = _verify_token(request)
 	if not user_id:
@@ -798,9 +828,9 @@ def finish_course_controller(request: Request, payload: FinishCourseRequest):
 		if not lessons or any(not l.finish for l in lessons):
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
 
-		# Check tests
-		tests = session.query(Test.finish).join(Lesson, Test.lesson_id == Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()
-		if any(not t.finish for t in tests):
+		# Check quizzes (if any exist for this user & course)
+		quizzes = session.query(Quiz.finish).filter(Quiz.course_id == course.course_id, Quiz.user_id == user_id).all()
+		if any(not q.finish for q in quizzes):
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
 
 		# Mark course finished
@@ -816,15 +846,9 @@ def finish_course_controller(request: Request, payload: FinishCourseRequest):
 
 
 def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
-	"""Mark a single lesson (and optionally its test) as finished.
-
-	Rules (inferred):
-	- User must own the course containing the lesson.
-	- We assume caller only invokes after passing its test. We'll just flip finish flag.
-	- If related Test exists we also mark its finish=True (since spec says triggered after passing test).
-	"""
+	"""Mark a single lesson as finished once its assessments are passed."""
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Test
+	from src.models import Course, Lesson
 
 	user_id = _verify_token(request)
 	if not user_id:
@@ -839,10 +863,6 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 		if not lesson:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
 		setattr(lesson, "finish", True)
-		# Mark related tests finished (if any)
-		tests = session.query(Test).filter(Test.lesson_id == lesson.lesson_id).all()
-		for t in tests:
-			setattr(t, "finish", True)
 		session.commit()
 		return {"status": 200, "message": "Đã cập nhật thành công"}
 	except Exception as e:

@@ -38,6 +38,7 @@ def send_generate_with_vectorize(
     user_id: Optional[str] = None,
     region: Optional[str] = None,
     group_id: Optional[str] = None,
+    job_type: str = "generate_course",
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
@@ -58,7 +59,7 @@ def send_generate_with_vectorize(
 
     body = json.dumps(
         {
-            "type": "GENERATE_COURSE_WITH_VECTORIZE",
+            "type": job_type,
             "correlation_id": str(uuid.uuid4()),
             "timestamp": _iso_now(),
             "payload": payload,

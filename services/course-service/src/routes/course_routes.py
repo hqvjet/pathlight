@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Request, UploadFile, File, Depends, Query, HTTPException
+from fastapi import APIRouter, Request, UploadFile, File, Depends, Query
 from typing import List, Optional
-from pydantic import BaseModel, Field
 import boto3
 from botocore.exceptions import ClientError
 from src.config import config
@@ -13,9 +12,10 @@ from src.controllers.course_controller import (
     get_all_courses_controller,
     list_course_lessons_controller,
     get_lesson_detail_controller,
-    get_lesson_test_controller,
-    submit_lesson_test_controller,
-    get_final_test_controller,
+    get_assessment_list_controller,
+    submit_assessment_controller,
+    get_quiz_controller,
+    submit_quiz_controller,
     finish_course_controller,
     finish_lesson_controller,
 )
@@ -31,14 +31,12 @@ from src.schemas.course_schemas import (
     CourseSummary,
     LessonListResponse,
     LessonDetail,
-    LessonTestResponse,
-    LessonTest,
-    LessonTestQA,
-    LessonTestSubmitRequest,
-    LessonTestSubmitResponse,
-    FinalTestResponse,
-    FinalTestDetail,
-    FinalTestQA,
+    AssessmentListResponse,
+    AssessmentSubmitRequest,
+    AssessmentSubmitResponse,
+    QuizResponse,
+    QuizSubmitRequest,
+    QuizSubmitResponse,
     FinishCourseRequest,
     FinishLessonRequest,
     PresignUploadRequest,
@@ -137,11 +135,34 @@ async def request_create_course(
     if not queue_url:
         return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
 
-    if not body.short_user_prompt or not body.short_user_prompt.strip():
-        return {"status": 400, "message": "short_user_prompt is required"}
+    # Accept new/legacy prompt fields
+    short_prompt = body.short_prompt or body.short_user_prompt
+    if not short_prompt or not short_prompt.strip():
+        return {"status": 400, "message": "short_prompt is required"}
+
+    # Validate job type (defaults to generate_course)
+    job_type = body.type or "generate_course"
+    allowed_job_types = {"generate_course", "generate_quiz"}
+    if job_type not in allowed_job_types:
+        return {"status": 400, "message": "type must be one of generate_course, generate_quiz"}
 
     course_id = body.course_id or f"course-{uuid.uuid4()}"
-    s3_keys = body.s3_key or []
+    s3_keys = (body.documents or []) + (body.s3_key or [])
+
+    # Normalize user prefix for any provided keys early, before validation
+    normalized_s3_keys = []
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    # body user_id is optional; we trust token and override
+    body.user_id = user_id
+    user_prefix = f"users/{user_id}/"
+    for key in s3_keys:
+        if not key:
+            continue
+        normalized_s3_keys.append(key if key.startswith(user_prefix) else user_prefix + key.lstrip('/'))
+    s3_keys = normalized_s3_keys
 
     # Validate S3 object sizes only when keys are provided
     region = getattr(config, "REGION", None) or os.getenv("REGION") or "ap-northeast-1"
@@ -167,11 +188,6 @@ async def request_create_course(
         except Exception as e:
             return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
-    from src.controllers.course_controller import _verify_token
-    user_id = _verify_token(request)
-    if not user_id:
-        return {"status": 401, "message": "Unauthorized"}
-
     try:
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
@@ -179,14 +195,15 @@ async def request_create_course(
             s3_keys=s3_keys,
             difficulty=body.difficulty,
             duration=body.duration,
-            short_user_prompt=body.short_user_prompt,
-            user_position=body.user_position,
+            short_user_prompt=short_prompt,
+            user_position=body.user_role or body.user_position,
             course_level=body.course_level,
             course_constraint=body.course_constraint,
             course_duration=body.course_duration,
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),
+            job_type=job_type,
         )
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
     except Exception as e:
@@ -213,19 +230,24 @@ async def get_lesson_detail(course_id: str, lesson_id: str, request: Request, _a
     return get_lesson_detail_controller(request, course_id, lesson_id)
 
 
-@router.get("/{course_id}/lessons/{lesson_id}/test", response_model=LessonTestResponse)
-async def get_lesson_test(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
-    return get_lesson_test_controller(request, course_id, lesson_id)
+@router.get("/{course_id}/lessons/{lesson_id}/assessments", response_model=AssessmentListResponse)
+async def list_assessments(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
+    return get_assessment_list_controller(request, course_id, lesson_id)
 
 
-@router.post("/{course_id}/lessons/{lesson_id}/test/submit", response_model=LessonTestSubmitResponse)
-async def submit_lesson_test(course_id: str, lesson_id: str, request: Request, body: LessonTestSubmitRequest, _auth=Depends(require_bearer)):
-    return submit_lesson_test_controller(request, course_id, lesson_id, body)
+@router.post("/{course_id}/lessons/{lesson_id}/assessments/submit", response_model=AssessmentSubmitResponse)
+async def submit_assessments(course_id: str, lesson_id: str, request: Request, body: AssessmentSubmitRequest, _auth=Depends(require_bearer)):
+    return submit_assessment_controller(request, course_id, lesson_id, body)
 
 
-@router.get("/{course_id}/final-test", response_model=FinalTestResponse)
-async def get_final_test(course_id: str, request: Request, _auth=Depends(require_bearer)):
-    return get_final_test_controller(request, course_id)
+@router.get("/{course_id}/quiz", response_model=QuizResponse)
+async def get_quiz(course_id: str, request: Request, _auth=Depends(require_bearer)):
+    return get_quiz_controller(request, course_id)
+
+
+@router.post("/{course_id}/quiz/submit", response_model=QuizSubmitResponse)
+async def submit_quiz(course_id: str, request: Request, body: QuizSubmitRequest, _auth=Depends(require_bearer)):
+    return submit_quiz_controller(request, course_id, body)
 
 
 @router.put("/finish")
