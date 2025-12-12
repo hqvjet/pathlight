@@ -110,6 +110,49 @@ class LessonTestResponse(BaseModel):
     test: LessonTest
 
 
+# ---- Lesson Test submission ----
+
+class LessonTestSubmitAnswer(BaseModel):
+    qa_id: str
+    answer: str
+
+
+class LessonTestSubmitRequest(BaseModel):
+    answers: List[LessonTestSubmitAnswer]
+
+
+class LessonTestSubmitResultItem(BaseModel):
+    qa_id: str
+    selected_answer: str
+    correct_answer: str
+    is_correct: bool
+    difficulty: int | None = None
+    gained_exp: int
+    penalty_exp: int
+
+
+class LessonTestSubmitResult(BaseModel):
+    score: float
+    correct_count: int
+    total: int
+    earned_exp: int
+    penalty_exp: int
+    applied_exp: int
+    passed: bool
+    pass_threshold: int
+    level: int | None = None
+    current_exp: int | None = None
+    require_exp: int | None = None
+    level_up: bool | None = None
+    answers: List[LessonTestSubmitResultItem]
+
+
+class LessonTestSubmitResponse(BaseModel):
+    status: int
+    result: LessonTestSubmitResult | None = None
+    message: str | None = None
+
+
 class FinalTestQA(BaseModel):
     final_qa_id: str
     question: str

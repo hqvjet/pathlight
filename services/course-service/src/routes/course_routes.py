@@ -14,6 +14,7 @@ from src.controllers.course_controller import (
     list_course_lessons_controller,
     get_lesson_detail_controller,
     get_lesson_test_controller,
+    submit_lesson_test_controller,
     get_final_test_controller,
     finish_course_controller,
     finish_lesson_controller,
@@ -33,6 +34,8 @@ from src.schemas.course_schemas import (
     LessonTestResponse,
     LessonTest,
     LessonTestQA,
+    LessonTestSubmitRequest,
+    LessonTestSubmitResponse,
     FinalTestResponse,
     FinalTestDetail,
     FinalTestQA,
@@ -213,6 +216,11 @@ async def get_lesson_detail(course_id: str, lesson_id: str, request: Request, _a
 @router.get("/{course_id}/lessons/{lesson_id}/test", response_model=LessonTestResponse)
 async def get_lesson_test(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
     return get_lesson_test_controller(request, course_id, lesson_id)
+
+
+@router.post("/{course_id}/lessons/{lesson_id}/test/submit", response_model=LessonTestSubmitResponse)
+async def submit_lesson_test(course_id: str, lesson_id: str, request: Request, body: LessonTestSubmitRequest, _auth=Depends(require_bearer)):
+    return submit_lesson_test_controller(request, course_id, lesson_id, body)
 
 
 @router.get("/{course_id}/final-test", response_model=FinalTestResponse)

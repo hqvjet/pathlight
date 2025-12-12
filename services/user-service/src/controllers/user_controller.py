@@ -206,6 +206,14 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         logger.error(f"Dashboard error for {getattr(current_user, 'email', 'unknown')}: {e}")
         return DashboardResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
+
+# ---------- Experience ----------
+async def add_experience(request: ExperienceAddRequest, current_user: User, db: Session) -> TestStatsResponse:
+    if request.exp <= 0:
+        return TestStatsResponse(status=400, message="Giá trị exp phải lớn hơn 0")
+    result = await svc_add_experience(request.exp, current_user, db)
+    return result
+
 # ---------- Activity (placeholder) ----------
 async def save_user_activity(current_user: User, db: Session) -> MessageResponse:
     return MessageResponse(status=200)

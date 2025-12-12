@@ -24,6 +24,10 @@ from src.schemas.course_schemas import (
 	LessonTestResponse,
 	LessonTest,
 	LessonTestQA,
+	LessonTestSubmitRequest,
+	LessonTestSubmitResponse,
+	LessonTestSubmitResult,
+	LessonTestSubmitResultItem,
 	FinalTestResponse,
 	FinalTestDetail,
 	FinalTestQA,
@@ -34,6 +38,15 @@ from src.schemas.course_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+DIFFICULTY_EXP = {
+	1: 5,
+	2: 10,
+	3: 15,
+	4: 20,
+	5: 25,
+}
+PASS_THRESHOLD = 80
 
 
 def _verify_token(request: Request):
@@ -569,6 +582,148 @@ def get_lesson_test_controller(request: Request, course_id: str, lesson_id: str)
 			qas=qa_models,
 		)
 		return LessonTestResponse(status=200, test=test_model)
+	finally:
+		session.close()
+
+
+def _normalize_answer_value(raw: str | None) -> str:
+	return (raw or "").strip().lower()
+
+
+def submit_lesson_test_controller(request: Request, course_id: str, lesson_id: str, body: LessonTestSubmitRequest) -> LessonTestSubmitResponse:
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Test, LessonQA
+	import math
+
+	user_id = _verify_token(request)
+	if not user_id:
+		return LessonTestSubmitResponse(status=401, message="Bạn không có quyền làm bài test này")
+
+	session = SessionLocal()
+	try:
+		owned = session.query(Course).filter(Course.course_id == course_id, Course.user_id == user_id).first()
+		if not owned:
+			return LessonTestSubmitResponse(status=401, message="Bạn không có quyền làm bài test này")
+
+		test = (
+			session.query(Test)
+			.filter(Test.lesson_id == lesson_id)
+			.order_by(Test.created_at.asc())
+			.first()
+		)
+		if not test:
+			return LessonTestSubmitResponse(status=404, message="Không tìm thấy bài test")
+
+		qas = session.query(LessonQA).filter(LessonQA.test_id == test.test_id).all()
+		qa_lookup = {getattr(qa, "qa_id"): qa for qa in qas}
+		if not qas:
+			return LessonTestSubmitResponse(status=400, message="Bài test chưa có câu hỏi")
+
+		if not body.answers or len(body.answers) < len(qas):
+			return LessonTestSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi trước khi nộp bài")
+
+		correct_count = 0
+		earned_exp = 0
+		penalty_exp = 0
+		answer_results: list[LessonTestSubmitResultItem] = []
+
+		for ans in body.answers:
+			qa = qa_lookup.get(ans.qa_id)
+			if not qa:
+				continue
+			options = {
+				"option1": getattr(qa, "option1", ""),
+				"option2": getattr(qa, "option2", ""),
+				"option3": getattr(qa, "option3", ""),
+				"option4": getattr(qa, "option4", ""),
+			}
+			# Determine correct option id
+			correct_answer_raw = getattr(qa, "answer", "")
+			correct_opt_id = correct_answer_raw if correct_answer_raw in options else None
+			if not correct_opt_id:
+				for key, val in options.items():
+					if _normalize_answer_value(val) == _normalize_answer_value(correct_answer_raw):
+						correct_opt_id = key
+						break
+			# Determine selected option id
+			selected_opt_id = ans.answer if ans.answer in options else None
+			if not selected_opt_id:
+				for key, val in options.items():
+					if _normalize_answer_value(val) == _normalize_answer_value(ans.answer):
+						selected_opt_id = key
+						break
+			selected_opt_id = selected_opt_id or ""
+			correct_opt_id = correct_opt_id or ""
+			is_correct = selected_opt_id == correct_opt_id and bool(correct_opt_id)
+			if is_correct:
+				correct_count += 1
+
+			difficulty_val = getattr(qa, "difficult_level_id", None)
+			try:
+				difficulty_int = int(difficulty_val) if difficulty_val is not None else None
+			except Exception:
+				difficulty_int = None
+			base_exp = DIFFICULTY_EXP.get(difficulty_int, DIFFICULTY_EXP[1])
+			if is_correct:
+				gained = base_exp
+				penalty = 0
+			else:
+				gained = 0
+				penalty = math.floor(base_exp * 0.5)
+			earned_exp += gained
+			penalty_exp += penalty
+			answer_results.append(
+				LessonTestSubmitResultItem(
+					qa_id=ans.qa_id,
+					selected_answer=selected_opt_id,
+					correct_answer=correct_opt_id,
+					is_correct=is_correct,
+					difficulty=difficulty_int,
+					gained_exp=gained,
+					penalty_exp=penalty,
+				)
+			)
+
+		total = len(qas)
+		score = round((correct_count / total) * 100, 2)
+		applied_exp = max(0, earned_exp - penalty_exp)
+		passed = score >= PASS_THRESHOLD
+
+		# Only mark completion when passed. EXP/level will be handled client-side per requirement.
+		level = None
+		level_up = None
+		current_exp = None
+		require_exp = None
+
+		if passed:
+			lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
+			if lesson:
+				setattr(lesson, "finish", True)
+			setattr(test, "finish", True)
+			session.commit()
+		else:
+			session.rollback()
+
+		result = LessonTestSubmitResult(
+			score=score,
+			correct_count=correct_count,
+			total=total,
+			earned_exp=earned_exp,
+			penalty_exp=penalty_exp,
+			applied_exp=applied_exp if passed else 0,
+			passed=passed,
+			pass_threshold=PASS_THRESHOLD,
+			level=level,
+			current_exp=current_exp,
+			require_exp=require_exp,
+			level_up=level_up,
+			answers=answer_results,
+		)
+		return LessonTestSubmitResponse(status=200, result=result)
+	except Exception as e:
+		logger.error("submit_lesson_test_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)
+		session.rollback()
+		return LessonTestSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
 	finally:
 		session.close()
 
