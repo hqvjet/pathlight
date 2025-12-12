@@ -36,7 +36,9 @@ export default function Avatar({
   const applyCache = (url: string) => {
     if (!url) return url;
     if (/^data:/.test(url)) return url;
-    const version = cacheKey !== undefined && cacheKey !== null ? cacheKey : '0';
+    const version = cacheKey !== undefined && cacheKey !== null
+      ? cacheKey
+      : (user?.avatar_id || user?.avatar_url || user?.id || '0');
     return `${url}${url.includes('?') ? '&' : '?'}v=${version}-${retryNonce}`;
   };
   const sources = rawSources.map(applyCache);

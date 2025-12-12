@@ -222,6 +222,8 @@ export default function LessonDetailPage({ params }: PageProps) {
       return test.qas.map((qa, idx) => {
         const optionKeys = ['option1', 'option2', 'option3', 'option4'] as const;
         const correctKey = qa.correct_answer || qa.answer;
+        const isTextAnswer = Boolean(correctKey && correctKey.length > 1);
+        const normalizedCorrect = correctKey?.trim().toLowerCase();
         const explanation = qa.explanation || qa.answer_explanation;
         return {
           id: qa.qa_id || `qa-${idx}`,
@@ -230,11 +232,17 @@ export default function LessonDetailPage({ params }: PageProps) {
           explanation,
           difficult_level_id: qa.difficult_level_id,
           options: optionKeys
-            .map((key) => ({
-              id: key,
-              content: qa[key],
-              isCorrect: correctKey ? correctKey === key : false,
-            }))
+            .map((key) => {
+              const content = qa[key];
+              const isCorrect = isTextAnswer
+                ? Boolean(content && normalizedCorrect && content.trim().toLowerCase() === normalizedCorrect)
+                : Boolean(correctKey && correctKey === key);
+              return {
+                id: key,
+                content,
+                isCorrect,
+              };
+            })
             .filter((opt) => Boolean(opt.content)),
         } as NormalizedQuestion;
       });

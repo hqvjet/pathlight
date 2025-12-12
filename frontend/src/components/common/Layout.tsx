@@ -51,6 +51,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cachedProgress, setCachedProgress] = useState<{ level?: number; current_exp?: number; require_exp?: number; rank?: number }>({});
+  const [avatarVersion, setAvatarVersion] = useState<number>(() => Date.now());
   const router = useRouter();
   const pathname = usePathname();
 
@@ -103,6 +104,11 @@ export default function Layout({ children, title, user }: LayoutProps) {
       /* ignore */
     }
   }, []);
+
+  // Bust avatar cache whenever the user avatar changes
+  useEffect(() => {
+    setAvatarVersion(Date.now());
+  }, [effectiveUser?.avatar_url, effectiveUser?.avatar_id, effectiveUser?.google_avatar_url]);
 
   const handleLogout = () => {
     storage.removeToken();
@@ -164,7 +170,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
             className="w-8 h-8"
             displayName={effectiveUser?.name || effectiveUser?.email || 'User'}
             showInitialsFallback={true}
-            cacheKey={effectiveUser?.avatarKey}
+            cacheKey={effectiveUser?.avatarKey ?? avatarVersion}
           />
         </div>
       </div>
