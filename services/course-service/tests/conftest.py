@@ -14,6 +14,8 @@ for p in (str(SRC_DIR), str(SERVICE_ROOT)):
 # Ensure DB setup is skipped for tests
 os.environ.setdefault("COURSE_SKIP_DB_SETUP", "true")
 os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
+os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+os.environ.setdefault("S3_BUCKET_NAME", "test-bucket")
 
 from src.main import app
 

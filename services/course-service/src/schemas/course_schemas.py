@@ -35,6 +35,8 @@ class CourseFullInfo(BaseModel):
     overview: str
     level: str
     duration: int
+    is_public: bool = False
+    owner_id: str
     lesson: List[LessonInfo]
     updated_at: str
 
@@ -51,6 +53,8 @@ class CourseSummary(BaseModel):
     level: str
     duration: int
     finish: bool
+    is_public: bool = False
+    owner_id: str
     lesson_num: int
     finish_lesson_num: int
     updated_at: str
@@ -59,6 +63,11 @@ class CourseSummary(BaseModel):
 class CourseListResponse(BaseModel):
     status: int
     courses: List[CourseSummary]
+
+
+class CourseVisibilityUpdate(BaseModel):
+    course_id: str
+    is_public: bool
 
 
 # ---- Lesson detail ----
@@ -129,52 +138,20 @@ class AssessmentSubmitResult(BaseModel):
     answers: List[AssessmentSubmitResultItem]
 
 
+class ExperienceSnapshot(BaseModel):
+    gained_exp: int
+    new_level: int | None = None
+    new_exp: int | None = None
+    require_exp: int | None = None
+    exp_needed_for_next: int | None = None
+    rank: int | None = None
+
+
 class AssessmentSubmitResponse(BaseModel):
     status: int
     result: AssessmentSubmitResult | None = None
     message: str | None = None
-
-
-# ---- Course-level quiz ----
-
-class QuizQAItem(BaseModel):
-    qa_id: str
-    quiz_id: str
-    question: str
-    explain: str
-    option1: str
-    option2: str
-    option3: str
-    option4: str
-    answer: int
-
-
-class QuizDetail(BaseModel):
-    quiz_id: str
-    course_id: str
-    finish: bool
-    qas: List[QuizQAItem]
-
-
-class QuizResponse(BaseModel):
-    status: int
-    quiz: QuizDetail | None = None
-    message: str | None = None
-
-
-class QuizSubmitAnswer(BaseModel):
-    qa_id: str
-    answer: int
-
-
-class QuizSubmitRequest(BaseModel):
-    answers: List[QuizSubmitAnswer]
-
-
-class QuizSubmitResponse(BaseModel):
-    status: int
-    result: AssessmentSubmitResult | None = None
-    message: str | None = None
+    experience: ExperienceSnapshot | None = None
 
 
 # ---- Upload presign schemas ----

@@ -6,13 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Use unique database URL to avoid interference with other test files  
-TEST_DB_URL = f"sqlite+pysqlite:///:memory:delete_test_{os.getpid()}"
+# Use file-based SQLite so app sessions share the same database during tests
+TEST_DB_URL = "sqlite+pysqlite:///./test_course_delete.db"
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
 
 from src.database import Base
-from src.models import Course, CourseInfo, UnderstandLevelTag
+from src.models import Course
 from src.main import app
 
 engine = create_engine(
@@ -29,6 +29,21 @@ _db.engine = engine
 _db.SessionLocal = SessionLocal
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _configure_test_db():
+    prev_engine = _db.engine
+    prev_session = _db.SessionLocal
+    _db.engine = engine
+    _db.SessionLocal = SessionLocal
+    yield
+    _db.engine = prev_engine
+    _db.SessionLocal = prev_session
+    try:
+        os.remove("test_course_delete.db")
+    except FileNotFoundError:
+        pass
+
+
 @pytest.fixture(scope="module")
 def client():
     return TestClient(app)
@@ -40,47 +55,30 @@ def seed_db():
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     try:
-        level = UnderstandLevelTag(understand_level_id=str(uuid.uuid4()), understand_level="average")
-        session.add(level)
-        session.flush()
         courses = []
         for i in range(2):
-            ci_id = str(uuid.uuid4())
             c_id = str(uuid.uuid4())
-            ci = CourseInfo(
-                course_info_id=ci_id,
-                understand_level_id=level.understand_level_id,
-                title=f"Course {i}",
-                description="Desc",
-                duration=10,
-                roadmap=None,
-            )
             c = Course(
                 course_id=c_id,
-                course_info_id=ci.course_info_id,
                 user_id="user-1",
-                finish=False,
+                title=f"Course {i}",
+                overview="Desc",
+                level="overview",
+                duration=10,
+                is_public=False,
             )
-            session.add(ci)
             session.add(c)
             courses.append(c_id)
-        ci_other_id = str(uuid.uuid4())
         c_other_id = str(uuid.uuid4())
-        ci_other = CourseInfo(
-            course_info_id=ci_other_id,
-            understand_level_id=level.understand_level_id,
-            title="Other",
-            description="Desc",
-            duration=5,
-            roadmap=None,
-        )
         c_other = Course(
             course_id=c_other_id,
-            course_info_id=ci_other.course_info_id,
             user_id="user-2",
-            finish=False,
+            title="Other",
+            overview="Desc",
+            level="overview",
+            duration=5,
+            is_public=False,
         )
-        session.add(ci_other)
         session.add(c_other)
         session.commit()
         yield {"user_courses": courses, "other_course": c_other_id}
@@ -90,6 +88,7 @@ def seed_db():
 
 def _auth(mocker, user_id="user-1"):
     mocker.patch("src.controllers.course_controller.jwt.decode", return_value={"sub": user_id})
+    mocker.patch("src.controllers.course_controller.jwt.get_unverified_claims", return_value={"sub": user_id})
 
 
 def test_delete_single_success(mocker, client, seed_db):

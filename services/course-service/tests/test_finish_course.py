@@ -6,12 +6,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-os.environ.setdefault("COURSE_SERVICE_SKIP_DB", "true")
+os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+os.environ["COURSE_SERVICE_SKIP_DB"] = "true"
 
 from src.main import app
 from src.database import Base
-from src.models import Course, CourseInfo, UnderstandLevelTag, Lesson, Test, FinalTest
+from src.models import Course, Lesson, LessonProgress
 import src.database as _db
 
 engine = create_engine(
@@ -25,6 +25,17 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 _db.engine = engine
 _db.SessionLocal = SessionLocal
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _configure_test_db():
+    prev_engine = _db.engine
+    prev_session = _db.SessionLocal
+    _db.engine = engine
+    _db.SessionLocal = SessionLocal
+    yield
+    _db.engine = prev_engine
+    _db.SessionLocal = prev_session
+
 @pytest.fixture(scope="module")
 def client():
     return TestClient(app)
@@ -34,28 +45,18 @@ def seed_full_course():
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     try:
-        level = UnderstandLevelTag(understand_level_id=str(uuid.uuid4()), understand_level="average")
-        session.add(level)
-        session.flush()
-        ci_id = str(uuid.uuid4())
         c_id = str(uuid.uuid4())
-        ci = CourseInfo(
-            course_info_id=ci_id,
-            understand_level_id=level.understand_level_id,
-            title="Course",
-            description="Desc",
-            duration=10,
-            roadmap=None,
-        )
         course = Course(
             course_id=c_id,
-            course_info_id=ci.course_info_id,
             user_id="user-1",
-            finish=False,
+            title="Course",
+            overview="Desc",
+            level="overview",
+            duration=10,
+            is_public=False,
         )
-        session.add(ci)
         session.add(course)
-        # lessons + test + final test
+        # lessons + progress
         lesson_ids = []
         for i in range(2):
             lid = str(uuid.uuid4())
@@ -63,36 +64,20 @@ def seed_full_course():
                 lesson_id=lid,
                 course_id=course.course_id,
                 title=f"L{i}",
+                overview="Desc",
                 content="Content",
-                description="Desc",
-                finish=True,  # already finished
+                duration=5,
             )
             session.add(lesson)
-            # each lesson test finished
-            t = Test(
-                test_id=str(uuid.uuid4()),
+            lp = LessonProgress(
+                progress_id=f"lp-{uuid.uuid4()}",
                 lesson_id=lesson.lesson_id,
-                title="T",
-                description="TD",
-                duration=5,
-                finish=True,
-                exp=10,
+                course_id=course.course_id,
+                user_id="user-1",
+                is_completed=True,
             )
-            session.add(t)
+            session.add(lp)
             lesson_ids.append(lid)
-        ft = FinalTest(
-            final_test_id=str(uuid.uuid4()),
-            course_id=course.course_id,
-            title="FT",
-            description="FD",
-            duration=5,
-            exp=20,
-        )
-        # Mark final test finished by adding attribute if not exists
-        if not hasattr(ft, "finish"):
-            # Some models may not have finish flag; for safety ignore
-            pass
-        session.add(ft)
         session.commit()
         yield {"course_id": c_id, "lesson_ids": lesson_ids}
     finally:
@@ -101,6 +86,7 @@ def seed_full_course():
 
 def _auth(mocker, user="user-1"):
     mocker.patch("src.controllers.course_controller.jwt.decode", return_value={"sub": user})
+    mocker.patch("src.controllers.course_controller.jwt.get_unverified_claims", return_value={"sub": user})
 
 
 def test_finish_course_success(mocker, client, seed_full_course):
@@ -116,34 +102,23 @@ def test_finish_course_not_all_lessons_done(mocker, client, seed_full_course):
     _auth(mocker)
     session = SessionLocal()
     try:
-        level = session.query(UnderstandLevelTag).first()
-        if level is None:
-            level = UnderstandLevelTag(understand_level_id=str(uuid.uuid4()), understand_level="average")
-            session.add(level)
-            session.flush()
-        ci = CourseInfo(
-            course_info_id=str(uuid.uuid4()),
-            understand_level_id=level.understand_level_id,
-            title="New",
-            description="d",
-            duration=5,
-            roadmap=None,
-        )
         c = Course(
             course_id=str(uuid.uuid4()),
-            course_info_id=ci.course_info_id,
             user_id="user-1",
-            finish=False,
+            title="New",
+            overview="d",
+            level="overview",
+            duration=5,
+            is_public=False,
         )
-        session.add(ci)
         session.add(c)
         lesson = Lesson(
             lesson_id=str(uuid.uuid4()),
             course_id=c.course_id,
             title="L",
+            overview="D",
             content="C",
-            description="D",
-            finish=False,
+            duration=5,
         )
         session.add(lesson)
         session.commit()
@@ -168,9 +143,9 @@ def test_finish_lesson_success(mocker, client, seed_full_course):
             lesson_id=lid,
             course_id=course_id,
             title="NewLesson",
+            overview="D",
             content="C",
-            description="D",
-            finish=False,
+            duration=5,
         )
         session.add(lesson)
         session.commit()
