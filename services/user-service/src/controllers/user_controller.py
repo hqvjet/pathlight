@@ -1,7 +1,9 @@
 import logging
 from sqlalchemy.orm import Session
 from typing import Optional
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException, status
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials
 
 from models import User
 from schemas.user_schemas import *  # noqa
@@ -16,12 +18,38 @@ from services.experience_service import (
     simulate_learning_activity as svc_simulate_learning_activity,
     add_experience as svc_add_experience,
 )
+from services.activity_service import log_activity as svc_log_activity, get_activity_series as svc_get_activity_series
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
 from services.external.course_client import get_course_stats
 from services.external.quiz_client import get_quiz_stats
 from services.log_service import get_admin_logs as fetch_admin_logs
+from services.user_service_auth import get_current_admin_user
 
 logger = logging.getLogger(__name__)
+
+
+def _admin_guard(credentials: HTTPAuthorizationCredentials, db: Session):
+    """Ensure the requester is an admin; mirror previous route-level checks."""
+    try:
+        get_current_admin_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": 503, "message": "Bạn không có quyền truy cập"},
+            )
+        raise
+    return None
+
+
+def _send_result(model_response):
+    """Return JSONResponse with proper status when status != 200."""
+    if isinstance(model_response, JSONResponse):
+        return model_response
+    status_code = getattr(model_response, "status", 200)
+    if status_code != 200 and hasattr(model_response, "dict"):
+        return JSONResponse(status_code=status_code, content=model_response.dict())
+    return model_response
 
 # ---------- Profile & Basic Info ----------
 async def change_user_info(request: ChangeInfoRequest, current_user: User, db: Session) -> MessageResponse:
@@ -111,8 +139,10 @@ async def get_all_users(db: Session) -> UsersListResponse:
         return UsersListResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
 
-async def get_admin_user_overview(db: Session) -> AdminUsersResponse:
-    """Return compact user data for admin dashboard listing"""
+async def get_admin_user_overview(credentials: HTTPAuthorizationCredentials, db: Session) -> AdminUsersResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
     try:
         users = db.query(User).all()
         user_items = [
@@ -130,22 +160,25 @@ async def get_admin_user_overview(db: Session) -> AdminUsersResponse:
         return AdminUsersResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
 
-async def create_admin_account(request: AdminCreateRequest, db: Session) -> MessageResponse:
+async def create_admin_account(request: AdminCreateRequest, credentials: HTTPAuthorizationCredentials, db: Session) -> MessageResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
     try:
         username = request.username.strip()
         if not username:
-            return MessageResponse(status=400, message="Username không được để trống")
+            return _send_result(MessageResponse(status=400, message="Username không được để trống"))
         if get_admin_by_username(db, username):
-            return MessageResponse(status=400, message="Tên đăng nhập đã tồn tại")
+            return _send_result(MessageResponse(status=400, message="Tên đăng nhập đã tồn tại"))
         try:
             create_admin(db, username, request.password)
         except Exception as exc:
             logger.error(f"Failed to create admin '{username}': {exc}")
-            return MessageResponse(status=500, message="Không thể tạo admin mới")
-        return MessageResponse(status=200, message="Admin đã được tạo thành công")
+            return _send_result(MessageResponse(status=500, message="Không thể tạo admin mới"))
+        return _send_result(MessageResponse(status=200, message="Admin đã được tạo thành công"))
     except Exception as e:  # pragma: no cover
         logger.error(f"Unexpected error during admin creation: {e}")
-        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+        return _send_result(MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại"))
 
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
@@ -235,52 +268,69 @@ async def get_level_system_info() -> dict:
 async def simulate_learning_activity(current_user: User, db: Session) -> TestStatsResponse:
     return await svc_simulate_learning_activity(current_user, db)
 
-async def add_experience(exp_amount: int, current_user: User, db: Session) -> TestStatsResponse:
-    return await svc_add_experience(exp_amount, current_user, db)
+
+# ---------- Activity tracking ----------
+
+async def log_learning_activity(request: ActivityLogRequest, current_user: User, db: Session):
+    return svc_log_activity(request, current_user, db)
+
+
+async def get_learning_activity(current_user: User, db: Session, days: int = 365):
+    return svc_get_activity_series(current_user, db, days)
 
 # ---------- Admin Update Email ----------
-async def admin_update_user_email(user_id: str, new_email: str, db: Session) -> MessageResponse:
+async def admin_update_user_email(user_id: str, new_email: str, credentials: HTTPAuthorizationCredentials, db: Session) -> MessageResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
     try:
         target_user = db.query(User).filter(User.id == user_id).first()
         if not target_user:
-            return MessageResponse(status=404, message="Người dùng không tồn tại")
-        
+            return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
+
         existing_user = db.query(User).filter(User.email == new_email).first()
-        if existing_user:
-            if str(getattr(existing_user, 'id')) != str(user_id):
-                return MessageResponse(status=500, message="Email muốn thay đổi đã tồn tại trong hệ thống, vui lòng cung cấp email khác")
-        
+        if existing_user and str(getattr(existing_user, 'id')) != str(user_id):
+            return _send_result(MessageResponse(status=500, message="Email muốn thay đổi đã tồn tại trong hệ thống, vui lòng cung cấp email khác"))
+
         setattr(target_user, 'email', new_email)
         db.commit()
         logger.info(f"Admin updated email for user {user_id} to {new_email}")
-        return MessageResponse(status=200, message="Cập nhật email thành công")
+        return _send_result(MessageResponse(status=200, message="Cập nhật email thành công"))
     except Exception as e:
         logger.error(f"Admin update email error: {e}")
         db.rollback()
-        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+        return _send_result(MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại"))
 
 # ---------- Admin Delete User ----------
-async def admin_delete_user(user_id: str, db: Session) -> MessageResponse:
+async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredentials, db: Session) -> MessageResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
     try:
         target_user = db.query(User).filter(User.id == user_id).first()
         if not target_user:
-            return MessageResponse(status=404, message="Người dùng không tồn tại")
-        
-        # Delete user and all related resources
+            return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
+
         db.delete(target_user)
         db.commit()
         logger.info(f"Admin deleted user {user_id} and all related resources")
-        return MessageResponse(status=200, message="Xóa người dùng thành công")
+        return _send_result(MessageResponse(status=200, message="Xóa người dùng thành công"))
     except Exception as e:  # pragma: no cover
         logger.error(f"Admin delete user error: {e}")
         db.rollback()
-        return MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
+        return _send_result(MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại"))
 
 # ---------- Admin Get AWS Costs ----------
-async def get_admin_aws_costs():
+async def get_admin_aws_costs(credentials: HTTPAuthorizationCredentials, db: Session):
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
     from services.aws_cost_service import get_aws_costs_last_30_days
     return get_aws_costs_last_30_days()
 
 
-def get_admin_logs(filter_key: str):
-    return fetch_admin_logs(filter_key)
+async def get_admin_logs(filter_key: str, service: Optional[str], credentials: HTTPAuthorizationCredentials, db: Session):
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    return fetch_admin_logs(filter_key, service=service)

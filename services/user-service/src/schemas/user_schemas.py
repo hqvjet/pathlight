@@ -151,3 +151,28 @@ class TestStatsResponse(BaseModel):
 
 class ExperienceAddRequest(BaseModel):
     exp: int
+
+
+# ---------- Activity tracking ----------
+
+class ActivityLogRequest(BaseModel):
+    event: str
+
+
+class ActivityLogResponse(BaseModel):
+    status: int
+    date: str | None = None
+    added_points: int | None = None
+    total_points: int | None = None
+    message: Optional[str] = None
+
+
+class ActivityItem(BaseModel):
+    date: str
+    points: int
+
+
+class ActivitySeriesResponse(BaseModel):
+    status: int
+    items: Optional[List[ActivityItem]] = None
+    message: Optional[str] = None
