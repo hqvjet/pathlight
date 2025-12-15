@@ -164,6 +164,11 @@ class ActivityLogResponse(BaseModel):
     date: str | None = None
     added_points: int | None = None
     total_points: int | None = None
+    streak: int | None = None
+    bonus_exp: int | None = None
+    new_exp: int | None = None
+    new_level: int | None = None
+    require_exp: int | None = None
     message: Optional[str] = None
 
 

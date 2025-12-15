@@ -56,7 +56,8 @@ class User(Base):
 
     @family_name.setter
     def family_name(self, value: str | None):
-        self._ensure_profile().family_name = value
+        # SQLAlchemy attribute typing is dynamic; ignore type checker
+        self._ensure_profile().family_name = value  # type: ignore[assignment]
 
     @property
     def given_name(self) -> str | None:
@@ -64,7 +65,7 @@ class User(Base):
 
     @given_name.setter
     def given_name(self, value: str | None):
-        self._ensure_profile().given_name = value
+        self._ensure_profile().given_name = value  # type: ignore[assignment]
 
     @property
     def avatar_url(self) -> str | None:
@@ -72,7 +73,7 @@ class User(Base):
 
     @avatar_url.setter
     def avatar_url(self, value: str | None):
-        self._ensure_profile().avatar_url = value
+        self._ensure_profile().avatar_url = value  # type: ignore[assignment]
 
     @property
     def dob(self):
@@ -88,7 +89,7 @@ class User(Base):
 
     @level.setter
     def level(self, value: int):
-        self._ensure_profile().level = value
+        self._ensure_profile().level = value  # type: ignore[assignment]
 
     @property
     def current_exp(self) -> int:
@@ -96,7 +97,7 @@ class User(Base):
 
     @current_exp.setter
     def current_exp(self, value: int):
-        self._ensure_profile().current_exp = value
+        self._ensure_profile().current_exp = value  # type: ignore[assignment]
 
     @property
     def require_exp(self) -> int:
@@ -104,7 +105,7 @@ class User(Base):
 
     @require_exp.setter
     def require_exp(self, value: int):
-        self._ensure_profile().require_exp = value
+        self._ensure_profile().require_exp = value  # type: ignore[assignment]
 
     @property
     def remind_time(self):
@@ -128,7 +129,23 @@ class User(Base):
 
     @bio.setter
     def bio(self, value: str | None):
-        self._ensure_profile().bio = value
+        self._ensure_profile().bio = value  # type: ignore[assignment]
+
+    @property
+    def streak(self) -> int:
+        return getattr(self._ensure_profile(), "streak", 0) or 0
+
+    @streak.setter
+    def streak(self, value: int):
+        self._ensure_profile().streak = value  # type: ignore[assignment]
+
+    @property
+    def subscription(self) -> int:
+        return getattr(self._ensure_profile(), "subscription", 0) or 0
+
+    @subscription.setter
+    def subscription(self, value: int):
+        self._ensure_profile().subscription = value  # type: ignore[assignment]
 
 
 class UserProfile(Base):
@@ -142,6 +159,8 @@ class UserProfile(Base):
     level = Column(Integer, nullable=False, default=1)
     current_exp = Column(BigInteger, nullable=False, default=0)
     require_exp = Column(BigInteger, nullable=False, default=10)
+    streak = Column(Integer, nullable=False, default=0)
+    subscription = Column(Integer, nullable=False, default=0)
     remind_time = Column(DateTime(timezone=True), nullable=True)
     sex = Column(Boolean, nullable=True)
     bio = Column(Text, nullable=True)
@@ -163,10 +182,8 @@ def _ensure_profile_before_insert(mapper, connection, target: User):  # pragma: 
 class LearningActivity(Base):
     __tablename__ = "learning_activity"
 
-    id = Column("activity_id", String, primary_key=True, default=_generate_id)
-    user_id = Column(String, ForeignKey("user.user_id"), nullable=False)
-    date = Column(DateTime(timezone=True), nullable=False)
-    date_of_the_week = Column(String, nullable=False)
+    user_id = Column(String, ForeignKey("user.user_id"), primary_key=True, nullable=False)
+    date = Column(DateTime(timezone=True), primary_key=True, nullable=False)
     count = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="activities")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query, Response, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
@@ -25,6 +25,7 @@ from models import User
 from controllers.user_controller import (
     change_user_info,
     update_user_avatar,
+    get_user_avatar_stream,
     get_user_info,
     get_admin_user_overview,
     create_admin_account,
@@ -40,7 +41,6 @@ from controllers.user_controller import (
     get_learning_activity,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
-from services.avatar_service import get_avatar_bytes  # bytes version
 
 logger = logging.getLogger(__name__)
 
@@ -55,56 +55,13 @@ async def change_personal_info(
 ):
     return await change_user_info(request, current_user, db)
 
-# 2.2. Lấy avatar (stream trực tiếp)
+# 2.2. Lấy avatar
 @router.get("/avatar")
 async def get_avatar(
     user_id: Optional[str] = Query(None, alias="user-id", description="User ID muốn lấy avatar"),
     db: Session = Depends(get_db)
 ):
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Thiếu user-id")
-    target_user = db.query(User).filter(User.id == user_id).first()
-    if not target_user:
-        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
-
-    def _gender_defaults(user: User) -> list[str]:
-        raw_sex = getattr(user, 'sex', None)
-        sex = str(raw_sex).lower() if raw_sex is not None else ''
-        is_female = sex.startswith('f') or sex in {'nu', 'female', 'girl', 'woman'}
-        base = 'female' if is_female else 'male'
-        return [
-            f"{base}.png",
-            f"avatars/{base}.png",
-            f"default/{base}.png",
-            f"avatars/default/{base}.png"
-        ]
-
-    candidates: list[str] = []
-    avatar_url_val = getattr(target_user, 'avatar_url', None)
-    if avatar_url_val:
-        candidates.append(avatar_url_val)
-        if '/' not in avatar_url_val and not avatar_url_val.lower().endswith(('.png', '.jpg', '.jpeg')):
-            candidates.append(f"avatars/{avatar_url_val}.jpg")
-            candidates.append(f"avatars/{avatar_url_val}")
-    else:
-        candidates.extend(_gender_defaults(target_user))
-    for d in _gender_defaults(target_user):
-        if d not in candidates:
-            candidates.append(d)
-
-    last_error: Optional[HTTPException] = None
-    for key in candidates:
-        try:
-            content, media_type, headers = get_avatar_bytes(key)
-            return Response(content=content, media_type=media_type, headers=headers)
-        except HTTPException as e:
-            if e.status_code != 404:
-                raise
-            last_error = e
-            continue
-    if last_error:
-        raise last_error
-    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+    return await get_user_avatar_stream(user_id, db)
 
 # 2.3. Cập nhật avatar
 @router.put("/avatar", response_model=MessageResponse)

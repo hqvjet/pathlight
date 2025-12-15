@@ -59,6 +59,7 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
     try:
         token = credentials.credentials
+        payload = {}  # ensure payload is always bound for static analysis
         try:
             payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         except JWTError as e:

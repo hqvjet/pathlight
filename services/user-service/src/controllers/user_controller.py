@@ -2,14 +2,14 @@ import logging
 from sqlalchemy.orm import Session
 from typing import Optional
 from fastapi import UploadFile, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials
 
 from models import User
 from schemas.user_schemas import *  # noqa
 from config import config
 
-from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect
+from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
 from services.admin_service import create_admin, get_admin_by_username
 from services.experience_service import (
     get_level_system_info as svc_get_level_system_info,
@@ -70,6 +70,55 @@ async def change_user_info(request: ChangeInfoRequest, current_user: User, db: S
 async def get_user_avatar(avatar_id: str):
     return get_avatar_redirect(avatar_id)
 
+
+async def get_user_avatar_stream(user_id: Optional[str], db: Session) -> Response:
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Thiếu user-id")
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+
+    def _gender_defaults(user: User) -> list[str]:
+        raw_sex = getattr(user, 'sex', None)
+        sex = str(raw_sex).lower() if raw_sex is not None else ''
+        is_female = sex.startswith('f') or sex in {'nu', 'female', 'girl', 'woman'}
+        base = 'female' if is_female else 'male'
+        return [
+            f"{base}.png",
+            f"avatars/{base}.png",
+            f"default/{base}.png",
+            f"avatars/default/{base}.png",
+        ]
+
+    candidates: list[str] = []
+    avatar_url_val = getattr(target_user, 'avatar_url', None)
+    if avatar_url_val:
+        candidates.append(avatar_url_val)
+        if '/' not in avatar_url_val and not avatar_url_val.lower().endswith(('.png', '.jpg', '.jpeg')):
+            candidates.append(f"avatars/{avatar_url_val}.jpg")
+            candidates.append(f"avatars/{avatar_url_val}")
+    else:
+        candidates.extend(_gender_defaults(target_user))
+    for d in _gender_defaults(target_user):
+        if d not in candidates:
+            candidates.append(d)
+
+    last_error: Optional[HTTPException] = None
+    for key in candidates:
+        try:
+            content, media_type, headers = get_avatar_bytes(key)
+            return Response(content=content, media_type=media_type, headers=headers)
+        except HTTPException as e:
+            if e.status_code != 404:
+                raise
+            last_error = e
+            continue
+    if last_error:
+        raise last_error
+    raise HTTPException(status_code=404, detail="Avatar không tồn tại")
+
+
 async def update_user_avatar(avatar_file: UploadFile, current_user: User, db: Session) -> MessageResponse:
     status_code, msg = avatar_update_service(avatar_file, current_user, db)
     return MessageResponse(status=status_code, message=msg)
@@ -98,6 +147,7 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             "level": getattr(target_user, 'level', 1),
             "current_exp": getattr(target_user, 'current_exp', 0),
             "require_exp": getattr(target_user, 'require_exp', 1000),
+            "subscription": getattr(target_user, 'subscription', 0),
             "sex": getattr(target_user, 'sex', None),
             "bio": getattr(target_user, 'bio', None),
             "remind_time": getattr(target_user, 'remind_time', None),
@@ -229,6 +279,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             # Rank
             "rank": rank_data["rank"],
             "user_num": rank_data["total_users"],
+            "subscription": getattr(current_user, 'subscription', 0),
             # Leaderboard
             "user_top_rank": leaderboard,
             # Placeholder
