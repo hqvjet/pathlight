@@ -3,18 +3,15 @@ from typing import Optional, List
 
 class CreateCourseRequest(BaseModel):
     type: str = Field(default="generate_course", description="Job type required by SQS: generate_course | generate_quiz")
-    short_prompt: str = Field(..., alias="short_prompt", description="Short prompt guiding course generation")
-    user_role: Optional[str] = Field(default=None, alias="user_role", description="User role/position")
+    short_prompt: str = Field(..., description="Short prompt guiding course generation")
+    user_role: str = Field(..., description="User role/position of the requester")
     course_duration: int = Field(..., description="Desired course duration in days")
     course_level: str = Field(..., description="overview | intermediate | advance")
     course_constraint: str = Field(..., description="professional | academic | friendly | humorous")
     course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
-    documents: Optional[List[str]] = Field(default=None, alias="documents", description="Array of S3 object keys (users/<user_id>/<file>)")
+    documents: Optional[List[str]] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
-    # legacy/compat fields (still honored)
     s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
-    user_position: Optional[str] = Field(default=None, description="Legacy: user position / role")
-    short_user_prompt: Optional[str] = Field(default=None, description="Legacy short prompt")
     difficulty: str = Field(default="medium")
     duration: int = Field(default=1200)
 
@@ -35,9 +32,12 @@ class CourseFullInfo(BaseModel):
     overview: str
     level: str
     duration: int
-    is_public: bool = False
+    publish: bool = False
+    finish: bool = False
     owner_id: str
     lesson: List[LessonInfo]
+    progress_finished_lessons: int = 0
+    progress_total_lessons: int = 0
     updated_at: str
 
 
@@ -53,7 +53,7 @@ class CourseSummary(BaseModel):
     level: str
     duration: int
     finish: bool
-    is_public: bool = False
+    publish: bool = False
     owner_id: str
     lesson_num: int
     finish_lesson_num: int
@@ -67,7 +67,10 @@ class CourseListResponse(BaseModel):
 
 class CourseVisibilityUpdate(BaseModel):
     course_id: str
-    is_public: bool
+    publish: bool = Field(..., alias="is_public")
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 # ---- Lesson detail ----

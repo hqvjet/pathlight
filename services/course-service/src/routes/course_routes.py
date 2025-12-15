@@ -22,10 +22,7 @@ from src.services.status_service import fetch_generation_status, fetch_user_gene
 from src.schemas.course_schemas import (
     CreateCourseRequest,
     CourseFullInfoResponse,
-    CourseFullInfo,
-    LessonInfo,
     CourseListResponse,
-    CourseSummary,
     LessonListResponse,
     LessonDetail,
     AssessmentListResponse,
@@ -37,7 +34,6 @@ from src.schemas.course_schemas import (
     PresignUploadResponse,
     CourseVisibilityUpdate,
 )
-import os
 
 router = APIRouter(prefix="", tags=["Course"])
 
@@ -115,8 +111,15 @@ async def get_lesson_detail(course_id: str, lesson_id: str, request: Request):
 
 
 @router.get("/{course_id}/lessons/{lesson_id}/assessments", response_model=AssessmentListResponse)
-async def list_assessments(course_id: str, lesson_id: str, request: Request, _auth=Depends(require_bearer)):
-    return get_assessment_list_controller(request, course_id, lesson_id)
+async def list_assessments(
+    course_id: str,
+    lesson_id: str,
+    request: Request,
+    include_hints: bool = Query(default=True),
+    include_explanations: bool = Query(default=True),
+    _auth=Depends(require_bearer),
+):
+    return get_assessment_list_controller(request, course_id, lesson_id, include_hints=include_hints, include_explanations=include_explanations)
 
 
 @router.post("/{course_id}/lessons/{lesson_id}/assessments/submit", response_model=AssessmentSubmitResponse)

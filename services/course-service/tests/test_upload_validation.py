@@ -39,13 +39,13 @@ def test_reject_bad_extension_with_auth(mocker, client):
         files={"files": ("a.txt", b"x", "text/plain")},
     )
     data = resp.json()
-    assert data["status"] == 401
+    assert data["status"] == 400
     assert "không được hỗ trợ" in data["message"]
 
 
 def test_upload_file_over_20mb(mocker, client):
     _auth(mocker)
-    big = b"0" * (20 * 1024 * 1024 + 1)
+    big = b"0" * (25 * 1024 * 1024 + 1)
     resp = client.post(
         "/course/upload/file",
         headers={"Authorization": "Bearer token"},
@@ -54,5 +54,5 @@ def test_upload_file_over_20mb(mocker, client):
         ],
     )
     data = resp.json()
-    assert data["status"] == 401
-    assert "dung lượng" in data["message"]
+    assert data["status"] == 400
+    assert "25MB" in data["message"]

@@ -27,11 +27,9 @@ def send_generate_with_vectorize(
     queue_url: str,
     course_id: str,
     s3_keys: Optional[List[str]],
-    difficulty: str,
-    duration: int,
     *,
-    short_user_prompt: str,
-    user_position: Optional[str] = None,
+    short_prompt: str,
+    user_role: str,
     course_duration: int,
     course_level: str,
     course_constraint: str,
@@ -46,15 +44,15 @@ def send_generate_with_vectorize(
 
     payload = {
         "id": course_id,
-        "difficulty": difficulty,
-        "duration": duration,
-        "s3_keys": s3_keys or [],
         "user_id": user_id,
-        "short_user_prompt": short_user_prompt,
-        "user_position": user_position,
+        "user_role": user_role,
+        "short_prompt": short_prompt,
         "course_duration": course_duration,
         "course_level": course_level,
         "course_constraint": course_constraint,
+        "documents": s3_keys or [],
+        # Backward compatibility
+        "s3_keys": s3_keys or [],
     }
 
     body = json.dumps(

@@ -65,7 +65,7 @@ def seed_db():
                 overview="Desc",
                 level="overview",
                 duration=10,
-                is_public=False,
+                publish=False,
             )
             session.add(c)
             courses.append(c_id)
@@ -77,7 +77,7 @@ def seed_db():
             overview="Desc",
             level="overview",
             duration=5,
-            is_public=False,
+            publish=False,
         )
         session.add(c_other)
         session.commit()

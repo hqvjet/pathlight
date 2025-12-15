@@ -11,7 +11,7 @@ os.environ["COURSE_SERVICE_SKIP_DB"] = "true"
 
 from src.main import app
 from src.database import Base
-from src.models import Course, Lesson, LessonProgress
+from src.models import Course, Lesson, LearningProgress
 import src.database as _db
 
 engine = create_engine(
@@ -53,7 +53,7 @@ def seed_full_course():
             overview="Desc",
             level="overview",
             duration=10,
-            is_public=False,
+            publish=False,
         )
         session.add(course)
         # lessons + progress
@@ -69,15 +69,14 @@ def seed_full_course():
                 duration=5,
             )
             session.add(lesson)
-            lp = LessonProgress(
-                progress_id=f"lp-{uuid.uuid4()}",
-                lesson_id=lesson.lesson_id,
-                course_id=course.course_id,
-                user_id="user-1",
-                is_completed=True,
-            )
-            session.add(lp)
             lesson_ids.append(lid)
+        lp = LearningProgress(
+            user_id="user-1",
+            course_id=course.course_id,
+            num_finished_lesson=len(lesson_ids),
+            num_total_lesson=len(lesson_ids),
+        )
+        session.add(lp)
         session.commit()
         yield {"course_id": c_id, "lesson_ids": lesson_ids}
     finally:
@@ -109,7 +108,7 @@ def test_finish_course_not_all_lessons_done(mocker, client, seed_full_course):
             overview="d",
             level="overview",
             duration=5,
-            is_public=False,
+            publish=False,
         )
         session.add(c)
         lesson = Lesson(
