@@ -2,10 +2,20 @@
 import { apiClient } from './http';
 
 export interface CreateCourseRequest {
+  type?: 'generate_course' | 'generate_quiz';
+  short_prompt: string;
+  user_role: string;
+  course_duration: number;
+  course_level: string;
+  course_constraint: string;
+  course_id?: string;
+  documents?: string[];
+  s3_key?: string[]; // legacy optional
+}
+
+export interface UpdateVisibilityRequest {
   course_id: string;
-  s3_key: string[];
-  difficulty?: string; // default medium
-  duration?: number; // default 1200
+  is_public: boolean;
 }
 
 export interface PresignUploadRequestItem {
@@ -36,19 +46,39 @@ export const courseApi = {
   uploadFiles: (files: File[]) => apiClient.uploadFiles<{ status: number; uploaded_file: string[] }>(`/course/upload/file`, files),
   presignUploads: (items: PresignUploadRequestItem[], userId?: string) =>
     apiClient.post<PresignUploadResponse>(`/course/upload/presign`, { user_id: userId, items }),
-  requestCreate: (payload: CreateCourseRequest) => apiClient.post<{ status: number; message?: string; sqs_message_id?: string }>(`/course/create`, payload),
+  requestCreate: (payload: CreateCourseRequest) =>
+    apiClient.post<{ status: number; message?: string; sqs_message_id?: string; course_id?: string }>(`/course/create`, payload),
   getStatus: (course_id: string) => apiClient.get<{ status: number; body?: unknown; message?: string }>(`/course/status?course_id=${encodeURIComponent(course_id)}`),
   getById: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}`),
   getAll: () => apiClient.get(`/course/all`),
+  listPublic: (search?: string, ownerId?: string) => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (ownerId) params.append('owner_id', ownerId);
+    const qs = params.toString();
+    return apiClient.get(`/course/public${qs ? `?${qs}` : ''}`);
+  },
+  updateVisibility: (payload: UpdateVisibilityRequest) => apiClient.put<{ status: number; course_id: string; publish: boolean }>(`/course/visibility`, payload),
+  deleteCourse: (course_id: string) => apiClient.delete<{ status: number; message?: string }>(`/course/delete?course_id=${encodeURIComponent(course_id)}`),
   listMyGenerations: () => apiClient.get<{ status: number; items?: Array<Record<string, unknown>>; message?: string }>(`/course/generations/my`),
   listLessons: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons`),
   getLessonDetail: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}`),
-  getLessonTest: (course_id: string, lesson_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/test`),
-  submitLessonTest: (
+  listAssessments: (course_id: string, lesson_id: string, opts?: { include_hints?: boolean; include_explanations?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.include_hints === false) params.append('include_hints', 'false');
+    if (opts?.include_explanations === false) params.append('include_explanations', 'false');
+    const qs = params.toString();
+    return apiClient.get(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/assessments${qs ? `?${qs}` : ''}`);
+  },
+  submitAssessments: (
     course_id: string,
     lesson_id: string,
-    payload: { answers: Array<{ qa_id: string; answer: string }> },
-  ) => apiClient.post(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/test/submit`, payload),
-  getFinalTest: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/final-test`),
+    payload: { answers: Array<{ assessment_id: string; answer: number }> },
+  ) => apiClient.post(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/assessments/submit`, payload),
+  getQuiz: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/quiz`),
+  submitQuiz: (
+    course_id: string,
+    payload: { answers: Array<{ qa_id: string; answer: number }> },
+  ) => apiClient.post(`/course/${encodeURIComponent(course_id)}/quiz/submit`, payload),
   finishLesson: (course_id: string, lesson_id: string) => apiClient.put(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/finish`),
 };

@@ -170,8 +170,9 @@ export function CreateCourseWizard() {
       }
 
       const payload: CreateAgenticCourseRequest = {
-        user_position: draft.meta.userPosition.trim(),
-        short_user_prompt: draft.meta.shortPrompt.trim(),
+        type: 'generate_course',
+        user_role: draft.meta.userPosition.trim(),
+        short_prompt: draft.meta.shortPrompt.trim(),
         course_duration: Math.max(1, draft.meta.durationDays || 1),
         documents:
           draft.documents.length > 0

@@ -15,6 +15,8 @@ export interface CourseHeroData {
   totalLessons: number;
   badge?: string;
   color?: string;
+  ownerId?: string;
+  isPublic?: boolean;
 }
 
 interface CourseHeroProps {
@@ -44,6 +46,16 @@ export function CourseHero({ course, actions }: CourseHeroProps) {
               <span className="h-2 w-2 rounded-full bg-orange-500" />
               Lộ trình {course.durationLabel}
             </span>
+            {course.isPublic && (
+              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">
+                Public
+              </span>
+            )}
+            {course.ownerId && (
+              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-700">
+                Chủ sở hữu: {course.ownerId}
+              </span>
+            )}
           </div>
         </div>
         <div className="bg-white/80 backdrop-blur rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">

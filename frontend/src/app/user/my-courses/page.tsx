@@ -12,11 +12,15 @@ type SortOption = 'latest' | 'progress_desc' | 'title_asc';
 interface ApiCourseSummary {
   course_id: string;
   title: string;
-  description: string;
+  overview: string;
+  level: string;
+  finish: boolean;
   duration: number;
   lesson_num: number;
   finish_lesson_num: number;
   updated_at: string;
+  publish?: boolean;
+  owner_id?: string;
 }
 
 interface ApiCourseListResponse {
@@ -34,13 +38,13 @@ const minutesToWeeksLabel = (minutes: number) => {
 
 const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
   const progress = c.lesson_num > 0 ? Math.floor((c.finish_lesson_num / c.lesson_num) * 100) : 0;
-  const badge = progress >= 100 ? 'Hoàn thành' : progress === 0 ? 'Bản nháp' : 'Đang học';
+  const badge = c.finish || progress >= 100 ? 'Hoàn thành' : progress === 0 ? 'Bản nháp' : 'Đang học';
   return {
     id: c.course_id,
     title: c.title || 'Khóa học không tên',
-    subtitle: 'Khoá học do bạn tạo',
-    description: c.description || 'Cập nhật mô tả khóa học để học viên hiểu rõ mục tiêu.',
-    level: 'Trung cấp',
+    subtitle: c.owner_id ? `Chủ sở hữu: ${c.owner_id}` : 'Khoá học do bạn tạo',
+    description: c.overview || 'Cập nhật mô tả khóa học để học viên hiểu rõ mục tiêu.',
+    level: c.level || 'Không xác định',
     durationLabel: minutesToWeeksLabel(c.duration),
     language: 'Tiếng Việt',
     progress,
@@ -49,6 +53,8 @@ const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
     badge,
     color: '#fb923c',
     updatedAt: c.updated_at,
+    isPublic: !!c.publish,
+    ownerId: c.owner_id || '',
   };
 };
 
@@ -58,6 +64,8 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
+  const [publicCourses, setPublicCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -75,7 +83,10 @@ export default function MyCoursesPage() {
         const resp = await courseApi.getAll();
         const data = resp.data as ApiCourseListResponse | undefined;
         const list = (data?.courses || []).map(mapApiToCard);
-        if (!cancelled) setCourses(list);
+        if (!cancelled) {
+          setCourses(list);
+          if (list.length > 0 && !selectedId) setSelectedId(list[0].id || null);
+        }
       } catch {
         if (!cancelled) setError('Không thể tải danh sách khóa học. Vui lòng thử lại.');
       } finally {
@@ -86,7 +97,52 @@ export default function MyCoursesPage() {
     return () => {
       cancelled = true;
     };
+  }, [selectedId]);
+
+  // Load public courses once
+  useEffect(() => {
+    let cancelled = false;
+    const loadPublic = async () => {
+      try {
+        const resp = await courseApi.listPublic();
+        const data = resp.data as ApiCourseListResponse | undefined;
+        const list = (data?.courses || []).map(mapApiToCard);
+        if (!cancelled) setPublicCourses(list);
+      } catch {
+        if (!cancelled) setPublicCourses([]);
+      }
+    };
+    loadPublic();
+    return () => { cancelled = true; };
   }, []);
+
+  const updateCourseVisibility = async (courseId: string, isPublic: boolean) => {
+    setSavingId(courseId);
+    try {
+      await courseApi.updateVisibility({ course_id: courseId, is_public: isPublic });
+      setCourses((prev) => prev.map((c) => (c.id === courseId ? { ...c, isPublic } : c)));
+      if (selectedId === courseId) {
+        setSelectedId(courseId); // trigger re-render
+      }
+    } catch {
+      setError('Không thể cập nhật quyền riêng tư của khóa học.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const deleteCourse = async (courseId: string) => {
+    setSavingId(courseId);
+    try {
+      await courseApi.deleteCourse(courseId);
+      setCourses((prev) => prev.filter((c) => c.id !== courseId));
+      if (selectedId === courseId) setSelectedId(null);
+    } catch {
+      setError('Không thể xóa khóa học.');
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     let list = courses.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
@@ -119,6 +175,10 @@ export default function MyCoursesPage() {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const handleOwnerClick = (ownerId: string) => {
+    setSearch(ownerId);
   };
 
   return (
@@ -185,12 +245,28 @@ export default function MyCoursesPage() {
           <CourseHero
             course={heroCourse}
             actions={(
-              <Link
-                href={`/user/my-courses/${heroCourse.id}`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
-              >
-                Xem chi tiết →
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/user/my-courses/${heroCourse.id}`}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
+                >
+                  Xem chi tiết →
+                </Link>
+                <button
+                  onClick={() => updateCourseVisibility(heroCourse.id, !heroCourse.isPublic)}
+                  disabled={savingId === heroCourse.id}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-800 font-semibold shadow-sm hover:shadow disabled:opacity-60"
+                >
+                  {heroCourse.isPublic ? 'Chuyển Private' : 'Công khai'}
+                </button>
+                <button
+                  onClick={() => deleteCourse(heroCourse.id)}
+                  disabled={savingId === heroCourse.id}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 font-semibold border border-red-200 hover:bg-red-100 disabled:opacity-60"
+                >
+                  Xóa
+                </button>
+              </div>
             )}
           />
         </div>
@@ -215,7 +291,7 @@ export default function MyCoursesPage() {
                 key={course.id}
                 className="transition-all duration-300 ease-in-out hover:-translate-y-0.5"
               >
-                <CourseCard course={course} onSelect={handleSelect} />
+                <CourseCard course={course} onSelect={handleSelect} onOwnerClick={handleOwnerClick} />
               </div>
             ))}
             {remaining.length === 0 && (
@@ -225,6 +301,26 @@ export default function MyCoursesPage() {
             )}
           </div>
         )}
+      </section>
+
+      {/* Public courses section */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Khóa học công khai</h3>
+          <p className="text-sm text-gray-500">Nhấn vào chủ sở hữu để lọc theo người tạo</p>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2 auto-rows-fr">
+          {publicCourses.map((course) => (
+            <div key={`public-${course.id}`} className="transition-all duration-300 ease-in-out hover:-translate-y-0.5">
+              <CourseCard course={course} onOwnerClick={handleOwnerClick} />
+            </div>
+          ))}
+          {publicCourses.length === 0 && (
+            <div className="bg-white rounded-xl p-10 text-center border border-dashed border-gray-300 text-gray-600">
+              Chưa có khóa học công khai.
+            </div>
+          )}
+        </div>
       </section>
 
       <footer className="pt-2 pb-8 text-xs text-gray-400 flex flex-wrap gap-6 justify-center">

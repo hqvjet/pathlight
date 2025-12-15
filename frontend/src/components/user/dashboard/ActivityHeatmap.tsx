@@ -5,10 +5,9 @@ interface ActivityHeatmapProps {
   selectedYear: number;
   setSelectedYear: (year: number) => void;
   generateYearActivityData: (year: number) => { date: Date; level: number; count: number; isCurrentYear: boolean; dateKey: string }[];
-  handleActivityClick: (dateKey: string, level: number) => void;
 }
 
-export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, setSelectedYear, generateYearActivityData, handleActivityClick }) => {
+export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, setSelectedYear, generateYearActivityData }) => {
   return (
     <Card className="md:col-span-2 bg-[#0d1117] text-gray-200 border border-gray-700/60 overflow-hidden">
       <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between">
@@ -42,10 +41,9 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, 
                   return (
                     <div
                       key={i}
-                      className={`w-full aspect-square rounded-[2px] transition-transform ${isCurrentYear ? 'cursor-pointer hover:scale-110' : 'opacity-30'}`}
+                      className={`w-full aspect-square rounded-[2px] ${isCurrentYear ? 'cursor-default' : 'opacity-30'}`}
                       style={{ backgroundColor: bg, border: `1px solid ${border}` }}
-                      onClick={() => isCurrentYear && handleActivityClick(activity.dateKey, activity.level)}
-                      title={isCurrentYear ? `${activity.date.toLocaleDateString('vi-VN')} - Level ${activity.level}` : activity.date.toLocaleDateString('vi-VN')}
+                      title={isCurrentYear ? `${activity.date.toLocaleDateString('vi-VN')} · ${activity.count || 0} điểm` : activity.date.toLocaleDateString('vi-VN')}
                     />
                   );
                 });

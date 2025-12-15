@@ -11,7 +11,6 @@ import {
   HomeIcon,
   BookOpenIcon,
   ClipboardListIcon,
-  UserCircleIcon,
   LogoutIcon,
   MenuIcon,
 } from '@/components/icons';
@@ -124,8 +123,8 @@ export default function Layout({ children, title, user }: LayoutProps) {
   const mainOffsetClasses = isMobile ? '' : sidebarExpandedDesktop ? 'lg:ml-64' : 'lg:ml-16';
 
   const expPercent = (() => {
-    const current = effectiveUser?.current_exp ?? cachedProgress.current_exp ?? 0;
-    const need = effectiveUser?.require_exp ?? cachedProgress.require_exp ?? 0;
+    const current = effectiveUser?.current_exp ?? (effectiveUser as { experience?: number })?.experience ?? cachedProgress.current_exp ?? 0;
+    const need = effectiveUser?.require_exp ?? (effectiveUser as { exp_needed_for_next?: number; required_exp?: number })?.exp_needed_for_next ?? (effectiveUser as { required_exp?: number })?.required_exp ?? cachedProgress.require_exp ?? 0;
     if (!need || need <= 0) return 0;
     const pct = current / need;
     return Math.max(0, Math.min(1, pct));
