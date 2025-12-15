@@ -42,4 +42,19 @@ class MessageResponse(BaseModel):
 class AuthResponse(BaseModel):
     status: int
     access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     message: Optional[str] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class UserInfoResponse(BaseModel):
+    status: int
+    user_id: Optional[str] = None
+    email: Optional[EmailStr] = None
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_email_verified: Optional[bool] = None

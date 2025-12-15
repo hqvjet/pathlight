@@ -161,9 +161,10 @@ async def signin_user(user_data: SigninRequest, db: Session) -> AuthResponse:
             )
         
         access_token = create_access_token(data={"sub": user.id})
+        refresh_token = create_refresh_token(data={"sub": user.id, "type": "refresh"})
         logger.info(f"Login successful for email: {user_data.email}")
         
-        return AuthResponse(status=200, access_token=access_token)
+        return AuthResponse(status=200, access_token=access_token, refresh_token=refresh_token)
         
     except Exception as e:
         logger.error(f"Login error for {user_data.email}: {str(e)}")
@@ -316,9 +317,10 @@ async def oauth_signin_user(request: OAuthSigninRequest, db: Session) -> AuthRes
         
         db.commit()
         access_token = create_access_token(data={"sub": user.id})
+        refresh_token = create_refresh_token(data={"sub": user.id, "type": "refresh"})
         logger.info(f"OAuth signin successful for email: {request.email}")
         
-        return AuthResponse(status=200, access_token=access_token)
+        return AuthResponse(status=200, access_token=access_token, refresh_token=refresh_token)
         
     except Exception as e:
         logger.error(f"OAuth signin error for {request.email}: {str(e)}")
@@ -363,7 +365,45 @@ async def admin_signin_user(request: AdminSigninRequest, db: Session) -> AuthRes
         )
     
     access_token = create_access_token(data={"sub": admin.id, "role": "admin"})
-    return AuthResponse(status=200, access_token=access_token)
+    refresh_token = create_refresh_token(data={"sub": admin.id, "role": "admin", "type": "refresh"})
+    return AuthResponse(status=200, access_token=access_token, refresh_token=refresh_token)
+
+
+async def refresh_access_token(body: RefreshTokenRequest, db: Session) -> AuthResponse:
+    """Issue a new access token from a valid refresh token."""
+    try:
+        payload = jwt.decode(body.refresh_token, config.JWT_SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        jti = payload.get("jti")
+        if jti and is_token_blacklisted(db, jti):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been blacklisted")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: missing sub")
+        new_access_token = create_access_token({"sub": user_id})
+        new_refresh_token = create_refresh_token({"sub": user_id, "type": "refresh"})
+        return AuthResponse(status=200, access_token=new_access_token, refresh_token=new_refresh_token)
+    except InvalidTokenError as e:
+        logger.error(f"Refresh token invalid: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired or invalid")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected refresh error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired or invalid")
+
+
+async def get_me(current_user: User) -> UserInfoResponse:
+    return UserInfoResponse(
+        status=200,
+        user_id=getattr(current_user, "id", None),
+        email=getattr(current_user, "email", None),
+        given_name=getattr(current_user, "given_name", None),
+        family_name=getattr(current_user, "family_name", None),
+        avatar_url=getattr(current_user, "avatar_url", None),
+        is_email_verified=getattr(current_user, "is_email_verified", None),
+    )
 
 async def resend_verification_email(request: ResendVerificationRequest, db: Session) -> MessageResponse:
     """Resend verification email"""
