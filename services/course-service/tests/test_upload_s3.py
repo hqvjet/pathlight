@@ -5,6 +5,7 @@ from botocore.exceptions import ClientError, EndpointConnectionError, NoCredenti
 
 def _auth(mocker):
     mocker.patch("src.controllers.course_controller.jwt.decode", return_value={"sub": "u1"})
+    mocker.patch("src.controllers.course_controller.jwt.get_unverified_claims", return_value={"sub": "u1"})
 
 
 def test_upload_success(mocker, client):

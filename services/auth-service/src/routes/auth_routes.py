@@ -26,7 +26,7 @@ async def signin(user_data: SigninRequest, db: Session = Depends(get_db)):
     """User login endpoint"""
     return await signin_user(user_data, db)
 # 1.4. Đăng xuất
-@router.get("/signout", response_model=MessageResponse)
+@router.post("/signout", response_model=MessageResponse)
 async def signout(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """User logout endpoint"""
     return await signout_user(credentials, db)
@@ -55,6 +55,11 @@ async def oauth_signin(request: OAuthSigninRequest, db: Session = Depends(get_db
     """OAuth signin endpoint (Google)"""
     return await oauth_signin_user(request, db)
 
+# 1.8.1 Refresh access token
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
+    return await refresh_access_token(body, db)
+
 # 1.8. Đổi mật khẩu
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
@@ -76,3 +81,8 @@ async def admin_signin(request: AdminSigninRequest, db: Session = Depends(get_db
 async def resend_verification(request: ResendVerificationRequest, db: Session = Depends(get_db)):
     """Resend verification email endpoint"""
     return await resend_verification_email(request, db)
+
+# 1.11. Get current user info
+@router.get("/me", response_model=UserInfoResponse)
+async def me(current_user: User = Depends(get_current_user)):
+    return await get_me(current_user)

@@ -28,21 +28,73 @@ __all__ = [
 
 # ===== LEVEL SYSTEM CONFIGURATION =====
 LEVEL_EXP_THRESHOLDS = [
-    0,      # Level 1: 0 exp
-    100,    # Level 2: 100 exp
-    300,    # Level 3: 300 exp
-    600,    # Level 4: 600 exp
-    1000,   # Level 5: 1000 exp
-    1500,   # Level 6: 1500 exp
-    2100,   # Level 7: 2100 exp
-    2800,   # Level 8: 2800 exp
-    3600,   # Level 9: 3600 exp
-    4500,   # Level 10: 4500 exp
-    5500,   # Level 11: 5500 exp
-    6600,   # Level 12: 6600 exp
-    7800,   # Level 13: 7800 exp
-    9100,   # Level 14: 9100 exp
-    10500,  # Level 15: 10500 exp
+    0,
+    1000,
+    3000,
+    6000,
+    10000,
+    15000,
+    21000,
+    28000,
+    36000,
+    45000,
+    55000,
+    66000,
+    78000,
+    91000,
+    105000,
+    120000,
+    136000,
+    153000,
+    171000,
+    190000,
+    210000,
+    231000,
+    253000,
+    276000,
+    300000,
+    325000,
+    351000,
+    378000,
+    406000,
+    435000,
+    465000,
+    496000,
+    528000,
+    561000,
+    595000,
+    630000,
+    666000,
+    703000,
+    741000,
+    780000,
+    820000,
+    861000,
+    903000,
+    946000,
+    990000,
+    1035000,
+    1081000,
+    1128000,
+    1176000,
+    1225000,
+    1275000,
+    1326000,
+    1378000,
+    1431000,
+    1485000,
+    1540000,
+    1596000,
+    1653000,
+    1711000,
+    1770000,
+    1830000,
+    1891000,
+    1953000,
+    2016000,
+    2080000,
+    2145000,
+    2211000,
 ]
 
 def get_exp_for_level(level: int) -> int:
@@ -86,7 +138,7 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
         original_stats = {
             "level": getattr(current_user, 'level', 1),
             "current_exp": getattr(current_user, 'current_exp', 0),
-            "require_exp": getattr(current_user, 'require_exp', 100),
+            "require_exp": getattr(current_user, 'require_exp', get_exp_for_level(2)),
         }
         calculated_exp = 0
         if request.current_exp is not None:
@@ -185,7 +237,7 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
     try:
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
-        original_require_exp = getattr(current_user, 'require_exp', 100)
+        original_require_exp = getattr(current_user, 'require_exp', get_exp_for_level(2))
         activity_exp = 100 + 100 + 50  # Course + quizzes + bonus
         new_total_exp = original_exp + activity_exp
         setattr(current_user, 'current_exp', new_total_exp)
@@ -221,7 +273,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
     try:
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
-        original_require_exp = getattr(current_user, 'require_exp', 100)
+        original_require_exp = getattr(current_user, 'require_exp', get_exp_for_level(2))
         new_total_exp = original_exp + exp_amount
         setattr(current_user, 'current_exp', new_total_exp)
         new_level, next_level_exp, level_increased = auto_level_up(new_total_exp, original_level)

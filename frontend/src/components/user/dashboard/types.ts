@@ -31,12 +31,14 @@ export interface UserProfile {
   quiz_num?: number;
   total_quizzes?: number;
   lesson_num?: number;
+  total_lessons?: number;
   average_score?: number;
   average_quiz_score?: number;
   study_streak?: number;
   total_study_time?: number;
   rank?: number;
   user_num?: number;
+  total_users?: number;
   user_top_rank?: LeaderboardUser[];
 }
 

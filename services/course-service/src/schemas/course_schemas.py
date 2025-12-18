@@ -1,33 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-class CourseCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    instructor: Optional[str] = None
-    duration: Optional[int] = None
-    level: Optional[str] = None
-    price: Optional[float] = None
-
-class CourseUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    instructor: Optional[str] = None
-    duration: Optional[int] = None
-    level: Optional[str] = None
-    price: Optional[float] = None
-
-
 class CreateCourseRequest(BaseModel):
-    course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
-    s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
-    user_position: Optional[str] = Field(default=None, description="User position / role")
-    short_user_prompt: str = Field(..., description="Short prompt guiding course generation")
+    type: str = Field(default="generate_course", description="Job type required by SQS: generate_course | generate_quiz")
+    short_prompt: str = Field(..., description="Short prompt guiding course generation")
+    user_role: str = Field(..., description="User role/position of the requester")
     course_duration: int = Field(..., description="Desired course duration in days")
     course_level: str = Field(..., description="overview | intermediate | advance")
     course_constraint: str = Field(..., description="professional | academic | friendly | humorous")
+    course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
+    documents: Optional[List[str]] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
+    user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
+    s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
     difficulty: str = Field(default="medium")
     duration: int = Field(default=1200)
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 # ---- Course detail/list response schemas ----
@@ -40,10 +29,15 @@ class LessonInfo(BaseModel):
 
 class CourseFullInfo(BaseModel):
     title: str
-    description: str
+    overview: str
+    level: str
     duration: int
-    roadmap: Optional[str] = None
+    publish: bool = False
+    finish: bool = False
+    owner_id: str
     lesson: List[LessonInfo]
+    progress_finished_lessons: int = 0
+    progress_total_lessons: int = 0
     updated_at: str
 
 
@@ -55,8 +49,12 @@ class CourseFullInfoResponse(BaseModel):
 class CourseSummary(BaseModel):
     course_id: str
     title: str
-    description: str
+    overview: str
+    level: str
     duration: int
+    finish: bool
+    publish: bool = False
+    owner_id: str
     lesson_num: int
     finish_lesson_num: int
     updated_at: str
@@ -67,14 +65,23 @@ class CourseListResponse(BaseModel):
     courses: List[CourseSummary]
 
 
-# ---- Lesson / Test / Final Test detail schemas ----
+class CourseVisibilityUpdate(BaseModel):
+    course_id: str
+    publish: bool = Field(..., alias="is_public")
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+# ---- Lesson detail ----
 
 class LessonDetail(BaseModel):
     lesson_id: str
     course_id: str
     title: str
-    description: str
+    overview: str
     content: str
+    duration: int
     finish: bool
 
 
@@ -82,56 +89,47 @@ class LessonListResponse(BaseModel):
     status: int
     lessons: List[LessonDetail]
 
+# ---- Assessment (lesson-level questions) ----
 
-class LessonTestQA(BaseModel):
-    qa_id: str
+class AssessmentItem(BaseModel):
+    assessment_id: str
+    lesson_id: str
     question: str
+    hint: str | None = None
+    explanation: str
+    difficulty: str
     option1: str
     option2: str
     option3: str
     option4: str
-    answer: str
-    explanation: str
-    difficult_level_id: str | None = None
+    answer: int
 
 
-class LessonTest(BaseModel):
-    test_id: str
-    title: str
-    description: str
-    duration: int
-    exp: int
-    finish: bool
-    qas: List[LessonTestQA]
-
-
-class LessonTestResponse(BaseModel):
+class AssessmentListResponse(BaseModel):
     status: int
-    test: LessonTest
+    assessments: List[AssessmentItem]
 
 
-# ---- Lesson Test submission ----
-
-class LessonTestSubmitAnswer(BaseModel):
-    qa_id: str
-    answer: str
+class AssessmentSubmitAnswer(BaseModel):
+    assessment_id: str
+    answer: int
 
 
-class LessonTestSubmitRequest(BaseModel):
-    answers: List[LessonTestSubmitAnswer]
+class AssessmentSubmitRequest(BaseModel):
+    answers: List[AssessmentSubmitAnswer]
 
 
-class LessonTestSubmitResultItem(BaseModel):
-    qa_id: str
-    selected_answer: str
-    correct_answer: str
+class AssessmentSubmitResultItem(BaseModel):
+    assessment_id: str
+    selected_answer: int
+    correct_answer: int
     is_correct: bool
-    difficulty: int | None = None
+    difficulty: str | None = None
     gained_exp: int
     penalty_exp: int
 
 
-class LessonTestSubmitResult(BaseModel):
+class AssessmentSubmitResult(BaseModel):
     score: float
     correct_count: int
     total: int
@@ -140,42 +138,23 @@ class LessonTestSubmitResult(BaseModel):
     applied_exp: int
     passed: bool
     pass_threshold: int
-    level: int | None = None
-    current_exp: int | None = None
+    answers: List[AssessmentSubmitResultItem]
+
+
+class ExperienceSnapshot(BaseModel):
+    gained_exp: int
+    new_level: int | None = None
+    new_exp: int | None = None
     require_exp: int | None = None
-    level_up: bool | None = None
-    answers: List[LessonTestSubmitResultItem]
+    exp_needed_for_next: int | None = None
+    rank: int | None = None
 
 
-class LessonTestSubmitResponse(BaseModel):
+class AssessmentSubmitResponse(BaseModel):
     status: int
-    result: LessonTestSubmitResult | None = None
+    result: AssessmentSubmitResult | None = None
     message: str | None = None
-
-
-class FinalTestQA(BaseModel):
-    final_qa_id: str
-    question: str
-    option1: str
-    option2: str
-    option3: str
-    option4: str
-    answer: str
-    explanation: str
-
-
-class FinalTestDetail(BaseModel):
-    final_test_id: str
-    title: str
-    description: str
-    duration: int
-    exp: int
-    qas: List[FinalTestQA]
-
-
-class FinalTestResponse(BaseModel):
-    status: int
-    final_test: FinalTestDetail
+    experience: ExperienceSnapshot | None = None
 
 
 # ---- Upload presign schemas ----

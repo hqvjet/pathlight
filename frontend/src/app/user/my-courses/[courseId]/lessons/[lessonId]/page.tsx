@@ -4,71 +4,48 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { courseApi } from '@/lib/api/course';
+import { userApi } from '@/lib/api/user';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/utils/toast';
+import { Lightbulb } from 'lucide-react';
 import { JSX } from 'react/jsx-runtime';
-
-interface AgenticAssessmentOption {
-  option_content: string;
-  option_correction: boolean;
-}
-
-interface AgenticAssessment {
-  assessment_question: string;
-  assessment_hint: string;
-  assessment_explanation: string;
-  assessment_level: number;
-  assessment_options: AgenticAssessmentOption[];
-}
 
 interface LessonDetailApi {
   lesson_id: string;
   course_id: string;
   title: string;
-  description: string;
+  overview: string;
   content: string;
+  duration: number;
   finish: boolean;
-  lesson_assessments?: AgenticAssessment[];
 }
 
-interface LessonTestQA {
-  qa_id: string;
+interface AssessmentItemApi {
+  assessment_id: string;
+  lesson_id: string;
   question: string;
+  hint?: string | null;
+  explanation?: string | null;
+  difficulty?: string | number | null;
   option1: string;
   option2: string;
   option3: string;
   option4: string;
-  correct_answer?: string;
-  answer?: string;
-  hint?: string;
-  explanation?: string;
-  answer_explanation?: string;
-  difficult_level_id?: number;
+  answer?: number;
 }
 
-interface LessonTestApi {
-  test_id: string;
-  title: string;
-  description: string;
-  duration: number;
-  exp: number;
-  finish: boolean;
-  qas: LessonTestQA[];
-  lesson_assessments?: AgenticAssessment[];
-}
-
-interface LessonTestResponseApi {
+interface AssessmentListResponseApi {
   status: number;
-  test?: LessonTestApi;
+  assessments?: AssessmentItemApi[];
   message?: string;
 }
 
 interface LessonTestSubmitResultItemApi {
-  qa_id: string;
-  selected_answer: string;
-  correct_answer: string;
+  assessment_id: string;
+  selected_answer: number;
+  correct_answer: number;
   is_correct: boolean;
   difficulty?: number | null;
   gained_exp: number;
@@ -84,17 +61,23 @@ interface LessonTestSubmitResultApi {
   applied_exp: number;
   passed: boolean;
   pass_threshold: number;
-  level?: number | null;
-  current_exp?: number | null;
-  require_exp?: number | null;
-  level_up?: boolean | null;
   answers: LessonTestSubmitResultItemApi[];
+}
+
+interface ExperienceSnapshotApi {
+  gained_exp: number;
+  new_level?: number | null;
+  new_exp?: number | null;
+  require_exp?: number | null;
+  exp_needed_for_next?: number | null;
+  rank?: number | null;
 }
 
 interface LessonTestSubmitResponseApi {
   status: number;
   result?: LessonTestSubmitResultApi;
   message?: string;
+  experience?: ExperienceSnapshotApi;
 }
 
 interface LessonListItemApi {
@@ -112,6 +95,16 @@ type ContentBlock =
 interface LessonListResponseApi {
   status: number;
   lessons?: LessonListItemApi[];
+  message?: string;
+}
+
+interface UserInfoApi {
+  status: number;
+  Info?: {
+    level?: number;
+    current_exp?: number;
+    require_exp?: number;
+  };
   message?: string;
 }
 
@@ -140,7 +133,7 @@ export default function LessonDetailPage({ params }: PageProps) {
   const { courseId, lessonId } = use(params);
   const router = useRouter();
   const [lesson, setLesson] = useState<LessonDetailApi | null>(null);
-  const [test, setTest] = useState<LessonTestApi | null>(null);
+  const [assessments, setAssessments] = useState<AssessmentItemApi[]>([]);
   const [lessons, setLessons] = useState<LessonListItemApi[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -150,14 +143,16 @@ export default function LessonDetailPage({ params }: PageProps) {
   const [passed, setPassed] = useState(false);
   const [earnedExp, setEarnedExp] = useState<number | null>(null);
   const [submissionResult, setSubmissionResult] = useState<LessonTestSubmitResultApi | null>(null);
+  const [experience, setExperience] = useState<ExperienceSnapshotApi | null>(null);
   const [showTest, setShowTest] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
   const [visibleHints, setVisibleHints] = useState<Record<string, boolean>>({});
+  const [visibleExplanations, setVisibleExplanations] = useState<Record<string, boolean>>({});
   const [playerLevel, setPlayerLevel] = useState(1);
-  const [playerExp, setPlayerExp] = useState(200);
+  const [playerExp, setPlayerExp] = useState(0);
   const [requireExp, setRequireExp] = useState(() => requiredExpForLevel(1));
 
   useEffect(() => {
@@ -171,22 +166,22 @@ export default function LessonDetailPage({ params }: PageProps) {
       setLoading(true);
       setError(null);
       try {
-        const [detailResp, testResp, listResp] = await Promise.all([
+        const [detailResp, assessResp, listResp, userResp] = await Promise.all([
           courseApi.getLessonDetail(courseId, lessonId),
-          courseApi.getLessonTest(courseId, lessonId),
+          courseApi.listAssessments(courseId, lessonId, { include_hints: false, include_explanations: false }),
           courseApi.listLessons(courseId),
+          userApi.getInfo(),
         ]);
 
         const detailData = detailResp.data as LessonDetailApi & { status?: number; message?: string };
-        const testData = testResp.data as LessonTestResponseApi;
+        const assessData = assessResp.data as AssessmentListResponseApi;
         const listData = listResp.data as LessonListResponseApi;
 
         if (detailData.status && detailData.status !== 200) {
           throw new Error(detailData.message || 'Không thể tải bài học');
         }
-        const detailAssessments = detailData.lesson_assessments;
-        if (testData?.status !== 200 && (!detailAssessments || detailAssessments.length === 0)) {
-          throw new Error(testData?.message || 'Không thể tải bài test');
+        if (assessData?.status !== 200 || !assessData.assessments || assessData.assessments.length === 0) {
+          throw new Error(assessData?.message || 'Không thể tải bài kiểm tra');
         }
 
         if (!cancelled) {
@@ -199,15 +194,17 @@ export default function LessonDetailPage({ params }: PageProps) {
             order: parseOrder(l.title, idx),
           })).sort((a, b) => (a.order || 0) - (b.order || 0));
 
-          const mergedTest = testData?.test
-            ? {
-                ...testData.test,
-                lesson_assessments: testData.test.lesson_assessments || detailData.lesson_assessments,
-              }
-            : null;
+          const userInfoPayload = (userResp?.data as UserInfoApi | undefined)?.Info || null;
+          const initialLevel = userInfoPayload?.level ?? 1;
+          const initialExp = Math.max(0, userInfoPayload?.current_exp ?? 0);
+          const initialRequireExp = Math.max(1, userInfoPayload?.require_exp ?? requiredExpForLevel(initialLevel));
+
+          setPlayerLevel(initialLevel);
+          setPlayerExp(initialExp);
+          setRequireExp(initialRequireExp);
 
           setLesson(detailData as LessonDetailApi);
-          setTest(mergedTest);
+          setAssessments(assessData.assessments || []);
           setLessons(sortedLessons);
         }
       } catch (e: unknown) {
@@ -230,56 +227,19 @@ export default function LessonDetailPage({ params }: PageProps) {
   }, [lessons, lessonId]);
 
   const questions = useMemo<NormalizedQuestion[]>(() => {
-    const assessments = test?.lesson_assessments || lesson?.lesson_assessments;
-    if (assessments?.length) {
-      return assessments.map((a, idx) => ({
-        id: `assessment-${idx}-${(a.assessment_question || idx)
-          .toString()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/gi, '-')}`,
-        question: a.assessment_question,
-        hint: a.assessment_hint,
-        explanation: a.assessment_explanation,
-        level: a.assessment_level,
-        difficult_level_id: (a as { difficult_level_id?: number }).difficult_level_id,
-        options: (a.assessment_options || []).map((opt, oIdx) => ({
-          id: `opt-${idx}-${oIdx}`,
-          content: opt.option_content,
-          isCorrect: Boolean(opt.option_correction),
-        })),
-      }));
-    }
-    if (test?.qas?.length) {
-      return test.qas.map((qa, idx) => {
-        const optionKeys = ['option1', 'option2', 'option3', 'option4'] as const;
-        const correctKey = qa.correct_answer || qa.answer;
-        const isTextAnswer = Boolean(correctKey && correctKey.length > 1);
-        const normalizedCorrect = correctKey?.trim().toLowerCase();
-        const explanation = qa.explanation || qa.answer_explanation;
-        return {
-          id: qa.qa_id || `qa-${idx}`,
-          question: qa.question,
-          hint: qa.hint,
-          explanation,
-          difficult_level_id: qa.difficult_level_id,
-          options: optionKeys
-            .map((key) => {
-              const content = qa[key];
-              const isCorrect = isTextAnswer
-                ? Boolean(content && normalizedCorrect && content.trim().toLowerCase() === normalizedCorrect)
-                : Boolean(correctKey && correctKey === key);
-              return {
-                id: key,
-                content,
-                isCorrect,
-              };
-            })
-            .filter((opt) => Boolean(opt.content)),
-        } as NormalizedQuestion;
-      });
-    }
-    return [];
-  }, [lesson?.lesson_assessments, test?.lesson_assessments, test?.qas]);
+    if (!assessments?.length) return [];
+    return assessments.map((a, idx) => ({
+      id: a.assessment_id || `assessment-${idx}`,
+      question: a.question,
+      hint: a.hint || undefined,
+      explanation: a.explanation || undefined,
+      level: typeof a.difficulty === 'number' ? a.difficulty : undefined,
+      difficult_level_id: typeof a.difficulty === 'number' ? a.difficulty : undefined,
+      options: [a.option1, a.option2, a.option3, a.option4]
+        .map((content, oIdx) => ({ id: String(oIdx + 1), content, isCorrect: false }))
+        .filter((opt) => Boolean(opt.content)),
+    }));
+  }, [assessments]);
 
   const totalQuestions = questions.length;
 
@@ -291,7 +251,7 @@ export default function LessonDetailPage({ params }: PageProps) {
   const answerMap = useMemo(() => {
     if (!submissionResult) return {} as Record<string, LessonTestSubmitResultItemApi>;
     return submissionResult.answers.reduce((acc, item) => {
-      acc[item.qa_id] = item;
+      acc[item.assessment_id] = item;
       return acc;
     }, {} as Record<string, LessonTestSubmitResultItemApi>);
   }, [submissionResult]);
@@ -316,34 +276,59 @@ export default function LessonDetailPage({ params }: PageProps) {
     setSubmitting(true);
     try {
       const payload = {
-        answers: questions.map((q) => ({ qa_id: q.id, answer: answers[q.id] || '' })),
+        answers: questions.map((q) => ({ assessment_id: q.id, answer: Number(answers[q.id]) || 0 })),
       };
-      const resp = await courseApi.submitLessonTest(courseId, lessonId, payload);
+      const resp = await courseApi.submitAssessments(courseId, lessonId, payload);
       const data = resp.data as LessonTestSubmitResponseApi;
       if (data.status !== 200 || !data.result) {
         throw new Error(data.message || 'Chấm bài không thành công');
       }
       const result = data.result;
+      const snapshot = data.experience || null;
       setSubmissionResult(result);
+      setExperience(snapshot);
       setScore(result.score);
       setPassed(result.passed);
-      const adjustedExp = Math.max(0, (result.applied_exp || 0) - hintSpent);
+      const awardedExp = Math.max(0, (snapshot?.gained_exp ?? result.applied_exp ?? 0));
+      const adjustedExp = Math.max(0, awardedExp - hintSpent);
       setEarnedExp(adjustedExp);
       setReviewMode(true);
       showToast.success(result.passed ? 'Đạt yêu cầu 80%. Bạn có thể sang bài tiếp theo.' : 'Chưa đạt 80%. Hãy thử lại.');
-
-      // Update EXP/level locally based on returned EXP and hint spending
-      let expPool = playerExp + adjustedExp;
-      let nextLevel = playerLevel;
-      let nextRequireExp = requireExp;
-      while (expPool >= nextRequireExp) {
-        expPool -= nextRequireExp;
-        nextLevel += 1;
-        nextRequireExp = requiredExpForLevel(nextLevel);
+      if (result.passed) {
+        try {
+          await userApi.logActivity('complete_lesson');
+          if (!nextLessonId) {
+            await userApi.logActivity('complete_course');
+          }
+        } catch {
+          // ignore activity log errors
+        }
       }
-      setPlayerExp(expPool);
-      setPlayerLevel(nextLevel);
-      setRequireExp(nextRequireExp);
+
+      if (snapshot) {
+        if (typeof snapshot.new_exp === 'number') {
+          setPlayerExp(Math.max(0, snapshot.new_exp));
+        }
+        if (typeof snapshot.new_level === 'number' && snapshot.new_level > 0) {
+          setPlayerLevel(snapshot.new_level);
+        }
+        if (typeof snapshot.require_exp === 'number' && snapshot.require_exp > 0) {
+          setRequireExp(snapshot.require_exp);
+        }
+      } else {
+        // Fallback to local progression if server does not provide experience snapshot
+        let expPool = playerExp + adjustedExp;
+        let nextLevel = playerLevel;
+        let nextRequireExp = requireExp;
+        while (expPool >= nextRequireExp) {
+          expPool -= nextRequireExp;
+          nextLevel += 1;
+          nextRequireExp = requiredExpForLevel(nextLevel);
+        }
+        setPlayerExp(expPool);
+        setPlayerLevel(nextLevel);
+        setRequireExp(nextRequireExp);
+      }
 
       if (result.passed) {
         setShowTest(true);
@@ -367,10 +352,12 @@ export default function LessonDetailPage({ params }: PageProps) {
     }
     setReviewMode(false);
     setSubmissionResult(null);
+    setExperience(null);
     setScore(null);
     setPassed(false);
     setEarnedExp(null);
     setVisibleHints({});
+    setVisibleExplanations({});
     setCurrentQuestion(0);
     setShowTest(true);
   };
@@ -382,17 +369,92 @@ export default function LessonDetailPage({ params }: PageProps) {
     setPassed(false);
     setReviewMode(false);
     setSubmissionResult(null);
+    setExperience(null);
     setVisibleHints({});
+    setVisibleExplanations({});
     setCurrentQuestion(0);
   };
 
   const handleShowHint = (questionId: string) => {
     if (visibleHints[questionId]) return;
+    const target = assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
+    const ensureHint = async () => {
+      if (target?.hint) return true;
+      try {
+        const resp = await courseApi.listAssessments(courseId, lessonId, { include_hints: true, include_explanations: false });
+        const data = resp.data as AssessmentListResponseApi;
+        if (data?.assessments?.length) {
+          setAssessments((prev) => {
+            const map = new Map<string, AssessmentItemApi>();
+            prev.forEach((a) => map.set(a.assessment_id || a.question, a));
+            data.assessments?.forEach((a) => {
+              const key = a.assessment_id || a.question;
+              map.set(key, { ...(map.get(key) || {}), ...a });
+            });
+            return Array.from(map.values());
+          });
+          const updated = data.assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
+          return Boolean(updated?.hint);
+        }
+      } catch {
+        /* ignore */
+      }
+      return false;
+    };
+
+    ensureHint().then((hasHint) => {
+      if (!hasHint) {
+        showToast.info('Câu hỏi này không có gợi ý.');
+        return;
+      }
     if (availableExp < HINT_COST) {
       showToast.warning('Không đủ EXP để mở gợi ý (-50 EXP)');
       return;
     }
+    // Consume EXP budget locally when hint is revealed
+    setPlayerExp((prev) => Math.max(0, prev - HINT_COST));
     setVisibleHints((prev) => (prev[questionId] ? prev : { ...prev, [questionId]: true }));
+    });
+  };
+
+  const handleShowExplanation = (questionId: string) => {
+    if (!submissionResult) {
+      showToast.info('Nộp bài để xem giải thích');
+      return;
+    }
+    if (visibleExplanations[questionId]) return;
+    const ensureExplanation = async () => {
+      const target = assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
+      if (target?.explanation) return true;
+      try {
+        const resp = await courseApi.listAssessments(courseId, lessonId, { include_hints: true, include_explanations: true });
+        const data = resp.data as AssessmentListResponseApi;
+        if (data?.assessments?.length) {
+          setAssessments((prev) => {
+            const map = new Map<string, AssessmentItemApi>();
+            prev.forEach((a) => map.set(a.assessment_id || a.question, a));
+            data.assessments?.forEach((a) => {
+              const key = a.assessment_id || a.question;
+              map.set(key, { ...(map.get(key) || {}), ...a });
+            });
+            return Array.from(map.values());
+          });
+          const updated = data.assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
+          return Boolean(updated?.explanation);
+        }
+      } catch {
+        /* ignore */
+      }
+      return false;
+    };
+
+    ensureExplanation().then((hasExplanation) => {
+      if (!hasExplanation) {
+        showToast.info('Không có lời giải cho câu này.');
+        return;
+      }
+      setVisibleExplanations((prev) => ({ ...prev, [questionId]: true }));
+    });
   };
 
   const applyFormat = (mode: 'bold' | 'highlight' | 'italic' | 'underline') => {
@@ -530,7 +592,7 @@ export default function LessonDetailPage({ params }: PageProps) {
         <CardContent className="space-y-4 text-gray-800 leading-6">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="text-sm text-gray-600 whitespace-pre-wrap max-w-3xl">
-              {lesson.description || 'Chưa có mô tả'}
+              {lesson.overview || 'Chưa có mô tả'}
             </div>
             <div className="flex items-center gap-2 text-xs">
               <div className="flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 bg-white shadow-sm">
@@ -672,7 +734,7 @@ export default function LessonDetailPage({ params }: PageProps) {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="space-y-1">
                 <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Bài test</p>
-                <p className="text-lg font-semibold text-gray-900">{test?.title || lesson?.title || 'Bài kiểm tra'}</p>
+                <p className="text-lg font-semibold text-gray-900">{lesson?.title || 'Bài kiểm tra'}</p>
                 <p className="text-xs text-gray-500">Yêu cầu ≥ 80% để qua bài · Đã trả lời {answeredCount}/{totalQuestions}</p>
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -703,7 +765,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                       const answered = Boolean(answers[q.id]);
                       const isCurrent = currentQuestion === idx;
                       const serverItem = answerMap[q.id];
-                      const isCorrect = reviewMode && serverItem?.is_correct;
+                      const isIncorrect = reviewMode && serverItem && serverItem.is_correct === false;
                       return (
                         <button
                           key={q.id}
@@ -713,7 +775,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                             'h-10 rounded-md border text-sm font-semibold flex items-center justify-center',
                             isCurrent ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-700',
                             answered && 'border-green-200 bg-green-50 text-green-700',
-                            reviewMode && isCorrect && 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            isIncorrect && 'border-red-200 bg-red-50 text-red-700'
                           )}
                         >
                           {idx + 1}
@@ -737,30 +799,53 @@ export default function LessonDetailPage({ params }: PageProps) {
                             )}
                           </div>
                         </div>
-                        {questions[currentQuestion].hint && (
-                          <button
-                            type="button"
-                            onClick={() => handleShowHint(questions[currentQuestion].id)}
-                            disabled={Boolean(visibleHints[questions[currentQuestion].id])}
-                            className={cn(
-                              'px-3 py-1.5 rounded-md border text-sm font-semibold',
-                              visibleHints[questions[currentQuestion].id]
-                                ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'
-                            )}
-                          >
-                            {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {questions[currentQuestion].hint && (
+                            <button
+                              type="button"
+                              onClick={() => handleShowHint(questions[currentQuestion].id)}
+                              disabled={Boolean(visibleHints[questions[currentQuestion].id])}
+                              className={cn(
+                                'px-3 py-1.5 rounded-md border text-sm font-semibold flex items-center gap-2',
+                                visibleHints[questions[currentQuestion].id]
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'
+                              )}
+                            >
+                              <Lightbulb className="w-4 h-4" />
+                              {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
+                            </button>
+                          )}
+                          {submissionResult && (
+                            <button
+                              type="button"
+                              onClick={() => handleShowExplanation(questions[currentQuestion].id)}
+                              disabled={Boolean(visibleExplanations[questions[currentQuestion].id])}
+                              className={cn(
+                                'px-3 py-1.5 rounded-md border text-sm font-semibold flex items-center gap-2',
+                                visibleExplanations[questions[currentQuestion].id]
+                                  ? 'border-sky-200 bg-sky-50 text-sky-700'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'
+                              )}
+                            >
+                              <span aria-hidden="true">ℹ️</span>
+                              {visibleExplanations[questions[currentQuestion].id] ? 'Đã hiện giải thích' : 'Hiện giải thích'}
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {visibleHints[questions[currentQuestion].id] && questions[currentQuestion].hint && (
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 space-y-1">
                           <div className="font-semibold">Gợi ý</div>
                           <div>{questions[currentQuestion].hint}</div>
-                          {questions[currentQuestion].explanation && (
-                            <div className="text-amber-900/90">Giải thích: {questions[currentQuestion].explanation}</div>
-                          )}
+                        </div>
+                      )}
+
+                      {visibleExplanations[questions[currentQuestion].id] && questions[currentQuestion].explanation && (
+                        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 space-y-1">
+                          <div className="font-semibold">Giải thích</div>
+                          <div>{questions[currentQuestion].explanation}</div>
                         </div>
                       )}
 
@@ -772,17 +857,15 @@ export default function LessonDetailPage({ params }: PageProps) {
                           const showReview = reviewMode;
                             const serverItem = answerMap[q.id];
                             const serverCorrectId = serverItem?.correct_answer;
-                            const isCorrectOption = serverCorrectId ? serverCorrectId === opt.id : opt.isCorrect;
-                            const showCorrect = showReview && isCorrectOption;
-                            const showIncorrect = showReview && isSelected && !isCorrectOption;
+                            const isCorrectOption = serverCorrectId ? String(serverCorrectId) === opt.id : opt.isCorrect;
+                            const isIncorrectChoice = showReview && isSelected && !isCorrectOption;
                           return (
                             <label
                               key={opt.id}
                               className={cn(
                                 'flex items-start gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition',
                                 isSelected ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-gray-50',
-                                showIncorrect && 'border-red-200 bg-red-50 text-red-700',
-                                showCorrect && 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                                isIncorrectChoice && 'border-red-200 bg-red-50 text-red-700',
                                 !reviewMode && 'hover:border-orange-200'
                               )}
                             >
@@ -796,11 +879,10 @@ export default function LessonDetailPage({ params }: PageProps) {
                               />
                               <div className="space-y-1">
                                 <span>{opt.content}</span>
-                                {reviewMode && opt.isCorrect && (
-                                  <span className="text-xs font-semibold text-emerald-700">Đáp án đúng</span>
-                                )}
-                                {reviewMode && isSelected && !opt.isCorrect && (
-                                  <span className="text-xs font-semibold text-red-600">Bạn chọn</span>
+                                {reviewMode && isSelected && (
+                                  <span className={cn('text-xs font-semibold', isIncorrectChoice ? 'text-red-600' : 'text-gray-700')}>
+                                    {isIncorrectChoice ? 'Bạn chọn (sai)' : 'Bạn chọn'}
+                                  </span>
                                 )}
                               </div>
                             </label>
@@ -815,6 +897,21 @@ export default function LessonDetailPage({ params }: PageProps) {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
+                            onClick={() => questions[currentQuestion]?.id && handleShowHint(questions[currentQuestion].id)}
+                            disabled={
+                              !questions[currentQuestion]?.hint ||
+                              Boolean(questions[currentQuestion] && visibleHints[questions[currentQuestion].id])
+                            }
+                            className={cn(
+                              'px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-orange-200 flex items-center gap-1',
+                              (!questions[currentQuestion]?.hint || visibleHints[questions[currentQuestion]?.id || '']) && 'opacity-60 cursor-not-allowed'
+                            )}
+                          >
+                            <Lightbulb className="h-4 w-4" />
+                            Gợi ý
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
                             className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-orange-200"
                           >
@@ -822,10 +919,16 @@ export default function LessonDetailPage({ params }: PageProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCurrentQuestion((prev) => Math.min(totalQuestions - 1, prev + 1))}
+                            onClick={() => {
+                              if (currentQuestion === totalQuestions - 1) {
+                                handleSubmit();
+                              } else {
+                                setCurrentQuestion((prev) => Math.min(totalQuestions - 1, prev + 1));
+                              }
+                            }}
                             className="px-3 py-1.5 rounded-md border border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300"
                           >
-                            Tiếp
+                            {currentQuestion === totalQuestions - 1 ? 'Nộp bài' : 'Tiếp'}
                           </button>
                         </div>
                       </div>
@@ -865,7 +968,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                     Điểm: {score}% {passed ? '(Đạt yêu cầu)' : '(Chưa đạt)'}
                   </span>
                   {submissionResult && (
-                    <span className="text-blue-700">EXP hệ thống: {submissionResult.applied_exp}</span>
+                    <span className="text-blue-700">EXP hệ thống: {experience?.gained_exp ?? submissionResult.applied_exp}</span>
                   )}
                   <span className="text-blue-700">EXP sau gợi ý: {earnedExp ?? 0}</span>
                   {hintSpent > 0 && <span className="text-gray-500 font-normal">(-{hintSpent} EXP do mở gợi ý)</span>}

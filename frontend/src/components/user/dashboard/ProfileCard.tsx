@@ -4,11 +4,13 @@ import { UserProfile } from './types';
 import React from 'react';
 
 export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
+  const currentExp = user.current_exp ?? (user as { experience?: number })?.experience ?? 0;
+  const requireExp = user.require_exp ?? (user as { exp_needed_for_next?: number; required_exp?: number })?.exp_needed_for_next ?? (user as { required_exp?: number })?.required_exp ?? 0;
   const expPercent = (() => {
-    if (!user.require_exp || user.require_exp <= 0) return 0;
-    return Math.min(100, Math.round(((user.current_exp || 0) / user.require_exp) * 100));
+    if (!requireExp || requireExp <= 0) return 0;
+    return Math.min(100, Math.round((currentExp / requireExp) * 100));
   })();
-  const expLabel = `${user.current_exp || 0} / ${user.require_exp || 0} EXP`;
+  const expLabel = `${currentExp} / ${requireExp || 0} EXP`;
   return (
     <Card className="bg-[#111827] border-none text-white shadow-md md:col-span-1">
       <CardContent className="p-5 space-y-6">

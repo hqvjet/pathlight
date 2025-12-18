@@ -8,8 +8,9 @@ export type AgenticCourseConstraint =
   | 'humorous';
 
 export interface CreateAgenticCourseRequest {
-  user_position: string;
-  short_user_prompt: string;
+  type?: 'generate_course' | 'generate_quiz';
+  user_role: string;
+  short_prompt: string;
   course_duration: number; // unit: days
   documents?: string[];
   course_level: AgenticCourseLevel;

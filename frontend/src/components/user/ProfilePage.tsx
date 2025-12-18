@@ -22,8 +22,8 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); await updateProfile(formData as ProfileFormData); };
 
-  const currentExp = user?.current_exp ?? 0;
-  const requireExp = user?.require_exp ?? 0;
+  const currentExp = user?.current_exp ?? (user as { experience?: number } | undefined)?.experience ?? 0;
+  const requireExp = user?.require_exp ?? (user as { exp_needed_for_next?: number; required_exp?: number } | undefined)?.exp_needed_for_next ?? (user as { required_exp?: number } | undefined)?.required_exp ?? 0;
   const expPercent = (() => {
     if (!requireExp || requireExp <= 0) return 0;
     return Math.min(100, Math.round((currentExp / requireExp) * 100));

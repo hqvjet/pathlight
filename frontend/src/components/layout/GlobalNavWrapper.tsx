@@ -17,8 +17,9 @@ export default function GlobalNavWrapper() {
 
   if (!ready) return null; // avoid hydration mismatch
 
-  // Hide global nav on dashboard-like pages and auth flows to avoid stale header flashes
-  if (pathname.startsWith('/user/') || pathname.startsWith('/auth/')) return null;
+  // Hide global nav on dashboard-like pages; for auth routes, show the public nav
+  if (pathname.startsWith('/user/')) return null;
+  if (pathname.startsWith('/auth/')) return <NavBarPublic />;
 
   if (isAuthenticated) {
     // user?.name might be undefined until first profile fetch resolves; NavBarAuth shows skeleton then

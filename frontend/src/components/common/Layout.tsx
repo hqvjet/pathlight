@@ -11,7 +11,6 @@ import {
   HomeIcon,
   BookOpenIcon,
   ClipboardListIcon,
-  UserCircleIcon,
   LogoutIcon,
   MenuIcon,
 } from '@/components/icons';
@@ -40,7 +39,6 @@ const menuItems = [
   { label: 'Trang Chủ', icon: HomeIcon, href: '/user/dashboard' },
   { label: 'Khóa Học Của Tôi', icon: BookOpenIcon, href: '/user/my-courses' },
   { label: 'Quiz Của Tôi', icon: ClipboardListIcon, href: '/user/my-quizzes' },
-  { label: 'Hồ Sơ', icon: UserCircleIcon, href: '/user/profile' },
 ];
 
 export default function Layout({ children, title, user }: LayoutProps) {
@@ -55,6 +53,11 @@ export default function Layout({ children, title, user }: LayoutProps) {
   const [avatarVersion, setAvatarVersion] = useState<number | null>(null);
   const router = useRouter();
   const pathname = usePathname();
+  const userMenuLinks = [
+    { href: '/user/profile', label: 'Hồ sơ & tài khoản', sub: 'Cập nhật thông tin, ảnh đại diện' },
+    { href: '/user/profile#remind', label: 'Nhắc giờ học', sub: 'Chỉnh thời gian thông báo hằng ngày' },
+    { href: '/user/my-courses', label: 'Khóa học của tôi', sub: 'Xem lộ trình và tiến độ' },
+  ];
 
   useEffect(() => {
     const handleResize = () => {
@@ -120,8 +123,8 @@ export default function Layout({ children, title, user }: LayoutProps) {
   const mainOffsetClasses = isMobile ? '' : sidebarExpandedDesktop ? 'lg:ml-64' : 'lg:ml-16';
 
   const expPercent = (() => {
-    const current = effectiveUser?.current_exp ?? cachedProgress.current_exp ?? 0;
-    const need = effectiveUser?.require_exp ?? cachedProgress.require_exp ?? 0;
+    const current = effectiveUser?.current_exp ?? (effectiveUser as { experience?: number })?.experience ?? cachedProgress.current_exp ?? 0;
+    const need = effectiveUser?.require_exp ?? (effectiveUser as { exp_needed_for_next?: number; required_exp?: number })?.exp_needed_for_next ?? (effectiveUser as { required_exp?: number })?.required_exp ?? cachedProgress.require_exp ?? 0;
     if (!need || need <= 0) return 0;
     const pct = current / need;
     return Math.max(0, Math.min(1, pct));
@@ -320,13 +323,19 @@ export default function Layout({ children, title, user }: LayoutProps) {
                         <p className="text-sm font-semibold text-gray-900 truncate">{effectiveUser?.name || 'User'}</p>
                         <p className="text-xs text-gray-500 truncate">{effectiveUser?.email || 'Email'}</p>
                       </div>
-                      <Link
-                        href="/user/profile"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        onClick={() => setUserMenuOpen(false)}
-                      >
-                        Hồ sơ của tôi
-                      </Link>
+                      <div className="py-1">
+                        {userMenuLinks.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <div className="font-medium text-gray-800">{item.label}</div>
+                            {item.sub && <div className="text-xs text-gray-500">{item.sub}</div>}
+                          </Link>
+                        ))}
+                      </div>
                       <button
                         onClick={handleLogout}
                         className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

@@ -16,26 +16,14 @@ def hash_password(password: str, *, rounds: int = 10) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-def create_access_token(data: dict) -> str:
-    """Create a signed JWT access token.
-
-    Claims added:
-    - exp: expiration (config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES, default 1440 = 24h)
-    - iat: issued at
-    - type: "access"
-    - jti: unique token id (for blacklist support)
-    """
+def _create_token(data: dict, *, token_type: str, minutes: int) -> str:
+    """Create a signed JWT with common claims for access/refresh tokens."""
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    expire_minutes_val = getattr(config, "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
-    try:
-        expire_minutes = int(expire_minutes_val)
-    except Exception:
-        expire_minutes = 1440
-    expire = now + timedelta(minutes=expire_minutes)
+    expire = now + timedelta(minutes=minutes)
     to_encode.update({
         "exp": int(expire.timestamp()),
-        "type": "access",
+        "type": token_type,
         "iat": int(now.timestamp()),
         "jti": str(uuid.uuid4()),
     })
@@ -43,6 +31,26 @@ def create_access_token(data: dict) -> str:
     if not isinstance(algorithm, str) or not algorithm:
         algorithm = "HS256"
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=algorithm)
+
+
+def create_access_token(data: dict) -> str:
+    """Create a signed JWT access token (default 24h)."""
+    expire_minutes_val = getattr(config, "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
+    try:
+        expire_minutes = int(expire_minutes_val)
+    except Exception:
+        expire_minutes = 1440
+    return _create_token(data, token_type="access", minutes=expire_minutes)
+
+
+def create_refresh_token(data: dict) -> str:
+    """Create a signed JWT refresh token (default 30 days)."""
+    expire_minutes_val = getattr(config, "JWT_REFRESH_TOKEN_EXPIRE_MINUTES", 43200)  # 30 days
+    try:
+        expire_minutes = int(expire_minutes_val)
+    except Exception:
+        expire_minutes = 43200
+    return _create_token(data, token_type="refresh", minutes=expire_minutes)
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)

@@ -18,14 +18,17 @@ export interface CourseCardData {
   badge?: string;
   color?: string;
   updatedAt?: string;
+  ownerId?: string;
+  isPublic?: boolean;
 }
 
 interface CourseCardProps {
   course: CourseCardData;
   onSelect?: (course: CourseCardData) => void;
+  onOwnerClick?: (ownerId: string) => void;
 }
 
-export function CourseCard({ course, onSelect }: CourseCardProps) {
+export function CourseCard({ course, onSelect, onOwnerClick }: CourseCardProps) {
   return (
     <Card
       className="h-full border-gray-100 shadow-sm hover:shadow-lg transition-all bg-white cursor-pointer focus-within:ring-2 focus-within:ring-orange-500/50 focus-within:ring-offset-2"
@@ -67,6 +70,18 @@ export function CourseCard({ course, onSelect }: CourseCardProps) {
           <span className={cn('rounded-full border px-3 py-1 font-medium', 'border-gray-200 bg-gray-50 text-gray-700')}>{course.level}</span>
           <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.language}</span>
           <span className="rounded-full border px-3 py-1 border-gray-200 bg-white">{course.totalLessons} bài</span>
+          {course.isPublic && (
+            <span className="rounded-full border px-3 py-1 border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold">Public</span>
+          )}
+          {course.ownerId && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOwnerClick?.(course.ownerId!); }}
+              className="rounded-full border px-3 py-1 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+            >
+              Chủ sở hữu: {course.ownerId}
+            </button>
+          )}
         </div>
         <div className="flex justify-between items-center pt-1 mt-auto">
           <div className="text-sm text-gray-500">Tiếp tục từ bài {course.completedLessons + 1}</div>

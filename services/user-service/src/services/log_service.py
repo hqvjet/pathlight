@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional, Sequence
-
+import os
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -99,7 +99,7 @@ def _format_events(events: Sequence[dict], source: str) -> list[AdminLogItem]:
     return formatted
 
 
-def get_admin_logs(filter_key: str, *, service: Optional[str] = None, logs_client=None) -> AdminLogsResponse:
+def get_admin_logs(filter_key: FilterKey, *, service: Optional[str] = None, logs_client=None) -> AdminLogsResponse:
     """Fetch logs from CloudWatch for the requested window and convert to VN time.
 
     - filter_key: daily | weekly | monthly

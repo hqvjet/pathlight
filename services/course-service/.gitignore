@@ -118,6 +118,9 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
+
+# Accidental SQLite files created by malformed in-memory URLs
+:memory:*
 /site
 
 # mypy

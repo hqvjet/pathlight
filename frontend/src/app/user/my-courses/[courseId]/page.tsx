@@ -14,17 +14,19 @@ interface LessonDetailApi {
   lesson_id: string;
   course_id?: string;
   title: string;
-  description?: string;
+  overview?: string;
   content?: string;
+  duration?: number;
   finish: boolean;
   order?: number;
 }
 
 interface CourseFullInfoApi {
   title: string;
-  description: string;
+  overview: string;
+  level: string;
   duration: number;
-  roadmap?: string | null;
+  finish: boolean;
   lesson: Array<{ lesson_id: string; title: string; finish: boolean }>;
   updated_at: string;
 }
@@ -94,9 +96,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         const mappedHero: CourseHeroData = {
           id: courseId,
           title: infoData.info.title,
-          subtitle: infoData.info.roadmap || 'Lộ trình học tập được tự động tạo',
-          description: infoData.info.description || 'Khóa học không có mô tả',
-          level: 'Trung cấp',
+          subtitle: infoData.info.overview || 'Lộ trình học tập được tự động tạo',
+          description: infoData.info.overview || 'Khóa học không có mô tả',
+          level: infoData.info.level || 'Không xác định',
           durationLabel: minutesToWeeksLabel(infoData.info.duration),
           language: 'Tiếng Việt',
           progress,
@@ -148,13 +150,13 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         title: 'Lộ trình khóa học',
         lessons: lessons.map((lesson, idx) => {
           let status: 'completed' | 'in-progress' | 'locked';
-          if (lesson.finish) {
-            status = 'completed';
-          } else if (!locked) {
+          if (!locked && !lesson.finish) {
             status = 'in-progress';
             locked = true;
+          } else if (locked || !lesson.finish) {
+            status = lesson.finish ? 'completed' : 'locked';
           } else {
-            status = 'locked';
+            status = 'completed';
           }
 
           return {

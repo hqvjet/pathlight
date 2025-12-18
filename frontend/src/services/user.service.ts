@@ -123,10 +123,10 @@ export const userService = {
   },
 
   /**
-   * Save user activity milestone
+   * Log user activity event
    */
-  async saveActivity() {
-  return api.post('/user/activity');
+  async saveActivity(event: string) {
+  return api.post('/user/activity', { event });
   },
 
   /**

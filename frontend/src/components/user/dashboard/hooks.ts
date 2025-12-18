@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { storage } from '@/utils/api';
 import { api } from '@/lib/api';
+import { userApi } from '@/lib/api/user';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
@@ -99,13 +100,15 @@ export function useDashboard(onLogout: () => void) {
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,
           require_exp: userInfo.require_exp || 100,
-          total_courses: userInfo.course_num || userInfo.total_courses || 0,
-          completed_courses: userInfo.finish_course_num || userInfo.completed_courses || 0,
-          total_quizzes: userInfo.quiz_num || userInfo.total_quizzes || 0,
+          total_courses: userInfo.total_courses || userInfo.course_num || 0,
+          completed_courses: userInfo.completed_courses || userInfo.finish_course_num || 0,
+          total_quizzes: userInfo.total_quizzes || userInfo.quiz_num || 0,
           lesson_num: userInfo.lesson_num || 0,
+          total_lessons: (userInfo as { total_lessons?: number }).total_lessons || userInfo.lesson_num || 0,
           average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
           rank: userInfo.rank || 1,
           user_num: userInfo.user_num || 1,
+          total_users: (userInfo as { total_users?: number }).total_users || userInfo.user_num || 1,
           user_top_rank: leaderboard,
         };
         const dashboardInfo: DashboardData = { info: { ...(profileData as UserProfile), user_top_rank: leaderboard } as UserProfile & { user_top_rank?: LeaderboardUser[] } };
@@ -132,41 +135,59 @@ export function useDashboard(onLogout: () => void) {
 }
 
 export function useActivity() {
-   const [activityData, setActivityData] = useState<Record<string, number>>({});
-   const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
+  const [activityData, setActivityData] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
 
-   useEffect(() => {
-     if (!canUseStorage) return;
-     try { const saved = window.localStorage.getItem('pathlight_activity_data'); if (saved) setActivityData(JSON.parse(saved)); } catch {}
-   }, [canUseStorage]);
+  const bucketLevel = useCallback((points: number) => {
+    if (points <= 0) return 0;
+    if (points === 1) return 1;
+    if (points <= 3) return 2;
+    if (points <= 6) return 3;
+    return 4;
+  }, []);
 
-   useEffect(() => {
-     if (Object.keys(activityData).length === 0) return;
-     if (!canUseStorage) return;
-     const timeoutId = setTimeout(() => { try { window.localStorage.setItem('pathlight_activity_data', JSON.stringify(activityData)); } catch {} }, 500);
-     return () => clearTimeout(timeoutId);
-   }, [activityData, canUseStorage]);
+  const fetchActivity = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await userApi.getActivity(365);
+      const items = (resp.data as { items?: Array<{ date: string; points: number }> })?.items || [];
+      const mapped: Record<string, number> = {};
+      items.forEach((it) => { mapped[it.date] = bucketLevel(it.points || 0); });
+      setActivityData(mapped);
+    } catch {
+      // silent; keep existing state
+    } finally {
+      setLoading(false);
+    }
+  }, [bucketLevel]);
 
-  const handleActivityClick = useCallback((dateKey: string, currentLevel: number) => {
-    const newLevel = currentLevel >= 4 ? 0 : currentLevel + 1;
-    const newActivityData = { ...activityData, [dateKey]: newLevel };
-    setActivityData(newActivityData);
-    if (!canUseStorage) return;
-    if (window?.requestIdleCallback) window.requestIdleCallback(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)));
-    else setTimeout(()=> window.localStorage.setItem('pathlight_activity_data', JSON.stringify(newActivityData)),0);
-   }, [activityData, canUseStorage]);
+  useEffect(() => { fetchActivity(); }, [fetchActivity]);
 
-   const generateYearActivityData = useMemo(() => (year: number) => {
-      const activities = [] as { date: Date; level: number; count: number; isCurrentYear: boolean; dateKey: string }[];
-      const startDate = new Date(year, 0, 1); const endDate = new Date(year, 11, 31);
-      const firstDay = startDate.getDay(); const firstSunday = new Date(startDate); firstSunday.setDate(startDate.getDate() - firstDay);
-      const lastDay = endDate.getDay(); const lastSaturday = new Date(endDate); lastSaturday.setDate(endDate.getDate() + (6 - lastDay));
-      const targetDays = 53 * 7;
-      for (let i=0;i<targetDays;i++){ const date = new Date(firstSunday); date.setDate(firstSunday.getDate()+i); const dateKey = date.toISOString().split('T')[0]; const isCurrentYear = date.getFullYear()===year; const activityLevel = activityData[dateKey] || 0; const contributionCount = activityLevel * 3; activities.push({ date, level: activityLevel, count: contributionCount, isCurrentYear, dateKey }); }
-      return activities;
-    }, [activityData]);
+  const recordActivityEvent = useCallback(async (event: string) => {
+    try {
+      await userApi.logActivity(event);
+      await fetchActivity();
+    } catch {
+      // silent
+    }
+  }, [fetchActivity]);
 
-  const clearActivityData = () => { setActivityData({}); if (canUseStorage) window.localStorage.removeItem('pathlight_activity_data'); };
+  const generateYearActivityData = useMemo(() => (year: number) => {
+    const activities: { date: Date; level: number; count: number; isCurrentYear: boolean; dateKey: string }[] = [];
+    const startDate = new Date(year, 0, 1); const endDate = new Date(year, 11, 31);
+    const firstDay = startDate.getDay(); const firstSunday = new Date(startDate); firstSunday.setDate(startDate.getDate() - firstDay);
+    const lastDay = endDate.getDay(); const lastSaturday = new Date(endDate); lastSaturday.setDate(endDate.getDate() + (6 - lastDay));
+    const targetDays = 53 * 7;
+    for (let i = 0; i < targetDays; i++) {
+      const date = new Date(firstSunday); date.setDate(firstSunday.getDate() + i);
+      const dateKey = date.toISOString().split('T')[0];
+      const isCurrentYear = date.getFullYear() === year;
+      const activityLevel = activityData[dateKey] || 0;
+      const contributionCount = activityLevel * 3;
+      activities.push({ date, level: activityLevel, count: contributionCount, isCurrentYear, dateKey });
+    }
+    return activities;
+  }, [activityData]);
 
-   return { activityData, handleActivityClick, generateYearActivityData, clearActivityData };
+  return { activityData, generateYearActivityData, recordActivityEvent, loading };
 }

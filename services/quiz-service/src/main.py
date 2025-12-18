@@ -24,6 +24,9 @@ app.add_middleware(
     allow_headers=config.ALLOWED_HEADERS,
 )
 
+# Mount quiz routes under /quiz
+app.include_router(quiz_router, prefix="/quiz")
+
 
 @app.on_event("startup")
 async def startup_event():

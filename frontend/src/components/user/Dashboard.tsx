@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useActivity, useDashboard } from './dashboard/hooks';
 import { StatsGrid } from './dashboard/StatsGrid';
 import { ProfileCard } from './dashboard/ProfileCard';
@@ -14,7 +14,14 @@ interface DashboardProps {
 export default function Dashboard({ onLogout }: DashboardProps) {
   const { user, dashboardData, loading } = useDashboard(onLogout);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const { handleActivityClick, generateYearActivityData } = useActivity();
+  const { generateYearActivityData, recordActivityEvent } = useActivity();
+
+  // Record login activity once dashboard is ready
+  useEffect(() => {
+    if (user) {
+      recordActivityEvent('login');
+    }
+  }, [recordActivityEvent, user]);
 
   if (loading) {
     return (
@@ -48,7 +55,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         <StatsGrid user={user} />
         <div className="grid gap-6 md:grid-cols-3">
           <ProfileCard user={user} />
-          <ActivityHeatmap selectedYear={selectedYear} setSelectedYear={setSelectedYear} generateYearActivityData={generateYearActivityData} handleActivityClick={handleActivityClick} />
+          <ActivityHeatmap
+            selectedYear={selectedYear}
+            setSelectedYear={setSelectedYear}
+            generateYearActivityData={generateYearActivityData}
+          />
         </div>
         <div className="grid gap-8 lg:grid-cols-2">
           <div>

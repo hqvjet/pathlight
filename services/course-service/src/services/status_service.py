@@ -33,7 +33,7 @@ def _ddb_table():
         return None
 
     try:
-        resource = boto3.resource("dynamodb", **kwargs)
+        resource: Any = boto3.resource("dynamodb", **kwargs)
         table = resource.Table(table_name)
         # Try a light call to ensure table exists/accessible
         try:

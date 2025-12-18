@@ -9,6 +9,8 @@ export const userApi = {
   updateAvatar: (file: File) => apiClient.uploadFile('/user/avatar', file, { method: 'PUT' }, 'avatar_file'),
   getAvatar: (userId: string) => apiClient.get(`/user/avatar?user-id=${encodeURIComponent(userId)}`),
   setNotifyTime: (data: unknown) => apiClient.put('/user/notify-time', data),
-  saveActivity: () => apiClient.post('/user/activity'),
-  getAllUsers: () => apiClient.get('/user/all'),
+  logActivity: (event: string) => apiClient.post('/user/activity', { event }),
+  getActivity: (days = 365) => apiClient.get(`/user/activity?days=${days}`),
+  // Admin-only listing; backend expects admin credentials
+  getAllUsers: () => apiClient.get('/user/admin/users'),
 };
