@@ -51,7 +51,9 @@ def upgrade():
         # If it exists, rebuild FK to users
         fk = next((f for f in inspector.get_foreign_keys("learning_activity") if f.get("constrained_columns") == ["user_id"]), None)
         if fk:
-            op.drop_constraint(fk.get("name"), "learning_activity", type_="foreignkey")
+            fk_name = fk.get("name")
+            if fk_name:
+                op.drop_constraint(fk_name, "learning_activity", type_="foreignkey")
         op.create_foreign_key(None, "learning_activity", "users", ["user_id"], ["id"], ondelete="CASCADE")
 
 
