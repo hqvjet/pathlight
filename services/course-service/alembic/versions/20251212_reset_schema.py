@@ -1,7 +1,7 @@
 """reset schema to ERD 2025-12-12
 
 Revision ID: reset_20251212
-Revises: 001_create_course_tables
+Revises: 001
 Create Date: 2025-12-12
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'reset_20251212'
-down_revision = '001_create_course_tables'
+down_revision = '001'
 branch_labels = None
 depends_on = None
 

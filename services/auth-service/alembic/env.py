@@ -26,9 +26,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Đọc DATABASE_URL từ env hoặc alembic.ini
+# Đọc DATABASE_URL từ env hoặc alembic.ini (ưu tiên env, fallback ini)
 target_metadata = Base.metadata
-db_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+db_url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
 
 def run_migrations_offline():
     context.configure(
@@ -36,6 +36,7 @@ def run_migrations_offline():
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        version_table="auth_alembic_version",
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -47,7 +48,11 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table="auth_alembic_version",
+        )
         with context.begin_transaction():
             context.run_migrations()
 
