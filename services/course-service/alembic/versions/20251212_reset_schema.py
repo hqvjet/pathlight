@@ -142,11 +142,8 @@ def upgrade():
     ]:
         _drop_if_exists(inspector, tbl)
 
-    # quiz domain belongs to quiz-service; drop legacy quiz tables if present
-    if inspector.has_table('quiz_qa'):
-        op.drop_table('quiz_qa')
-    if inspector.has_table('quiz'):
-        op.drop_table('quiz')
+    # quiz domain belongs to quiz-service; leave any quiz tables untouched to avoid
+    # dependency issues with foreign keys managed by that service
 
     _create_course_tables(inspector)
 
