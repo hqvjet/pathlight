@@ -91,34 +91,18 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
+    # drop any existing course tables (and dependents) in dependency order to avoid duplicate table errors
+    for tbl in ['learning_progress', 'lesson_progress', 'course_progress', 'assessment', 'lesson', 'course']:
+        _drop_if_exists(inspector, tbl)
+
+    # refresh inspector after drops so existence checks reflect current state
+    inspector = sa.inspect(bind)
+
     # add new columns if tables already exist
     if inspector.has_table('course'):
         cols = {c['name'] for c in inspector.get_columns('course')}
         if 'is_public' not in cols:
             op.add_column('course', sa.Column('is_public', sa.Boolean(), nullable=False, server_default=sa.false()))
-
-    # create progress tables if missing
-    if not inspector.has_table('course_progress'):
-        op.create_table(
-            'course_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'course_id', name='uq_user_course_progress'),
-        )
-    if not inspector.has_table('lesson_progress'):
-        op.create_table(
-            'lesson_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('lesson_id', sa.String(), sa.ForeignKey('lesson.lesson_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'lesson_id', name='uq_user_lesson_progress'),
-        )
 
     # best-effort remove legacy completion columns from content tables
     if inspector.has_table('course'):
