@@ -1,6 +1,6 @@
 """Database models for Auth Service (shared tables)."""
 
-from sqlalchemy import Column, String, DateTime, Boolean
+from sqlalchemy import Column, String, DateTime, Boolean, BigInteger, Integer, Text
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
@@ -25,6 +25,24 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
 
+class UserProfile(Base):
+    __tablename__ = "user_profile"
+
+    profile_id = Column(String, primary_key=True)
+    subscription = Column(Integer, nullable=False, default=0)
+    family_name = Column(String, nullable=True)
+    given_name = Column(String, nullable=True)
+    avatar_id = Column(String, nullable=True)
+    dob = Column(DateTime(timezone=True), nullable=True)
+    streak = Column(Integer, nullable=False, default=0)
+    level = Column(Integer, nullable=False, default=1)
+    current_exp = Column(BigInteger, nullable=False, default=0)
+    require_exp = Column(BigInteger, nullable=False, default=10)
+    remind_time = Column(DateTime(timezone=True), nullable=True)
+    sex = Column(Boolean, nullable=True)
+    bio = Column(Text, nullable=True)
+
+
 class Admin(Base):
     """Admin model for authentication."""
     __tablename__ = "admins"
@@ -46,4 +64,4 @@ class TokenBlacklist(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
-__all__ = ['User', 'Admin', 'TokenBlacklist', 'Base']
+__all__ = ['User', 'UserProfile', 'Admin', 'TokenBlacklist', 'Base']

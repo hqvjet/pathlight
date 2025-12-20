@@ -19,6 +19,7 @@ __all__ = [
     "get_exp_for_level",
     "calculate_level_from_exp",
     "auto_level_up",
+    "require_exp_for_level",
     "update_test_stats",
     "reset_test_stats",
     "simulate_learning_activity",
@@ -125,6 +126,12 @@ def calculate_level_from_exp(current_exp: int) -> Tuple[int, int, int]:
     next_level_exp = get_exp_for_level(level + 1)
     return level, current_level_exp, next_level_exp
 
+
+def require_exp_for_level(level: int) -> int:
+    """Derived required exp to reach next level (level+1)."""
+    next_level = level + 1
+    return get_exp_for_level(next_level)
+
 def auto_level_up(current_exp: int, current_level: Optional[int] = None) -> Tuple[int, int, bool]:
     new_level, _, next_level_exp = calculate_level_from_exp(current_exp)
     level_increased = current_level is not None and new_level > current_level
@@ -135,10 +142,11 @@ from schemas.user_schemas import TestStatsRequest, TestStatsResponse  # type: ig
 
 async def update_test_stats(request: TestStatsRequest, current_user: User, db: Session) -> TestStatsResponse:
     try:
+        current_level_val = getattr(current_user, 'level', 1)
         original_stats = {
-            "level": getattr(current_user, 'level', 1),
+            "level": current_level_val,
             "current_exp": getattr(current_user, 'current_exp', 0),
-            "require_exp": getattr(current_user, 'require_exp', get_exp_for_level(2)),
+            "require_exp": getattr(current_user, 'require_exp', require_exp_for_level(current_level_val)),
         }
         calculated_exp = 0
         if request.current_exp is not None:
@@ -161,7 +169,7 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
         level_changed = False
         if request.level is not None:
             setattr(current_user, 'level', request.level)
-            setattr(current_user, 'require_exp', get_exp_for_level(request.level + 1))
+            setattr(current_user, 'require_exp', require_exp_for_level(request.level))
         else:
             current_level = getattr(current_user, 'level', 1)
             new_level, next_level_exp, level_increased = auto_level_up(final_exp, current_level)
@@ -219,13 +227,13 @@ async def reset_test_stats(current_user: User, db: Session) -> TestStatsResponse
     try:
         setattr(current_user, 'level', 1)
         setattr(current_user, 'current_exp', 0)
-        setattr(current_user, 'require_exp', get_exp_for_level(2))
+        setattr(current_user, 'require_exp', require_exp_for_level(1))
         current_bio = getattr(current_user, 'bio', '') or ''
         lines = [l for l in current_bio.split('\n') if not l.startswith('[TEST_DATA]')]
         setattr(current_user, 'bio', '\n'.join(lines).strip())
         db.commit()
         rank_data = await calculate_user_rank(current_user, db)
-        reset_stats = {"level": 1, "current_exp": 0, "require_exp": get_exp_for_level(2), **rank_data}
+        reset_stats = {"level": 1, "current_exp": 0, "require_exp": require_exp_for_level(1), **rank_data}
         logger.info(f"Successfully reset test stats for user {current_user.email}")
         return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=reset_stats)
     except Exception as e:  # pragma: no cover
@@ -237,7 +245,7 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
     try:
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
-        original_require_exp = getattr(current_user, 'require_exp', get_exp_for_level(2))
+        original_require_exp = getattr(current_user, 'require_exp', require_exp_for_level(original_level))
         activity_exp = 100 + 100 + 50  # Course + quizzes + bonus
         new_total_exp = original_exp + activity_exp
         setattr(current_user, 'current_exp', new_total_exp)
@@ -273,7 +281,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
     try:
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
-        original_require_exp = getattr(current_user, 'require_exp', get_exp_for_level(2))
+        original_require_exp = getattr(current_user, 'require_exp', require_exp_for_level(original_level))
         new_total_exp = original_exp + exp_amount
         setattr(current_user, 'current_exp', new_total_exp)
         new_level, next_level_exp, level_increased = auto_level_up(new_total_exp, original_level)

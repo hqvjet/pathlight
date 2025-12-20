@@ -1,11 +1,13 @@
 import logging
+import uuid
 from sqlalchemy.orm import Session
 from typing import Optional
 from fastapi import UploadFile, HTTPException, status
 from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials
 
-from models import User
+from models import User, UserProfile
+from services.experience_service import get_exp_for_level
 from schemas.user_schemas import *  # noqa
 from config import config
 
@@ -22,7 +24,7 @@ from services.activity_service import log_activity as svc_log_activity, get_acti
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
 from services.external.course_client import get_course_stats
 from services.external.quiz_client import get_quiz_stats
-from services.log_service import get_admin_logs as fetch_admin_logs
+from services.log_service import FilterKey, get_admin_logs as fetch_admin_logs
 from services.user_service_auth import get_current_admin_user
 
 logger = logging.getLogger(__name__)
@@ -54,10 +56,25 @@ def _send_result(model_response):
 # ---------- Profile & Basic Info ----------
 async def change_user_info(request: ChangeInfoRequest, current_user: User, db: Session) -> MessageResponse:
     try:
+        profile = getattr(current_user, 'profile', None)
+        if not profile:
+            profile = UserProfile(
+                profile_id=str(uuid.uuid4()),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=get_exp_for_level(2),
+            )
+            db.add(profile)
+            setattr(current_user, 'profile', profile)
+            if not getattr(current_user, 'profile_id', None):
+                setattr(current_user, 'profile_id', profile.profile_id)
+
         for field in ["family_name", "given_name", "dob", "sex", "bio"]:
             value = getattr(request, field, None)
             if value is not None:
-                setattr(current_user, field, value)
+                setattr(profile, field, value)
         db.commit()
         logger.info(f"User info updated: {current_user.email}")
         return MessageResponse(status=200, message="Bạn đã đổi thông tin cá nhân thành công")
@@ -146,7 +163,7 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             "avatar_url": avatar_url,
             "level": getattr(target_user, 'level', 1),
             "current_exp": getattr(target_user, 'current_exp', 0),
-            "require_exp": getattr(target_user, 'require_exp', 1000),
+            "require_exp": getattr(target_user, 'require_exp', None) or get_exp_for_level((getattr(target_user, 'level', 1) or 1) + 1),
             "subscription": getattr(target_user, 'subscription', 0),
             "sex": getattr(target_user, 'sex', None),
             "bio": getattr(target_user, 'bio', None),
@@ -380,7 +397,7 @@ async def get_admin_aws_costs(credentials: HTTPAuthorizationCredentials, db: Ses
     return get_aws_costs_last_30_days()
 
 
-async def get_admin_logs(filter_key: str, service: Optional[str], credentials: HTTPAuthorizationCredentials, db: Session):
+async def get_admin_logs(filter_key: FilterKey, service: Optional[str], credentials: HTTPAuthorizationCredentials, db: Session):
     guard = _admin_guard(credentials, db)
     if guard:
         return guard
