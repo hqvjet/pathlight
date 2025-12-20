@@ -1,4 +1,4 @@
-"""Database models for User Service (aligned with auth-service tables)."""
+"""Database models for User Service (shared users + profile tables)."""
 
 from __future__ import annotations
 
@@ -20,19 +20,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=_generate_id)
+    profile_id = Column(String, ForeignKey("user_profile.profile_id", ondelete="SET NULL"), nullable=True)
     email = Column(String, nullable=False, unique=True, index=True)
     password = Column(String, nullable=True)  # nullable for OAuth flows
     google_id = Column(String, nullable=True, unique=True)
-    given_name = Column(String, nullable=True)
-    family_name = Column(String, nullable=True)
-    avatar_url = Column(String, nullable=True)
-    dob = Column(DateTime(timezone=True), nullable=True)
-    level = Column(Integer, nullable=False, default=1)
-    current_exp = Column(BigInteger, nullable=False, default=0)
-    require_exp = Column(BigInteger, nullable=False, default=10)
-    remind_time = Column(DateTime(timezone=True), nullable=True)
-    sex = Column(Boolean, nullable=True)
-    bio = Column(Text, nullable=True)
     is_email_verified = Column(Boolean, default=False)
     email_verification_token = Column(String, nullable=True)
     email_verification_expires_at = Column(DateTime(timezone=True), nullable=True)
@@ -42,12 +33,76 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
+    profile = relationship("UserProfile", back_populates="user", lazy="joined")
     activities = relationship("LearningActivity", back_populates="user", cascade="all, delete-orphan")
 
+    # Proxy properties to profile for compatibility with existing code
+    def _p(self):
+        return self.profile
+
     @property
-    def subscription(self) -> int:
-        # placeholder for compatibility; subscription not stored in auth table
-        return 0
+    def family_name(self):
+        return getattr(self._p(), "family_name", None) if self._p() else None
+
+    @property
+    def given_name(self):
+        return getattr(self._p(), "given_name", None) if self._p() else None
+
+    @property
+    def avatar_id(self):
+        return getattr(self._p(), "avatar_id", None) if self._p() else None
+
+    @property
+    def level(self):
+        return getattr(self._p(), "level", 1) if self._p() else 1
+
+    @property
+    def current_exp(self):
+        return getattr(self._p(), "current_exp", 0) if self._p() else 0
+
+    @property
+    def require_exp(self):
+        return getattr(self._p(), "require_exp", 10) if self._p() else 10
+
+    @property
+    def remind_time(self):
+        return getattr(self._p(), "remind_time", None) if self._p() else None
+
+    @property
+    def sex(self):
+        return getattr(self._p(), "sex", None) if self._p() else None
+
+    @property
+    def bio(self):
+        return getattr(self._p(), "bio", None) if self._p() else None
+
+    @property
+    def streak(self):
+        return getattr(self._p(), "streak", 0) if self._p() else 0
+
+    @property
+    def subscription(self):
+        return getattr(self._p(), "subscription", 0) if self._p() else 0
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profile"
+
+    profile_id = Column(String, primary_key=True, default=_generate_id)
+    subscription = Column(Integer, nullable=False, default=0)
+    family_name = Column(String, nullable=True)
+    given_name = Column(String, nullable=True)
+    avatar_id = Column(String, nullable=True)
+    dob = Column(DateTime(timezone=True), nullable=True)
+    streak = Column(Integer, nullable=False, default=0)
+    level = Column(Integer, nullable=False, default=1)
+    current_exp = Column(BigInteger, nullable=False, default=0)
+    require_exp = Column(BigInteger, nullable=False, default=10)
+    remind_time = Column(DateTime(timezone=True), nullable=True)
+    sex = Column(Boolean, nullable=True)
+    bio = Column(Text, nullable=True)
+
+    user = relationship("User", back_populates="profile", uselist=False)
 
 
 class LearningActivity(Base):
@@ -72,4 +127,4 @@ class Admin(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-__all__ = ["User", "LearningActivity", "Admin", "Base"]
+__all__ = ["User", "UserProfile", "LearningActivity", "Admin", "Base"]
