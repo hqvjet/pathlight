@@ -1,7 +1,7 @@
 """reset schema to ERD 2025-12-12
 
 Revision ID: reset_20251212
-Revises: 001_create_course_tables
+Revises: 001
 Create Date: 2025-12-12
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'reset_20251212'
-down_revision = '001_create_course_tables'
+down_revision = '001'
 branch_labels = None
 depends_on = None
 
@@ -91,34 +91,18 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
+    # drop any existing course tables (and dependents) in dependency order to avoid duplicate table errors
+    for tbl in ['learning_progress', 'lesson_progress', 'course_progress', 'assessment', 'lesson', 'course']:
+        _drop_if_exists(inspector, tbl)
+
+    # refresh inspector after drops so existence checks reflect current state
+    inspector = sa.inspect(bind)
+
     # add new columns if tables already exist
     if inspector.has_table('course'):
         cols = {c['name'] for c in inspector.get_columns('course')}
         if 'is_public' not in cols:
             op.add_column('course', sa.Column('is_public', sa.Boolean(), nullable=False, server_default=sa.false()))
-
-    # create progress tables if missing
-    if not inspector.has_table('course_progress'):
-        op.create_table(
-            'course_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'course_id', name='uq_user_course_progress'),
-        )
-    if not inspector.has_table('lesson_progress'):
-        op.create_table(
-            'lesson_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('lesson_id', sa.String(), sa.ForeignKey('lesson.lesson_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'lesson_id', name='uq_user_lesson_progress'),
-        )
 
     # best-effort remove legacy completion columns from content tables
     if inspector.has_table('course'):
@@ -142,11 +126,8 @@ def upgrade():
     ]:
         _drop_if_exists(inspector, tbl)
 
-    # quiz domain belongs to quiz-service; drop legacy quiz tables if present
-    if inspector.has_table('quiz_qa'):
-        op.drop_table('quiz_qa')
-    if inspector.has_table('quiz'):
-        op.drop_table('quiz')
+    # quiz domain belongs to quiz-service; leave any quiz tables untouched to avoid
+    # dependency issues with foreign keys managed by that service
 
     _create_course_tables(inspector)
 
