@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { adminApi, LogItem } from '@/lib/api/admin';
+import { adminApi, LogItem, LogStream } from '@/lib/api/admin';
 import { showToast } from '@/utils/toast';
 
 const baseServices = [
@@ -13,36 +13,80 @@ const baseServices = [
 ];
 
 type FilterKeyOption = 'daily' | 'weekly' | 'monthly' | 'hourly' | '30m' | '1m';
+type SortOrder = 'desc' | 'asc';
 
 export default function AdminLogsPage() {
+  const [streams, setStreams] = useState<LogStream[]>([]);
+  const [selectedStream, setSelectedStream] = useState<LogStream | null>(null);
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingStreams, setLoadingStreams] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [filterKey, setFilterKey] = useState<FilterKeyOption>('daily');
   const [service, setService] = useState('all');
   const [serviceOptions, setServiceOptions] = useState<string[]>(baseServices);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
+  const loadStreams = useCallback(async () => {
+    setLoadingStreams(true);
+    setSelectedStream(null);
+    setLogs([]);
     try {
-      const resp = await adminApi.getLogs(filterKey, service === 'all' ? undefined : service);
-      const fetchedLogs = resp?.data?.logs ?? [];
-      setLogs(fetchedLogs);
+      const resp = await adminApi.getLogStreams(filterKey, service === 'all' ? undefined : service);
+      const fetchedStreams = resp?.data?.streams ?? [];
+      setStreams(fetchedStreams);
 
-      const dynamicServices = Array.from(new Set(fetchedLogs.map((log) => log.source).filter(Boolean)));
+      const dynamicServices = Array.from(
+        new Set(
+          fetchedStreams
+            .map((stream) => stream.log_group?.split('/').pop())
+            .filter((g): g is string => Boolean(g))
+        )
+      );
       setServiceOptions(Array.from(new Set([...baseServices, ...dynamicServices])));
     } catch {
-      showToast.error('Lỗi khi tải logs');
+      showToast.error('Lỗi khi tải log stream');
     } finally {
-      setLoading(false);
+      setLoadingStreams(false);
     }
   }, [filterKey, service]);
 
   useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
+    loadStreams();
+  }, [loadStreams]);
+
+  const loadLogs = useCallback(
+    async (targetStream: LogStream | null) => {
+      if (!targetStream) return;
+      setLoadingLogs(true);
+      try {
+        const resp = await adminApi.getLogs(filterKey, targetStream.log_group, targetStream.log_stream);
+        const fetched = resp?.data?.logs ?? [];
+        setLogs(fetched);
+      } catch {
+        showToast.error('Lỗi khi tải log');
+      } finally {
+        setLoadingLogs(false);
+      }
+    },
+    [filterKey]
+  );
+
+  const normalizedLogs = useMemo(() => {
+    const normalize = (ts: string) => new Date(ts.replace(' ', 'T')).getTime() || 0;
+    const sorted = [...logs].sort((a, b) => (sortOrder === 'desc' ? normalize(b.timestamp) - normalize(a.timestamp) : normalize(a.timestamp) - normalize(b.timestamp)));
+    if (!searchTerm.trim()) return sorted;
+    const keyword = searchTerm.toLowerCase();
+    return sorted.filter(
+      (log) =>
+        log.log.toLowerCase().includes(keyword) ||
+        (log.type || '').toLowerCase().includes(keyword) ||
+        (log.source || '').toLowerCase().includes(keyword)
+    );
+  }, [logs, sortOrder, searchTerm]);
 
   const typeCounts = useMemo(() => {
-    return logs.reduce(
+    return normalizedLogs.reduce(
       (acc, log) => {
         const lower = (log.type || '').toLowerCase();
         if (lower.includes('error')) acc.error += 1;
@@ -53,15 +97,15 @@ export default function AdminLogsPage() {
       },
       { error: 0, warn: 0, info: 0, other: 0 }
     );
-  }, [logs]);
+  }, [normalizedLogs]);
 
   const serviceCounts = useMemo(() => {
-    return logs.reduce<Record<string, number>>((acc, log) => {
+    return normalizedLogs.reduce<Record<string, number>>((acc, log) => {
       const key = log.source || 'unknown';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
-  }, [logs]);
+  }, [normalizedLogs]);
 
   const timelineCounts = useMemo(() => {
     const toBucket = (ts: string) => {
@@ -80,12 +124,12 @@ export default function AdminLogsPage() {
       return `${yyyy}-${mm}-${dd}`;
     };
 
-    return logs.reduce<Record<string, number>>((acc, log) => {
+    return normalizedLogs.reduce<Record<string, number>>((acc, log) => {
       const key = toBucket(log.timestamp);
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
-  }, [logs, filterKey]);
+  }, [normalizedLogs, filterKey]);
 
   const getLogTypeColor = (type: string) => {
     const lowerType = type.toLowerCase();
@@ -103,10 +147,9 @@ export default function AdminLogsPage() {
     return 'bg-gray-100 text-gray-800';
   };
 
-  const totalLogs = logs.length;
-  const chartMax = Math.max(...Object.values(timelineCounts), 1);
+  const totalLogs = normalizedLogs.length;
 
-  if (loading && logs.length === 0) {
+  if (loadingStreams && streams.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -122,9 +165,18 @@ export default function AdminLogsPage() {
           <h2 className="text-2xl font-bold text-gray-900">Nhật ký CloudWatch</h2>
           <p className="text-sm text-slate-500">Xem nhanh lỗi, cảnh báo và thông tin theo dịch vụ</p>
         </div>
-        <button onClick={loadLogs} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-          Làm mới
-        </button>
+        <div className="flex gap-3">
+          <button onClick={loadStreams} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">
+            Làm mới stream
+          </button>
+          <button
+            onClick={() => loadLogs(selectedStream)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60"
+            disabled={!selectedStream}
+          >
+            Tải log của stream
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -135,7 +187,7 @@ export default function AdminLogsPage() {
       </div>
 
       <div className="bg-white shadow-md rounded-lg p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Khoảng thời gian</label>
             <select
@@ -165,13 +217,25 @@ export default function AdminLogsPage() {
               ))}
             </select>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={loadLogs}
-              className="w-full px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-900"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tìm kiếm log</label>
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm theo nội dung, loại hoặc nguồn"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sắp xếp theo thời gian</label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              Áp dụng bộ lọc
-            </button>
+              <option value="desc">Mới nhất trước</option>
+              <option value="asc">Cũ nhất trước</option>
+            </select>
           </div>
         </div>
       </div>
@@ -188,7 +252,7 @@ export default function AdminLogsPage() {
           ))}
         </ChartCard>
 
-        <ChartCard title="Theo dịch vụ">
+        <ChartCard title="Theo stream">
           {Object.entries(serviceCounts).length === 0 ? (
             <p className="text-sm text-slate-500">Không có dữ liệu</p>
           ) : (
@@ -205,49 +269,83 @@ export default function AdminLogsPage() {
           {Object.keys(timelineCounts).length === 0 ? (
             <p className="text-sm text-slate-500">Không có dữ liệu</p>
           ) : (
-            <div className="flex items-end gap-2 h-40">
-              {Object.entries(timelineCounts)
-                .sort(([a], [b]) => (a > b ? 1 : -1))
-                .map(([date, count]) => (
-                  <div key={date} className="flex flex-col items-center gap-1">
-                    <div className="w-10 bg-indigo-500 rounded-md" style={{ height: `${(count / chartMax) * 100}%` }} title={`${date}: ${count}`} />
-                    <span className="text-[10px] text-slate-600">{date.slice(5)}</span>
-                  </div>
-                ))}
-            </div>
+            <LineChart data={Object.entries(timelineCounts).sort(([a], [b]) => (a > b ? 1 : -1)).map(([label, value]) => ({ label, value }))} />
           )}
         </ChartCard>
       </div>
 
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-sm font-medium text-gray-900">Danh sách log ({logs.length})</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-white shadow-md rounded-lg overflow-hidden lg:col-span-1">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-900">Log streams ({streams.length})</h3>
+            {loadingStreams ? <span className="text-xs text-slate-500">Đang tải...</span> : null}
+          </div>
+          <div className="max-h-[600px] overflow-y-auto divide-y divide-gray-200">
+            {streams.length === 0 ? (
+              <div className="p-6 text-sm text-slate-500">Không có log stream cho bộ lọc này.</div>
+            ) : (
+              streams.map((stream) => {
+                const isActive = selectedStream?.log_stream === stream.log_stream && selectedStream?.log_group === stream.log_group;
+                return (
+                  <button
+                    key={`${stream.log_group}-${stream.log_stream}`}
+                    className={`w-full text-left p-4 hover:bg-slate-50 ${isActive ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                    onClick={() => {
+                      setSelectedStream(stream);
+                      loadLogs(stream);
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{stream.log_stream}</p>
+                        <p className="text-xs text-slate-600">{stream.log_group}</p>
+                      </div>
+                      <span className="text-[11px] text-slate-500">{stream.last_event_time || 'N/A'}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                      <span>Ingest: {stream.last_ingestion_time || 'N/A'}</span>
+                      <span>Size: {stream.stored_bytes ? `${stream.stored_bytes}B` : 'N/A'}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
-          {logs.length > 0 ? (
-            logs.map((log, index) => (
-              <div key={index} className={`p-4 hover:bg-gray-50 ${getLogTypeColor(log.type)}`}>
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getLogTypeBadgeColor(log.type)}`}>
-                      {log.type}
-                    </span>
-                    <span className="text-xs text-gray-500">{new Date(log.timestamp).toLocaleString('vi-VN')}</span>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden lg:col-span-2">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-900">
+              {selectedStream ? `Log của stream: ${selectedStream.log_stream}` : 'Chọn một log stream để xem log'} ({normalizedLogs.length})
+            </h3>
+            {loadingLogs ? <span className="text-xs text-slate-500">Đang tải...</span> : null}
+          </div>
+
+          <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
+            {normalizedLogs.length > 0 ? (
+              normalizedLogs.map((log, index) => (
+                <div key={index} className={`p-4 hover:bg-gray-50 ${getLogTypeColor(log.type)}`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getLogTypeBadgeColor(log.type)} ${log.type ? '' : 'hidden'}`}>
+                        {log.type}
+                      </span>
+                      <span className="text-xs text-gray-500">{new Date(log.timestamp).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-mono">{log.source}</span>
                   </div>
-                  <span className="text-xs text-gray-500 font-mono">{log.source}</span>
+                  <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border border-gray-200 overflow-x-auto">
+                    <pre className="whitespace-pre-wrap break-words">{log.log}</pre>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border border-gray-200 overflow-x-auto">
-                  <pre className="whitespace-pre-wrap break-words">{log.log}</pre>
-                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <p>{selectedStream ? 'Không có log nào cho stream này.' : 'Chọn một stream để xem log.'}</p>
+                <p className="text-sm mt-2">Điều chỉnh bộ lọc hoặc chọn stream khác.</p>
               </div>
-            ))
-          ) : (
-            <div className="p-8 text-center text-gray-500">
-              <p>No logs found for the selected filters.</p>
-              <p className="text-sm mt-2">Try adjusting the time period or service filter.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -286,6 +384,45 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
       <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
       {children}
+    </div>
+  );
+}
+
+type LineChartProps = {
+  data: { label: string; value: number }[];
+};
+
+function LineChart({ data }: LineChartProps) {
+  if (data.length === 0) return null;
+  const max = Math.max(...data.map((d) => d.value), 1);
+  const points = data.map((d, idx) => {
+    const x = (idx / Math.max(data.length - 1, 1)) * 100;
+    const y = 100 - (d.value / max) * 100;
+    return `${x},${y}`;
+  });
+
+  return (
+    <div className="h-48">
+      <svg viewBox="0 0 100 100" className="w-full h-36 text-indigo-500">
+        <polyline
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          points={points.join(' ')}
+        />
+        {data.map((d, idx) => {
+          const x = (idx / Math.max(data.length - 1, 1)) * 100;
+          const y = 100 - (d.value / max) * 100;
+          return <circle key={d.label} cx={x} cy={y} r={1.5} fill="currentColor" />;
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-2 text-[10px] text-slate-600">
+        {data.map((d) => (
+          <span key={d.label} className="px-1.5 py-0.5 bg-slate-100 rounded">
+            {d.label.slice(5)}: {d.value}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

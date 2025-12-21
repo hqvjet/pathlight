@@ -12,6 +12,9 @@ export default function AdminUsersPageEnhanced() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSub, setFilterSub] = useState<'all' | 'free' | 'premium' | 'pro'>('all');
   const [sortBy, setSortBy] = useState<'level' | 'exp' | 'email'>('level');
+  const [subscriptionDrafts, setSubscriptionDrafts] = useState<Record<string, number>>({});
+  const [expInputs, setExpInputs] = useState<Record<string, string>>({});
+  const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
 
   const loadUsers = async () => {
     setLoading(true);
@@ -33,6 +36,24 @@ export default function AdminUsersPageEnhanced() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  useEffect(() => {
+    setSubscriptionDrafts((prev) => {
+      const next = { ...prev };
+      users.forEach((u) => {
+        if (next[u.user_id] === undefined) next[u.user_id] = u.subscription ?? 0;
+      });
+      return next;
+    });
+
+    setExpInputs((prev) => {
+      const next = { ...prev };
+      users.forEach((u) => {
+        if (next[u.user_id] === undefined) next[u.user_id] = '';
+      });
+      return next;
+    });
+  }, [users]);
 
   useEffect(() => {
     let filtered = [...users];
@@ -104,6 +125,75 @@ export default function AdminUsersPageEnhanced() {
       showToast.error('Lỗi khi xóa người dùng');
     }
   };
+
+  const handleUpdateSubscription = async (userId: string) => {
+    const subscription = subscriptionDrafts[userId];
+    if (![0, 1, 2].includes(subscription)) {
+      showToast.error('Giá trị gói không hợp lệ');
+      return;
+    }
+    setPendingActions((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const resp = await adminApi.updateUserSubscription(userId, subscription);
+      if (resp?.data?.status === 200) {
+        showToast.success('Đã cập nhật gói người dùng');
+        loadUsers();
+      } else {
+        showToast.error(resp?.data?.message || 'Cập nhật gói thất bại');
+      }
+    } catch {
+      showToast.error('Lỗi khi cập nhật gói');
+    } finally {
+      setPendingActions((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleAddExp = async (userId: string) => {
+    const rawValue = expInputs[userId] ?? '';
+    const exp = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(exp) || exp <= 0) {
+      showToast.error('Exp phải > 0');
+      return;
+    }
+    setPendingActions((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const resp = await adminApi.addUserExperience(userId, exp);
+      if (resp?.data?.status === 200) {
+        showToast.success(resp.data.message || 'Đã thêm exp');
+        setExpInputs((prev) => ({ ...prev, [userId]: '' }));
+        loadUsers();
+      } else {
+        showToast.error(resp?.data?.message || 'Không thể thêm exp');
+      }
+    } catch {
+      showToast.error('Lỗi khi thêm exp');
+    } finally {
+      setPendingActions((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleAdjustExpStep = async (userId: string, delta: number) => {
+    if (!delta || delta % 100 !== 0) {
+      showToast.error('Bước exp phải chia hết cho 100');
+      return;
+    }
+    setPendingActions((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const resp = await adminApi.adjustUserExperienceStep(userId, delta);
+      if (resp?.data?.status === 200) {
+        showToast.success(resp.data.message || 'Đã cập nhật exp');
+        loadUsers();
+      } else {
+        showToast.error(resp?.data?.message || 'Không thể cập nhật exp');
+      }
+    } catch {
+      showToast.error('Lỗi khi cập nhật exp');
+    } finally {
+      setPendingActions((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const isPending = (userId: string) => Boolean(pendingActions[userId]);
 
   const stats = {
     total: users.length,
@@ -237,22 +327,92 @@ export default function AdminUsersPageEnhanced() {
               <div className="text-xs text-gray-500 font-mono">ID: {user.user_id.substring(0, 12)}...</div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setEditingUser({ userId: user.user_id, email: user.email || '' });
-                  setNewEmail(user.email || '');
-                }}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDeleteUser(user.user_id, user.email || '')}
-                className="flex-1 px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
+            <div className="space-y-3">
+              <div className="rounded-md border border-dashed border-gray-200 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Subscription</p>
+                    <p className="text-sm text-gray-700">
+                      Hiện tại: {user.subscription === 1 ? 'Premium' : user.subscription === 2 ? 'Pro' : 'Free'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={subscriptionDrafts[user.user_id] ?? user.subscription ?? 0}
+                      onChange={(e) =>
+                        setSubscriptionDrafts((prev) => ({ ...prev, [user.user_id]: Number.parseInt(e.target.value, 10) }))
+                      }
+                      disabled={isPending(user.user_id)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={0}>Free</option>
+                      <option value={1}>Premium</option>
+                      <option value={2}>Pro</option>
+                    </select>
+                    <button
+                      onClick={() => handleUpdateSubscription(user.user_id)}
+                      disabled={isPending(user.user_id)}
+                      className="px-3 py-2 bg-amber-100 text-amber-800 text-sm rounded-md hover:bg-amber-200 transition-colors disabled:opacity-60"
+                    >
+                      Lưu gói
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-dashed border-gray-200 p-3">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      value={expInputs[user.user_id] ?? ''}
+                      onChange={(e) => setExpInputs((prev) => ({ ...prev, [user.user_id]: e.target.value }))}
+                      placeholder="Nhập exp"
+                      className="w-28 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => handleAddExp(user.user_id)}
+                      disabled={isPending(user.user_id)}
+                      className="px-3 py-2 bg-emerald-100 text-emerald-800 text-sm rounded-md hover:bg-emerald-200 transition-colors disabled:opacity-60"
+                    >
+                      Thêm exp
+                    </button>
+                    <button
+                      onClick={() => handleAdjustExpStep(user.user_id, -100)}
+                      disabled={isPending(user.user_id)}
+                      className="px-3 py-2 bg-slate-100 text-slate-800 text-sm rounded-md hover:bg-slate-200 transition-colors disabled:opacity-60"
+                    >
+                      -100
+                    </button>
+                    <button
+                      onClick={() => handleAdjustExpStep(user.user_id, 100)}
+                      disabled={isPending(user.user_id)}
+                      className="px-3 py-2 bg-slate-100 text-slate-800 text-sm rounded-md hover:bg-slate-200 transition-colors disabled:opacity-60"
+                    >
+                      +100
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">Bước ±100 để chỉnh exp nhanh, hoặc nhập số tùy ý để cộng exp.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditingUser({ userId: user.user_id, email: user.email || '' });
+                    setNewEmail(user.email || '');
+                  }}
+                  className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteUser(user.user_id, user.email || '')}
+                  className="flex-1 px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         ))}

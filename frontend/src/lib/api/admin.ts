@@ -51,6 +51,14 @@ export type LogItem = {
   source: string;
 };
 
+export type LogStream = {
+  log_group: string;
+  log_stream: string;
+  last_event_time?: string;
+  last_ingestion_time?: string;
+  stored_bytes?: number;
+};
+
 export const adminApi = {
   // User management
   listUsers: () => apiClient.get<{ status: number; users?: AdminUser[]; message?: string }>('/user/admin/users'),
@@ -58,11 +66,25 @@ export const adminApi = {
   updateUserEmail: (userId: string, email: string) =>
     apiClient.put<{ status: number; message?: string }>(`/user/admin/user?userid=${userId}`, { email }),
   
+  updateUserSubscription: (userId: string, subscription: number) =>
+    apiClient.put<{ status: number; message?: string }>(`/user/admin/user/subscription?userid=${userId}`, { subscription }),
+
   deleteUser: (userId: string) =>
     apiClient.delete<{ status: number; message?: string }>(`/user/admin/user?userid=${userId}`),
   
   createAdmin: (username: string, password: string) =>
     apiClient.post<{ status: number; message?: string }>('/user/admin/create', { username, password }),
+
+  addUserExperience: (userId: string, exp: number) =>
+    apiClient.post<{ status: number; message?: string; updated_stats?: Record<string, unknown> }>(`/user/admin/user/experience?userid=${userId}`, { exp }),
+
+  adjustUserExperienceStep: (userId: string, delta: number) =>
+    apiClient.post<{ status: number; message?: string; updated_stats?: Record<string, unknown> }>(
+      `/user/admin/user/experience/step?userid=${userId}`,
+      { delta }
+    ),
+
+  listAdmins: () => apiClient.get<{ status: number; admins?: { id: string; username: string; created_at?: string }[]; message?: string }>(`/user/admin/admins`),
 
   // Course management
   listAllCourses: (params?: { page?: number; limit?: number; search?: string }) => {
@@ -104,10 +126,27 @@ export const adminApi = {
   getCosts: () =>
     apiClient.get<{ status: number; total_cost?: number; costs?: CostItem[]; message?: string }>('/user/admin/cost'),
   
-  getLogs: (filterKey: 'daily' | 'weekly' | 'monthly' | 'hourly' | '30m' | '1m' = 'daily', service?: string) => {
+  getLogStreams: (
+    filterKey: 'daily' | 'weekly' | 'monthly' | 'hourly' | '30m' | '1m' = 'daily',
+    service?: string
+  ) => {
     const query = new URLSearchParams();
     query.append('filter_key', filterKey);
     if (service) query.append('service', service);
+    return apiClient.get<{ status: number; streams?: LogStream[]; message?: string }>(
+      `/user/admin/log/streams?${query.toString()}`
+    );
+  },
+
+  getLogs: (
+    filterKey: 'daily' | 'weekly' | 'monthly' | 'hourly' | '30m' | '1m' = 'daily',
+    service?: string,
+    logStream?: string
+  ) => {
+    const query = new URLSearchParams();
+    query.append('filter_key', filterKey);
+    if (service) query.append('service', service);
+    if (logStream) query.append('log_stream', logStream);
     return apiClient.get<{ status: number; logs?: LogItem[]; message?: string }>(
       `/user/admin/log?${query.toString()}`
     );
