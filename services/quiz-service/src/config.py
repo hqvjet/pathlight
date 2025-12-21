@@ -45,6 +45,10 @@ class QuizConfig:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
+    # DynamoDB (for generation status tracking)
+    DYNAMODB_TABLE_NAME: str = os.getenv("DYNAMODB_TABLE_NAME", "")
+    REGION: str = os.getenv("REGION", "ap-northeast-1")
+
     # JWT Configuration
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY: str = os.getenv("JWT_REFRESH_SECRET_KEY", "")

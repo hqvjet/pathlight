@@ -15,126 +15,61 @@ branch_labels = None
 depends_on = None
 
 
-def _drop_if_exists(inspector, table_name: str):
-    if inspector.has_table(table_name):
-        op.drop_table(table_name)
+def _create_course_tables():
+    op.create_table(
+        'course',
+        sa.Column('course_id', sa.String(), primary_key=True),
+        sa.Column('user_id', sa.String(), nullable=False, index=True),
+        sa.Column('publish', sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column('finish', sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column('title', sa.String(), nullable=False),
+        sa.Column('overview', sa.String(), nullable=False),
+        sa.Column('level', sa.String(), nullable=False),
+        sa.Column('duration', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
 
+    op.create_table(
+        'lesson',
+        sa.Column('lesson_id', sa.String(), primary_key=True),
+        sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
+        sa.Column('title', sa.String(), nullable=False),
+        sa.Column('overview', sa.String(), nullable=False),
+        sa.Column('content', sa.String(), nullable=False),
+        sa.Column('duration', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
 
-def _create_course_tables(inspector):
-    if not inspector.has_table('course'):
-        op.create_table(
-            'course',
-            sa.Column('course_id', sa.String(), primary_key=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_public', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('title', sa.String(), nullable=False),
-            sa.Column('overview', sa.String(), nullable=False),
-            sa.Column('level', sa.String(), nullable=False),
-            sa.Column('duration', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        )
+    op.create_table(
+        'assessment',
+        sa.Column('assessment_id', sa.String(), primary_key=True),
+        sa.Column('lesson_id', sa.String(), sa.ForeignKey('lesson.lesson_id', ondelete='CASCADE'), nullable=False, index=True),
+        sa.Column('question', sa.String(), nullable=False),
+        sa.Column('hint', sa.String(), nullable=True),
+        sa.Column('explanation', sa.String(), nullable=False),
+        sa.Column('difficulty', sa.String(), nullable=False),
+        sa.Column('option1', sa.String(), nullable=False),
+        sa.Column('option2', sa.String(), nullable=False),
+        sa.Column('option3', sa.String(), nullable=False),
+        sa.Column('option4', sa.String(), nullable=False),
+        sa.Column('answer', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
 
-    if not inspector.has_table('lesson'):
-        op.create_table(
-            'lesson',
-            sa.Column('lesson_id', sa.String(), primary_key=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('title', sa.String(), nullable=False),
-            sa.Column('overview', sa.String(), nullable=False),
-            sa.Column('content', sa.String(), nullable=False),
-            sa.Column('duration', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        )
-
-    if not inspector.has_table('assessment'):
-        op.create_table(
-            'assessment',
-            sa.Column('assessment_id', sa.String(), primary_key=True),
-            sa.Column('lesson_id', sa.String(), sa.ForeignKey('lesson.lesson_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('question', sa.String(), nullable=False),
-            sa.Column('hint', sa.String(), nullable=True),
-            sa.Column('explanation', sa.String(), nullable=False),
-            sa.Column('difficulty', sa.String(), nullable=False),
-            sa.Column('option1', sa.String(), nullable=False),
-            sa.Column('option2', sa.String(), nullable=False),
-            sa.Column('option3', sa.String(), nullable=False),
-            sa.Column('option4', sa.String(), nullable=False),
-            sa.Column('answer', sa.Integer(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        )
-
-    if not inspector.has_table('course_progress'):
-        op.create_table(
-            'course_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'course_id', name='uq_user_course_progress'),
-        )
-
-    if not inspector.has_table('lesson_progress'):
-        op.create_table(
-            'lesson_progress',
-            sa.Column('progress_id', sa.String(), primary_key=True),
-            sa.Column('lesson_id', sa.String(), sa.ForeignKey('lesson.lesson_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, index=True),
-            sa.Column('user_id', sa.String(), nullable=False, index=True),
-            sa.Column('is_completed', sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-            sa.UniqueConstraint('user_id', 'lesson_id', name='uq_user_lesson_progress'),
-        )
+    op.create_table(
+        'learning_progress',
+        sa.Column('user_id', sa.String(), nullable=False, primary_key=True, index=True),
+        sa.Column('course_id', sa.String(), sa.ForeignKey('course.course_id', ondelete='CASCADE'), nullable=False, primary_key=True, index=True),
+        sa.Column('num_finished_lesson', sa.Integer(), nullable=False, server_default=sa.text('0')),
+        sa.Column('num_total_lesson', sa.Integer(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
 
 
 def upgrade():
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-
-    # drop any existing course tables (and dependents) in dependency order to avoid duplicate table errors
-    for tbl in ['learning_progress', 'lesson_progress', 'course_progress', 'assessment', 'lesson', 'course']:
-        _drop_if_exists(inspector, tbl)
-
-    # refresh inspector after drops so existence checks reflect current state
-    inspector = sa.inspect(bind)
-
-    # add new columns if tables already exist
-    if inspector.has_table('course'):
-        cols = {c['name'] for c in inspector.get_columns('course')}
-        if 'is_public' not in cols:
-            op.add_column('course', sa.Column('is_public', sa.Boolean(), nullable=False, server_default=sa.false()))
-
-    # best-effort remove legacy completion columns from content tables
-    if inspector.has_table('course'):
-        cols = {c['name'] for c in inspector.get_columns('course')}
-        if 'finish' in cols:
-            op.drop_column('course', 'finish')
-    if inspector.has_table('lesson'):
-        cols = {c['name'] for c in inspector.get_columns('lesson')}
-        if 'finish' in cols:
-            op.drop_column('lesson', 'finish')
-
-    # drop legacy tables if they exist
-    for tbl in [
-        'lesson_qa',
-        'test',
-        'final_qa',
-        'final_test',
-        'difficult_level',
-        'understand_level_tag',
-        'course_info',
-    ]:
-        _drop_if_exists(inspector, tbl)
-
-    # quiz domain belongs to quiz-service; leave any quiz tables untouched to avoid
-    # dependency issues with foreign keys managed by that service
-
-    _create_course_tables(inspector)
+    _create_course_tables()
 
 
 def downgrade():
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    for tbl in ['lesson_progress', 'course_progress', 'assessment', 'lesson', 'course']:
-        if inspector.has_table(tbl):
-            op.drop_table(tbl)
+    for tbl in ['learning_progress', 'assessment', 'lesson', 'course']:
+        op.drop_table(tbl)

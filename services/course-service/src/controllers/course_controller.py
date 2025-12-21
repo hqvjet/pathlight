@@ -14,6 +14,8 @@ from jose import jwt
 import os
 
 from src.config import config
+from src.database import get_session
+from src.models import Course
 from src.schemas.course_schemas import (
     CourseFullInfo,
     CourseFullInfoResponse,
@@ -348,6 +350,66 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 		s3.put_object(Bucket=bucket, Key=key, Body=b"")
 	except Exception:
 		return
+
+
+def _admin_guard(request: Request):
+	user_id = _verify_token(request)
+	if not user_id:
+		return {"status": 401, "message": "Unauthorized"}
+	return None
+
+
+def list_all_courses_admin_controller(request: Request, page: int, limit: int, search: str | None):
+	guard = _admin_guard(request)
+	if guard:
+		return guard
+
+	session = get_session()()
+	try:
+		query = session.query(Course)
+		if search:
+			search_pattern = f"%{search}%"
+			query = query.filter(Course.title.ilike(search_pattern))
+
+		total = query.count()
+		offset = (page - 1) * limit
+		courses = query.order_by(Course.created_at.desc()).offset(offset).limit(limit).all()
+
+		course_list = [
+			{
+				"course_id": c.course_id,
+				"user_id": c.user_id,
+				"title": c.title,
+				"overview": c.overview,
+				"level": c.level,
+				"duration": c.duration,
+				"publish": bool(c.publish),
+				"finish": bool(c.finish),
+				"num_lessons": c.num_lessons,
+				"created_at": c.created_at.isoformat() if c.created_at else "",
+			}
+			for c in courses
+		]
+
+		return {"status": 200, "courses": course_list, "total": total}
+	finally:
+		session.close()
+
+
+async def delete_course_admin_controller(course_id: str, request: Request):
+	guard = _admin_guard(request)
+	if guard:
+		return guard
+
+	return await delete_single_course(request, course_id, admin_override=True)
+
+
+async def toggle_course_visibility_admin_controller(course_id: str, request: Request, body: CourseVisibilityUpdate):
+	guard = _admin_guard(request)
+	if guard:
+		return guard
+
+	return update_course_visibility_controller(request, body, admin_override=True)
 
 
 async def presign_upload_urls(request: Request, body: PresignUploadRequest) -> PresignUploadResponse | dict:

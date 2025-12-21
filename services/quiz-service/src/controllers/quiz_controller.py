@@ -1,3 +1,4 @@
+# pyright: reportArgumentType=false, reportAssignmentType=false, reportCallIssue=false
 import logging
 import os
 from uuid import uuid4
@@ -34,6 +35,14 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
+# Experience rewards
+DIFFICULTY_EXP = {
+    "easy": 5,
+    "medium": 10,
+    "hard": 15,
+}
+QUIZ_COMPLETION_EXP = 50  # Bonus for completing entire quiz
+
 
 def _get_db() -> Session:
     SessionLocal = get_session()
@@ -67,6 +76,47 @@ def _user_service_base_url() -> Optional[str]:
     return os.getenv("USER_SERVICE_URL")
 
 
+def _award_experience(request: Request, user_id: str, exp_amount: int) -> Optional[dict]:
+    """Call user-service to add experience for the current user.
+    Returns a dict with status_code and body when the call was attempted, otherwise None.
+    """
+    if exp_amount <= 0:
+        return None
+    base_url = _user_service_base_url()
+    auth_header = request.headers.get("Authorization")
+    if not base_url or not auth_header:
+        return None
+    url = f"{base_url.rstrip('/')}/user/experience/add"
+    try:
+        resp = httpx.post(
+            url,
+            headers={"Authorization": auth_header},
+            json={"exp": exp_amount},
+            timeout=5.0,
+        )
+        data = resp.json() if resp.content else {}
+        return {"status_code": resp.status_code, "body": data}
+    except Exception as e:
+        logger.error("Failed to award experience for user %s: %s", user_id, e)
+        return None
+
+
+def _experience_payload(gained_exp: int, award_result: Optional[dict]) -> dict:
+    payload = {"gained_exp": gained_exp}
+    if award_result and isinstance(award_result.get("body"), dict):
+        stats = award_result["body"].get("updated_stats") or {}
+        payload.update(  # type: ignore[arg-type]
+            {
+                "new_level": stats.get("new_level") or stats.get("level"),
+                "new_exp": stats.get("new_exp") or stats.get("current_exp"),
+                "require_exp": stats.get("new_require_exp") or stats.get("require_exp"),
+                "exp_needed_for_next": stats.get("exp_needed_for_next"),
+                "rank": stats.get("rank"),
+            }
+        )
+    return payload
+
+
 def _log_activity(request: Request, user_id: Optional[str], event: str) -> Optional[dict]:
     if not user_id:
         return None
@@ -86,13 +136,13 @@ def _log_activity(request: Request, user_id: Optional[str], event: str) -> Optio
 
 def _ensure_owner_or_public(quiz: Quiz, user_id: Optional[str]):
     is_owner = quiz.user_id == (user_id or "")
-    if not is_owner and not quiz.publish:
+    if not is_owner and not quiz.publish:  # type: ignore[arg-type]
         raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào quiz này")
     return is_owner
 
 
 def _quiz_to_summary(q: Quiz) -> QuizSummary:
-    return QuizSummary(
+    return QuizSummary(  # type: ignore[arg-type]
         quiz_id=q.quiz_id,
         title=q.title,
         overview=q.overview,
@@ -103,8 +153,15 @@ def _quiz_to_summary(q: Quiz) -> QuizSummary:
         num_questions=q.num_questions,
         previous_score=q.previous_score,
         owner_id=q.user_id,
-        created_at=q.created_at.isoformat() if q.created_at else "",
+        created_at=q.created_at.isoformat() if q.created_at else "",  # type: ignore[arg-type]
     )
+
+
+def _admin_guard(request: Request):
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    return None
 
 
 def create_quiz_controller(request: Request, body: CreateQuizRequest):
@@ -151,8 +208,9 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
                     raise HTTPException(status_code=400, detail=f"File exceeds 25MB: {key}")
         except ClientError as ce:
             code = ce.response.get("Error", {}).get("Code")
+            last_key = s3_keys[-1] if s3_keys else "unknown"
             if code in ("404", "NoSuchKey", "NotFound"):
-                raise HTTPException(status_code=400, detail=f"S3 key not found: {key}")
+                raise HTTPException(status_code=400, detail=f"S3 key not found: {last_key}")
             raise HTTPException(status_code=500, detail=f"Failed to validate S3 objects: {ce}")
         except HTTPException:
             raise
@@ -183,6 +241,148 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
         raise HTTPException(status_code=500, detail=f"Failed to submit job: {e}")
 
 
+def create_manual_quiz_controller(request: Request, body):
+    """Create a manual quiz directly (no AI generation, no EXP reward)."""
+    from uuid import uuid4
+    from src.models import Quiz, QuizCard
+    from src.schemas.quiz_schemas import CreateManualQuizRequest
+    
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Validate input
+    try:
+        data = CreateManualQuizRequest(**body.dict())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request: {e}")
+    
+    if not data.title or not data.overview:
+        raise HTTPException(status_code=400, detail="title and overview are required")
+    
+    if not data.cards or len(data.cards) == 0:
+        raise HTTPException(status_code=400, detail="At least one card is required")
+    
+    session = _get_db()
+    try:
+        quiz_id = f"quiz-{uuid4()}"
+        
+        # Create quiz with creation_type='manual' (important for EXP logic)
+        quiz = Quiz(
+            quiz_id=quiz_id,
+            user_id=user_id,
+            title=data.title,
+            overview=data.overview,
+            level=data.level,
+            duration=data.duration,
+            num_questions=len(data.cards),
+            publish=False,
+            finish=False,
+            creation_type='manual',  # Mark as manual (no EXP)
+            previous_score=None,
+        )
+        session.add(quiz)
+        
+        # Create cards
+        for card_data in data.cards:
+            card = QuizCard(
+                card_id=f"card-{uuid4()}",
+                quiz_id=quiz_id,
+                question=card_data.question,
+                hint=card_data.hint or "",
+                explanation=card_data.explanation or "",
+                difficulty=card_data.difficulty,
+                option1=card_data.option1,
+                option2=card_data.option2,
+                option3=card_data.option3,
+                option4=card_data.option4,
+                answer=card_data.answer,
+            )
+            session.add(card)
+        
+        session.commit()
+        _log_activity(request, user_id, "create_manual_quiz")
+        return {"status": 200, "message": "Quiz created successfully", "quiz_id": quiz_id}
+    except Exception as e:
+        session.rollback()
+        logger.error("Failed to create manual quiz: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to create quiz: {e}")
+    finally:
+        session.close()
+
+
+def list_all_quizzes_admin_controller(request: Request, page: int, limit: int, search: Optional[str]):
+    guard = _admin_guard(request)
+    if guard:
+        return guard
+
+    session = _get_db()
+    try:
+        query = session.query(Quiz)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(Quiz.title.ilike(search_pattern))
+
+        total = query.count()
+        offset = (page - 1) * limit
+        quizzes = query.order_by(Quiz.created_at.desc()).offset(offset).limit(limit).all()
+
+        quiz_list = [
+            {
+                "quiz_id": q.quiz_id,
+                "user_id": q.user_id,
+                "title": q.title,
+                "overview": q.overview,
+                "level": q.level,
+                "duration": q.duration,
+                "publish": bool(q.publish),
+                "finish": bool(q.finish),
+                "num_questions": q.num_questions,
+                "creation_type": getattr(q, "creation_type", "ai"),
+                "created_at": q.created_at.isoformat() if q.created_at else "",
+            }
+            for q in quizzes
+        ]
+
+        return {"status": 200, "quizzes": quiz_list, "total": total}
+    finally:
+        session.close()
+
+
+def delete_quiz_admin_controller(quiz_id: str, request: Request):
+    guard = _admin_guard(request)
+    if guard:
+        return guard
+
+    session = _get_db()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
+        session.delete(quiz)
+        session.commit()
+        return {"status": 200, "message": "Đã xóa quiz"}
+    finally:
+        session.close()
+
+
+def toggle_quiz_visibility_admin_controller(quiz_id: str, request: Request, body: QuizVisibilityUpdate):
+    guard = _admin_guard(request)
+    if guard:
+        return guard
+
+    session = _get_db()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
+        quiz.publish = bool(body.publish)
+        session.commit()
+        return {"status": 200, "quiz_id": quiz_id, "publish": bool(body.publish)}
+    finally:
+        session.close()
+
+
 def get_quiz_detail_controller(
     request: Request,
     quiz_id: str,
@@ -199,7 +399,7 @@ def get_quiz_detail_controller(
         _ensure_owner_or_public(quiz, user_id)
         cards = session.query(QuizCard).filter(QuizCard.quiz_id == quiz.quiz_id).order_by(QuizCard.created_at.asc()).all()
         card_models = [
-            QuizCardItem(
+            QuizCardItem(  # type: ignore[arg-type]
                 card_id=c.card_id,
                 quiz_id=c.quiz_id,
                 question=c.question,
@@ -213,7 +413,7 @@ def get_quiz_detail_controller(
             )
             for c in cards
         ]
-        detail = QuizDetail(
+        detail = QuizDetail(  # type: ignore[arg-type]
             quiz_id=quiz.quiz_id,
             title=quiz.title,
             overview=quiz.overview,
@@ -224,7 +424,7 @@ def get_quiz_detail_controller(
             num_questions=quiz.num_questions,
             previous_score=quiz.previous_score,
             owner_id=quiz.user_id,
-            created_at=quiz.created_at.isoformat() if quiz.created_at else "",
+            created_at=quiz.created_at.isoformat() if quiz.created_at else "",  # type: ignore[arg-type]
             cards=card_models,
         )
         return QuizDetailResponse(status=200, quiz=detail)
@@ -270,22 +470,22 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
         cards = session.query(QuizCard).filter(QuizCard.quiz_id == quiz.quiz_id).all()
         if not cards:
             return QuizSubmitResponse(status=400, message="Quiz chưa có câu hỏi")
-        card_map = {c.card_id: c for c in cards}
+        card_map = {c.card_id: c for c in cards}  # type: ignore[misc]
         if not body.answers or len(body.answers) < len(cards):
             return QuizSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi")
         correct_count = 0
         results: list[QuizSubmitResultItem] = []
         for ans in body.answers:
-            card = card_map.get(ans.card_id)
+            card = card_map.get(ans.card_id)  # type: ignore[arg-type]
             if not card:
                 continue
             selected = int(ans.answer)
-            correct = int(card.answer)
+            correct = int(card.answer)  # type: ignore[arg-type]
             is_correct = selected == correct
             if is_correct:
                 correct_count += 1
             results.append(
-                QuizSubmitResultItem(
+                QuizSubmitResultItem(  # type: ignore[arg-type]
                     card_id=card.card_id,
                     selected_answer=selected,
                     correct_answer=correct,
@@ -296,11 +496,29 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
             )
         total = len(cards)
         score = round((correct_count / total) * 100, 2)
+        
+        # Calculate experience based on difficulty and performance
+        gained_exp = 0
+        if score >= 70:  # Only award exp if passed (70% or higher)
+            for result in results:
+                if result.is_correct:
+                    difficulty = result.difficulty.lower() if result.difficulty else "medium"
+                    gained_exp += DIFFICULTY_EXP.get(difficulty, DIFFICULTY_EXP["medium"])
+        
         # update best score on quiz
-        if quiz.previous_score is None or score > quiz.previous_score:
-            quiz.previous_score = int(score)
+        if quiz.previous_score is None or score > quiz.previous_score:  # type: ignore[arg-type]
+            quiz.previous_score = int(score)  # type: ignore[assignment]
         session.commit()
-        _log_activity(request, user_id, "assessment_move")
+        
+        # Award experience if quiz passed
+        award_result = None
+        if gained_exp > 0 and user_id:
+            award_result = _award_experience(request, user_id, gained_exp)
+        
+        _log_activity(request, user_id, "quiz_submit")
+        
+        experience = _experience_payload(gained_exp, award_result) if gained_exp > 0 else None
+        
         return QuizSubmitResponse(
             status=200,
             result=QuizSubmitResult(
@@ -309,6 +527,7 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
                 total=total,
                 answers=results,
             ),
+            experience=experience,
         )
     except Exception as e:
         session.rollback()
@@ -327,7 +546,7 @@ def update_visibility_controller(request: Request, body: QuizVisibilityUpdate):
         quiz = session.query(Quiz).filter(Quiz.quiz_id == body.quiz_id, Quiz.user_id == user_id).first()
         if not quiz:
             raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
-        quiz.publish = bool(body.publish)
+        quiz.publish = bool(body.publish)  # type: ignore[assignment]
         session.commit()
         return {"status": 200, "quiz_id": quiz.quiz_id, "publish": quiz.publish}
     finally:
@@ -335,18 +554,63 @@ def update_visibility_controller(request: Request, body: QuizVisibilityUpdate):
 
 
 def finish_quiz_controller(request: Request, body: FinishQuizRequest):
+    """Mark quiz as finished and award completion bonus."""
     user_id = _verify_token(request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
     session = _get_db()
     try:
-        quiz = session.query(Quiz).filter(Quiz.quiz_id == body.quiz_id, Quiz.user_id == user_id).first()
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == body.quiz_id).first()
         if not quiz:
             raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
-        quiz.finish = True
+        
+        # Check if user has access (owner or public)
+        is_owner = quiz.user_id == user_id
+        if not is_owner and not quiz.publish:  # type: ignore[arg-type]
+            raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập quiz này")
+        
+        # Only award exp if not already finished and passed (score >= 70)
+        already_finished = bool(quiz.finish)
+        if is_owner:  # type: ignore[arg-type]
+            quiz.finish = True  # type: ignore[assignment]
         session.commit()
-        _log_activity(request, user_id, "quiz_move")
-        return {"status": 200, "message": "Đã cập nhật thành công"}
+        
+        # Award completion bonus if quiz passed and not already finished
+        # IMPORTANT: Do NOT award EXP for manual quizzes (to prevent spam)
+        exp_amount = 0
+        is_manual = getattr(quiz, 'creation_type', 'ai') == 'manual'
+        prev_score = quiz.previous_score
+        if not already_finished and not is_manual and prev_score is not None and prev_score >= 70:  # type: ignore[arg-type]
+            exp_amount = QUIZ_COMPLETION_EXP
+        
+        award_result = _award_experience(request, user_id, exp_amount) if exp_amount > 0 else None
+        experience = _experience_payload(exp_amount, award_result)
+        
+        _log_activity(request, user_id, "quiz_finish")
+        return {"status": 200, "message": "Đã cập nhật thành công", "experience": experience}
+    finally:
+        session.close()
+
+
+def start_quiz_controller(request: Request, quiz_id: str):
+    """Start a quiz session - validates access and returns quiz ready to play."""
+    from datetime import datetime
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    session = _get_db()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
+        _ensure_owner_or_public(quiz, user_id)
+        _log_activity(request, user_id, "quiz_start")
+        return {
+            "status": 200,
+            "message": "Bắt đầu quiz thành công",
+            "quiz_id": quiz.quiz_id,
+            "started_at": datetime.utcnow().isoformat()
+        }
     finally:
         session.close()
 

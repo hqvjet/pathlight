@@ -16,6 +16,9 @@ from src.controllers.course_controller import (
     update_course_visibility_controller,
     list_public_courses_controller,
     create_course_controller,
+    list_all_courses_admin_controller,
+    delete_course_admin_controller,
+    toggle_course_visibility_admin_controller,
 )
 from src.services.course_auth import require_bearer
 from src.services.status_service import fetch_generation_status, fetch_user_generations
@@ -141,3 +144,32 @@ async def finish_lesson(course_id: str, lesson_id: str, request: Request, _auth=
 @router.put("/visibility")
 async def update_visibility(request: Request, body: CourseVisibilityUpdate, _auth=Depends(require_bearer)):
     return update_course_visibility_controller(request, body)
+
+
+# Admin endpoints
+@router.get("/admin/courses")
+async def list_all_courses_admin(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    search: Optional[str] = Query(default=None),
+    _auth=Depends(require_bearer)
+):
+    return list_all_courses_admin_controller(request, page, limit, search)
+
+
+@router.delete("/admin/courses/{course_id}")
+async def delete_course_admin(course_id: str, request: Request, _auth=Depends(require_bearer)):
+    """Admin endpoint to delete any course."""
+    return await delete_course_admin_controller(course_id, request)
+
+
+@router.put("/admin/courses/{course_id}/visibility")
+async def toggle_course_visibility_admin(
+    course_id: str, 
+    request: Request, 
+    body: CourseVisibilityUpdate, 
+    _auth=Depends(require_bearer)
+):
+    """Admin endpoint to change course visibility."""
+    return await toggle_course_visibility_admin_controller(course_id, request, body)

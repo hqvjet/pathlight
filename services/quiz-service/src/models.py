@@ -17,6 +17,7 @@ class Quiz(Base):
     duration = Column(Integer, nullable=False)
     num_questions = Column(Integer, nullable=False)
     previous_score = Column(Integer, nullable=True)
+    creation_type = Column(String, nullable=False, default="ai", server_default="ai")  # 'ai' or 'manual'
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     cards = relationship("QuizCard", back_populates="quiz", cascade="all, delete-orphan")
