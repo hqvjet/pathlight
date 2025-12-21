@@ -3,6 +3,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 import jwt
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -75,22 +76,27 @@ def create_user(db: Session, email: str, password: str, google_id: Optional[str]
     if google_id == "":
         google_id = None
 
-    profile = _create_profile(db)
+    try:
+        profile = _create_profile(db)
+        db.flush([profile])
 
-    user = User(
-        email=email,
-        password=hashed_password,
-        google_id=google_id,
-        email_verification_token=verification_token,
-        email_verification_expires_at=expiration_time,
-        is_email_verified=False,
-        profile_id=profile.profile_id,
-    )
+        user = User(
+            email=email,
+            password=hashed_password,
+            google_id=google_id,
+            email_verification_token=verification_token,
+            email_verification_expires_at=expiration_time,
+            is_email_verified=False,
+            profile_id=profile.profile_id,
+        )
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except IntegrityError:
+        db.rollback()
+        raise
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email).first()
