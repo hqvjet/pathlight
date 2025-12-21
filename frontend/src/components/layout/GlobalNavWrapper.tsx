@@ -7,20 +7,22 @@ import NavBarAuth from '@/components/layout/NavBarAuth';
 import { useAuthContext } from '@/context/AuthContext';
 
 // This wrapper decides when to show the global top NavBar.
-// We hide it on /user/* pages because those pages already have their own header/sidebar layout.
+// We hide it on /user/* and /admin/* pages because those pages have their own layouts.
 export default function GlobalNavWrapper() {
   const pathname = usePathname();
-  const { isAuthenticated, user, logout } = useAuthContext();
   const [ready, setReady] = useState(false);
+  const { isAuthenticated, user, logout } = useAuthContext();
 
   useEffect(() => { setReady(true); }, []);
 
   if (!ready) return null; // avoid hydration mismatch
 
-  // Hide global nav on dashboard-like pages; for auth routes, show the public nav
+  // Hide global nav on dashboard-like pages and admin pages
   if (pathname.startsWith('/user/')) return null;
+  if (pathname.startsWith('/admin')) return null;
   if (pathname.startsWith('/auth/')) return <NavBarPublic />;
 
+  // For other routes, use AuthContext (will be available via ConditionalAuthProvider)
   if (isAuthenticated) {
     // user?.name might be undefined until first profile fetch resolves; NavBarAuth shows skeleton then
     const avatarUser = user
@@ -35,5 +37,6 @@ export default function GlobalNavWrapper() {
       : undefined;
     return <NavBarAuth user={avatarUser} onLogout={logout} />;
   }
+
   return <NavBarPublic />;
 }

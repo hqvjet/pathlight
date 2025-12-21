@@ -5,8 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Montserrat } from 'next/font/google';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
 
 const montserrat = Montserrat({
   subsets: ['latin', 'vietnamese'],
@@ -70,10 +68,10 @@ export default function Header({
   if (variant === 'minimal') {
     return (
       <header className={`absolute top-0 left-0 right-0 z-10 ${getBackgroundClass()}`}>
-        <div className="flex justify-center items-center p-6">
-          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={48} height={48} className="h-12 w-12" />
-            <span className={`text-2xl font-bold text-orange-500 ${montserrat.className}`}>Pathlight</span>
+        <div className="flex justify-center items-center p-3 sm:p-6">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-3 hover:opacity-80 transition-opacity">
+            <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={48} height={48} className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
+            <span className={`text-base sm:text-xl lg:text-2xl font-bold text-orange-500 ${montserrat.className}`}>Pathlight</span>
           </Link>
         </div>
       </header>
@@ -82,15 +80,15 @@ export default function Header({
 
   return (
     <header className={`absolute top-0 left-0 right-0 z-20 ${getBackgroundClass()}`}>
-      <div className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
-        <Link href="/" className="flex items-center gap-3 group">
+      <div className="flex justify-between items-center px-3 sm:px-6 py-2 sm:py-4 max-w-7xl mx-auto gap-2 sm:gap-6">
+        <Link href="/" className="flex items-center gap-1.5 sm:gap-3 group flex-shrink-0">
           <div className="relative">
-            <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={48} height={48} className="h-12 w-12 transition-transform group-hover:scale-105" />
+            <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={48} height={48} className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 transition-transform group-hover:scale-105" />
           </div>
-          <span className={`text-2xl font-bold bg-gradient-to-r from-orange-500 to-emerald-500 bg-clip-text text-transparent ${montserrat.className}`}>Pathlight</span>
+          <span className={`text-base sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-orange-500 to-emerald-500 bg-clip-text text-transparent ${montserrat.className}`}>Pathlight</span>
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-6 flex-shrink-0">
           {variant === 'default' && (
             <nav className="hidden md:flex items-center gap-6 text-sm">
               <Link href="/about" className="text-muted-foreground hover:text-foreground transition-colors font-medium">Về chúng tôi</Link>
@@ -104,13 +102,8 @@ export default function Header({
             <div className="flex items-center gap-3">{authNavigation}</div>
           )}
 
-          <div className="hidden lg:flex items-center gap-2 relative">
-            <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Tìm kiếm" className="pl-9 w-56" />
-          </div>
-
           {showSocialLinks && (
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               {socialLinks.map(s => (
                 <Button key={s.name} variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
                   <a href={s.href} aria-label={s.name} className="flex items-center justify-center">
@@ -123,11 +116,11 @@ export default function Header({
 
           {/* Auth buttons only when NOT in auth variant (avoid duplicates) */}
           {variant !== 'auth' && (
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" asChild>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 px-3 text-xs sm:text-sm" asChild>
                 <Link href="/auth/signin">Đăng nhập</Link>
               </Button>
-              <Button size="sm" asChild>
+              <Button size="sm" className="h-8 px-3 text-xs sm:text-sm" asChild>
                 <Link href="/auth/signup">Đăng ký</Link>
               </Button>
             </div>

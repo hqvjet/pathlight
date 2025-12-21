@@ -78,6 +78,19 @@ async def signup_user(user_data: SignupRequest, db: Session) -> MessageResponse:
                     detail="Email này đã được sử dụng và đã được xác thực. Vui lòng đăng nhập hoặc sử dụng email khác."
                 )
             else:
+                # Ensure profile exists for legacy/partial signups
+                if not getattr(existing_user, 'profile_id', None):
+                    profile = UserProfile(
+                        profile_id=str(uuid.uuid4()),
+                        subscription=0,
+                        streak=0,
+                        level=1,
+                        current_exp=0,
+                        require_exp=10,
+                    )
+                    db.add(profile)
+                    setattr(existing_user, 'profile_id', profile.profile_id)
+
                 verification_token = generate_token()
                 expiration_time = datetime.now(timezone.utc) + timedelta(minutes=verification_expire_minutes)
                 setattr(existing_user, 'email_verification_token', verification_token)

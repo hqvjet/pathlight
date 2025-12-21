@@ -8,7 +8,7 @@ import pytest
 import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from sqlalchemy.orm import Session
 
 
@@ -164,7 +164,8 @@ class TestAuthService:
         assert user.is_email_verified is False
         
         # Verify database operations
-        mock_db.add.assert_called_once_with(user)
+        assert mock_db.add.call_count == 2  # profile + user
+        assert mock_db.add.call_args_list[-1] == call(user)
         mock_db.commit.assert_called_once()
 
     @patch('models.User')

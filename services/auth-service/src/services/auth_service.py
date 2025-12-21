@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from config import config
-from models import User, Admin, TokenBlacklist
+from models import User, UserProfile, Admin, TokenBlacklist
 
 def hash_password(password: str, *, rounds: int = 10) -> str:
     salt = bcrypt.gensalt(rounds=rounds)
@@ -55,24 +55,41 @@ def create_refresh_token(data: dict) -> str:
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
+def _create_profile(db: Session) -> UserProfile:
+    profile = UserProfile(
+        profile_id=str(uuid.uuid4()),
+        subscription=0,
+        streak=0,
+        level=1,
+        current_exp=0,
+        require_exp=10,
+    )
+    db.add(profile)
+    return profile
+
+
 def create_user(db: Session, email: str, password: str, google_id: Optional[str] = None) -> User:
     verification_token = generate_token()
     expiration_time = datetime.now(timezone.utc) + timedelta(minutes=10)
     hashed_password = hash_password(password)
     if google_id == "":
         google_id = None
-    
+
+    profile = _create_profile(db)
+
     user = User(
         email=email,
         password=hashed_password,
         google_id=google_id,
         email_verification_token=verification_token,
         email_verification_expires_at=expiration_time,
-        is_email_verified=False
+        is_email_verified=False,
+        profile_id=profile.profile_id,
     )
-    
+
     db.add(user)
     db.commit()
+    db.refresh(user)
     return user
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:

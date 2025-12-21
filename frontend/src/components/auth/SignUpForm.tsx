@@ -124,7 +124,7 @@ export default function SignUpForm() {
       imageAlt="Signup illustration"
       headerVariant="auth"
     >
-      <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
+      <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit}>
         <div>
           <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-3">
             Email
@@ -140,7 +140,7 @@ export default function SignUpForm() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label htmlFor="password" className="block text-base font-medium text-gray-700 mb-3">
               Mật Khẩu

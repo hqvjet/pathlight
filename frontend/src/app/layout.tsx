@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import CookieWarning from '@/components/common/CookieWarning';
 import React from 'react';
 import GlobalNavWrapper from '@/components/layout/GlobalNavWrapper';
-import { AuthProvider } from '@/context/AuthContext';
+import { ConditionalAuthProvider } from '@/components/auth/ConditionalAuthProvider';
 
 // Harden runtime against environments exposing a broken global localStorage (e.g. dev nodes started with --localstorage-file).
 if (typeof globalThis !== 'undefined') {
@@ -78,13 +78,13 @@ export default function RootLayout({
       <body
         className={`${montserrat.variable} font-sans antialiased`}
       >        
-        <AuthProvider>
+        <ConditionalAuthProvider>
           <CookieWarning />
           <GlobalNavWrapper />
           <div className="pt-[var(--global-nav-offset,0px)]">
             {children}
           </div>
-        </AuthProvider>
+        </ConditionalAuthProvider>
         <ToastContainer
           position="top-right"
           autoClose={5000}

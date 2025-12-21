@@ -5,7 +5,7 @@
  * Authentication related API services using the new API client
  */
 
-import { api } from '../lib/api';
+import { api, ApiResponse } from '../lib/api';
 
 // =============================================================================
 // 🔧 TYPES & INTERFACES
@@ -15,6 +15,17 @@ export interface SignInRequest {
   email: string;
   password: string;
   remember_me?: boolean;
+}
+
+export interface AdminSignInRequest {
+  username: string;
+  password: string;
+}
+
+export interface AdminAuthResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
 }
 
 export interface SignUpRequest {
@@ -147,8 +158,9 @@ export const authService = {
   /**
    * Admin sign in
    */
-  async adminSignIn(data: SignInRequest) {
-    return api.auth.adminSignin(data);
+  async adminSignIn(data: AdminSignInRequest): Promise<ApiResponse<AdminAuthResponse>> {
+    const resp = await api.auth.adminSignin(data);
+    return resp as ApiResponse<AdminAuthResponse>;
   },
 
   /**

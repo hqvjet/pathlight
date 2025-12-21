@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional, Sequence
 import os
@@ -12,12 +13,15 @@ logger = logging.getLogger(__name__)
 
 Vietnam_TZ = timezone(timedelta(hours=7))
 
-FilterKey = Literal["daily", "weekly", "monthly"]
+FilterKey = Literal["daily", "weekly", "monthly", "hourly", "30m", "1m"]
 
 _FILTER_TO_WINDOW = {
     "daily": timedelta(days=1),
     "weekly": timedelta(days=7),
     "monthly": timedelta(days=30),
+    "hourly": timedelta(hours=1),
+    "30m": timedelta(minutes=30),
+    "1m": timedelta(minutes=1),
 }
 
 _LOG_LEVEL_PREFIXES = ["ERROR", "WARN", "WARNING", "INFO", "DEBUG"]
@@ -44,6 +48,8 @@ def _resolve_log_groups(selected: str | None) -> list[str]:
         groups_env = [g.strip() for g in env_list.split(",") if g.strip()]
 
     if selected:
+        if selected == "all":
+            return groups_env or _DEFAULT_LOG_GROUPS
         # Allow either full name or short suffix match (last token)
         candidates = groups_env or _DEFAULT_LOG_GROUPS
         if selected in candidates:
@@ -78,9 +84,16 @@ def _to_vietnam_time(ts_ms: int) -> str:
 
 def _detect_log_level(message: str) -> str:
     upper_msg = message.strip().upper()
+
     for prefix in _LOG_LEVEL_PREFIXES:
-        if upper_msg.startswith(prefix):
-            return prefix
+        if upper_msg.startswith(prefix) or upper_msg.startswith(f"[{prefix}]"):
+            return "WARN" if prefix == "WARNING" else prefix
+
+    match = re.search(r"\b(ERROR|WARN|WARNING|INFO|DEBUG)\b", upper_msg)
+    if match:
+        value = match.group(1)
+        return "WARN" if value == "WARNING" else value
+
     return "INFO"
 
 
@@ -106,7 +119,8 @@ def get_admin_logs(filter_key: FilterKey, *, service: Optional[str] = None, logs
     - service: optional specific log group (full name or suffix). If None, aggregate all known groups.
     """
     if filter_key not in _FILTER_TO_WINDOW:
-        return AdminLogsResponse(status=400, message="filter must be daily, weekly, or monthly", logs=[])
+        allowed = ", ".join(_FILTER_TO_WINDOW.keys())
+        return AdminLogsResponse(status=400, message=f"filter must be one of: {allowed}", logs=[])
 
     log_groups = _resolve_log_groups(service)
     if not log_groups:

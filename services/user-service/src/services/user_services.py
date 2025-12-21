@@ -1,10 +1,21 @@
 from sqlalchemy.orm import Session
 from typing import Optional
-from models import User
+import uuid
+from models import User, UserProfile
+from services.experience_service import get_exp_for_level
 from config import config
 
 def create_user(db: Session, email: str, password: str, **kwargs) -> User:
-    user = User(email=email, password=password, **kwargs)
+    profile = UserProfile(
+        profile_id=str(uuid.uuid4()),
+        subscription=0,
+        streak=0,
+        level=1,
+        current_exp=0,
+        require_exp=get_exp_for_level(2),
+    )
+    user = User(email=email, password=password, profile=profile, profile_id=profile.profile_id, **kwargs)
+    db.add(profile)
     db.add(user)
     db.commit()
     return user

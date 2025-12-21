@@ -22,6 +22,28 @@ class CreateQuizRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class ManualQuizCard(BaseModel):
+    question: str
+    hint: Optional[str] = None
+    explanation: Optional[str] = None
+    difficulty: str = Field(default="easy", description="easy | medium | hard")
+    option1: str
+    option2: str
+    option3: str
+    option4: str
+    answer: int = Field(..., ge=1, le=4, description="Correct answer number (1-4)")
+
+
+class CreateManualQuizRequest(BaseModel):
+    title: str
+    overview: str
+    level: str = Field(default="easy", description="easy | medium | hard")
+    duration: int = Field(default=15, description="Duration in minutes")
+    cards: List[ManualQuizCard]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class QuizCardItem(BaseModel):
     card_id: str
     quiz_id: str
@@ -103,6 +125,7 @@ class QuizSubmitResponse(BaseModel):
     status: int
     result: Optional[QuizSubmitResult] = None
     message: Optional[str] = None
+    experience: Optional[dict] = None  # Rewards from completing quiz
 
 
 class QuizVisibilityUpdate(BaseModel):
@@ -113,3 +136,20 @@ class QuizVisibilityUpdate(BaseModel):
 
 class FinishQuizRequest(BaseModel):
     quiz_id: str
+
+
+class FinishQuizResponse(BaseModel):
+    status: int
+    message: str
+    experience: dict
+
+
+class StartQuizRequest(BaseModel):
+    quiz_id: str
+
+
+class StartQuizResponse(BaseModel):
+    status: int
+    message: str
+    quiz_id: str
+    started_at: str

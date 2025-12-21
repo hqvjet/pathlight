@@ -191,24 +191,42 @@ export default function ProfilePage() {
   return (
     <>
       <div className="min-h-screen bg-[#f5f7fb]">
-        <div className="max-w-[1330px] mx-auto px-6 md:px-8 py-12">
-          <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-8 md:p-10">
+        <div className="max-w-[1330px] mx-auto px-3 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12">
+          <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-4 sm:p-6 md:p-8 lg:p-10">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
               <div>
-                <h1 className="text-[26px] font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
+                <h1 className="text-xl sm:text-2xl md:text-[26px] font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
               </div>
             </div>
 
           {user && (
-            <div className="mb-8 grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-4">
-              <div className="p-5 md:p-6 rounded-2xl bg-white border border-gray-100 shadow-sm text-gray-900">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-lg font-semibold text-gray-900">Hành trình của bạn</p>
+            <div className="mb-6 sm:mb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3 sm:gap-4">
+              {/* Avatar section - shows first on mobile */}
+              <div className="w-full lg:hidden flex justify-center">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6 flex flex-col items-center gap-3 sm:gap-4 w-full max-w-[280px]">
+                  <div className="w-full aspect-[1/1.02] min-h-[200px] sm:min-h-[240px] rounded-lg bg-gray-50/60 border border-dashed border-gray-200 relative">
+                    <ProfileAvatar user={user} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
+                    {!user && (
+                      <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">Đang tải ảnh...</div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                    <div className="px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Rank #{user.rank ?? '—'}</div>
-                    <div className="px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Lv {user.level || 1}</div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <span className="px-2 py-1 rounded-full bg-orange-50 text-orange-600 font-semibold">Lv {user?.level || 1}</span>
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold"># {user?.rank ?? '—'}</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-center text-gray-600">Ảnh tải lên không được quá 3MB<br/>Nên chọn ảnh có tỉ lệ 1:1</p>
+                </div>
+              </div>
+
+              {/* Stats card */}
+              <div className="p-4 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm text-gray-900 lg:col-span-1">
+                <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
+                  <div>
+                    <p className="text-base sm:text-lg font-semibold text-gray-900">Hành trình của bạn</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-gray-700">
+                    <div className="px-2 sm:px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Rank #{user.rank ?? '—'}</div>
+                    <div className="px-2 sm:px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Lv {user.level || 1}</div>
                   </div>
                 </div>
                 <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
@@ -218,7 +236,7 @@ export default function ProfilePage() {
                   <span>{currentExp} / {requireExp || 0} EXP</span>
                   <span>Còn {remainingExp} EXP lên Lv {nextLevelLabel}</span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm text-gray-800">
+                <div className="mt-3 sm:mt-4 grid grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm text-gray-800">
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                     <div className="text-[11px] text-gray-500">Khóa học</div>
                     <div className="font-semibold text-gray-900">{courseCount}</div>
@@ -232,30 +250,31 @@ export default function ProfilePage() {
                     <div className="font-semibold text-gray-900">{completedCourses}</div>
                   </div>
                 </div>
-              </div>
-              <div className="p-5 md:p-6 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center gap-4">
-                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center border border-gray-200">
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a6 6 0 00-6 6v3.5L4 15.5a1 1 0 00.7 1.7h14.6a1 1 0 00.7-1.7L18 12.5V9a6 6 0 00-6-6Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19a2 2 0 004 0" />
-                  </svg>
-                </div>
-                <div className="flex-1 flex flex-col gap-4">
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-sm font-semibold text-gray-900">Nhắc giờ học:</div>
-                    <div className="text-xs text-gray-600">Chọn giờ nhắc hằng ngày</div>
+
+                {/* Notification time picker - compact version */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="h-4 w-4 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a6 6 0 00-6 6v3.5L4 15.5a1 1 0 00.7 1.7h14.6a1 1 0 00.7-1.7L18 12.5V9a6 6 0 00-6-6Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 19a2 2 0 004 0" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-900">Nhắc giờ học</span>
                   </div>
-                  <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 w-full justify-end">
-                    <div className="flex gap-2" style={{ overscrollBehavior: 'contain' }}>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    {/* Time picker column */}
+                    <div className="flex-shrink-0">
+                      <div className="flex gap-2 items-center mb-2">
+                    <div className="flex gap-2">
                       {[
                         { label: 'Giờ', baseList: HOURS, idx: hourIdx, setIdx: setHourIdx, setter: setHour, drag: hourDrag, kind: 'hour' as const },
                         { label: 'Phút', baseList: MINUTES, idx: minuteIdx, setIdx: setMinuteIdx, setter: setMinute, drag: minuteDrag, kind: 'minute' as const },
-                      ].map(({ label, baseList, idx, setIdx, setter, drag, kind }) => (
+                      ].map(({ label, baseList, idx, drag, kind }) => (
                         <div
                           key={label}
-                          className="relative w-16 time-wheel"
+                          className="relative w-14 time-wheel"
                           data-kind={kind}
-                          style={{ height: '150px', overscrollBehavior: 'contain' }}
+                          style={{ height: '100px', overscrollBehavior: 'contain' }}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             if (kind === 'hour') {
@@ -272,18 +291,18 @@ export default function ProfilePage() {
                           onMouseUp={() => endDrag(drag)}
                           onMouseLeave={() => endDrag(drag)}
                         >
-                          <div className="h-full overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm">
-                            <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 36px 36px -36px rgba(0,0,0,0.06), inset 0 -36px 36px -36px rgba(0,0,0,0.06)' }} />
-                            <div className="absolute left-0 right-0 border-y border-orange-200/70 pointer-events-none" style={{ top: '50%', height: `${rowHeight}px`, marginTop: `-${rowHeight/2}px` }} />
+                          <div className="h-full overflow-hidden border border-gray-200 rounded-lg bg-white shadow-sm">
+                            <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 24px 24px -24px rgba(0,0,0,0.06), inset 0 -24px 24px -24px rgba(0,0,0,0.06)' }} />
+                            <div className="absolute left-0 right-0 border-y border-orange-200/70 pointer-events-none" style={{ top: '50%', height: '33px', marginTop: '-16.5px' }} />
                             <div className="h-full select-none">
-                              <div className="relative" style={{ height: '150px' }}>
+                              <div className="relative" style={{ height: '100px' }}>
                                 {renderWindow(baseList, idx, 3).map(({ val, key, rel }) => {
                                   const isCenter = rel === 0;
                                   return (
                                     <div
                                       key={key}
-                                      className={`absolute left-0 right-0 flex items-center justify-center text-sm font-semibold cursor-pointer select-none ${isCenter ? 'text-gray-900' : 'text-gray-500 opacity-60'}`}
-                                      style={{ height: `${rowHeight}px`, top: '50%', transform: `translateY(${rel * rowHeight - rowHeight / 2}px)` }}
+                                      className={`absolute left-0 right-0 flex items-center justify-center text-xs font-semibold cursor-pointer select-none ${isCenter ? 'text-gray-900' : 'text-gray-500 opacity-60'}`}
+                                      style={{ height: '33px', top: '50%', transform: `translateY(${rel * 33 - 16.5}px)` }}
                                       onClick={() => {
                                         const step = rel;
                                         if (kind === 'hour') {
@@ -302,59 +321,72 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           </div>
-                          <input
-                            type="number"
-                            min={0}
-                            max={baseList.length - 1}
-                            className="absolute left-0 right-0 mx-auto text-center text-sm font-semibold text-gray-900 rounded-md"
-                            style={{ width: '100%', top: '50%', height: `${rowHeight}px`, transform: 'translateY(-50%)', opacity: 0 }}
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => {
-                              const raw = Number(e.target.value);
-                              if (Number.isNaN(raw)) return;
-                              const clamped = Math.min(baseList.length - 1, Math.max(0, raw));
-                              const formatted = String(clamped).padStart(2, '0');
-                              setIdx(clamped);
-                              setter(formatted);
-                            }}
-                            aria-label={label}
-                          />
                         </div>
                       ))}
                     </div>
-                    <div className="flex-1 flex flex-col gap-3 min-w-[240px]">
-                      <div className="flex flex-wrap gap-2">
-                        {presetTimes.map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setRemindTime(t)}
-                            className={`px-3 py-2 rounded-lg text-sm border transition ${remindTime === t ? 'bg-orange-50 border-orange-200 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-200 hover:text-orange-700'}`}
-                          >
-                            {t}
-                          </button>
-                        ))}
+                    <input
+                      type="time"
+                      value={remindTime}
+                      onChange={(e)=> setRemindTime(e.target.value)}
+                      className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs shadow-sm bg-white focus:border-orange-200 focus:ring-1 focus:ring-orange-100 w-20"
+                    />
+                        <button type="button" onClick={()=> updateRemindTime(remindTime)} disabled={remindSaving} className="px-3 py-1.5 bg-orange-500 text-white text-xs rounded-lg shadow-sm hover:bg-orange-600 disabled:opacity-60 font-medium">{remindSaving ? 'Lưu...' : 'Lưu'}</button>
                       </div>
-                      <div className="flex gap-2 items-center flex-wrap">
-                        <input
-                          type="time"
-                          value={remindTime}
-                          onChange={(e)=> setRemindTime(e.target.value)}
-                          className="rounded-lg border border-gray-200 px-3 py-2 text-sm shadow-sm bg-white focus:border-orange-200 focus:ring-2 focus:ring-orange-100"
-                        />
-                        <button type="button" onClick={()=> updateRemindTime(remindTime)} disabled={remindSaving} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg shadow-sm hover:bg-orange-600 disabled:opacity-60 min-w-[72px]">{remindSaving ? 'Đang lưu' : 'Lưu'}</button>
+                      <div className="flex flex-wrap gap-1.5">
+                    {presetTimes.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setRemindTime(t)}
+                        className={`px-2 py-1 rounded text-[11px] border transition ${remindTime === t ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-gray-200 text-gray-600 hover:border-orange-200'}`}
+                      >
+                        {t}
+                        </button>
+                      ))}
+                      </div>
+                    </div>
+                    
+                    {/* Tips/Motivation column */}
+                    <div className="flex-1 hidden sm:block">
+                      <div className="h-full bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-3 border border-orange-100">
+                        <div className="flex items-start gap-2">
+                          <svg className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                          <div>
+                            <p className="text-xs font-semibold text-orange-800 mb-1">Mẹo học tập</p>
+                            <p className="text-[11px] leading-relaxed text-orange-700">Học đều đặn mỗi ngày sẽ giúp bạn ghi nhớ tốt hơn. Hãy chọn khung giờ phù hợp nhất!</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* Avatar section - desktop only (right column) */}
+              <div className="hidden lg:flex justify-center">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6 flex flex-col items-center gap-3 sm:gap-4 w-full">
+                  <div className="w-full aspect-[1/1.02] min-h-[200px] sm:min-h-[240px] rounded-lg bg-gray-50/60 border border-dashed border-gray-200 relative">
+                    <ProfileAvatar user={user} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
+                    {!user && (
+                      <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">Đang tải ảnh...</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <span className="px-2 py-1 rounded-full bg-orange-50 text-orange-600 font-semibold">Lv {user?.level || 1}</span>
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold"># {user?.rank ?? '—'}</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-center text-gray-600">Ảnh tải lên không được quá 3MB<br/>Nên chọn ảnh có tỉ lệ 1:1</p>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="flex flex-col xl:flex-row gap-10">
-            <div className="flex-1">
-              <form onSubmit={handleSubmit} className="space-y-6 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Form section */}
+          <div className="mb-6 sm:mb-8">
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-800 mb-2">Họ Và Tên (*)</label>
                     <input name="family_name" value={formData.family_name} onChange={(e)=> setFormData({ ...formData, family_name: e.target.value })} placeholder="Nhập họ và tên đệm của bạn" className="w-full h-11 px-4 border border-gray-200 focus:border-orange-200 focus:ring-2 focus:ring-orange-100 bg-gray-50 hover:bg-white rounded-lg text-sm transition" />
@@ -376,7 +408,7 @@ export default function ProfilePage() {
                       <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
                     </button>
                     {showNativeDate && (
-                      <input id="hidden-native-date" type="date" value={nativeDateValue} onChange={handleNativeDateChange} onBlur={()=> setShowNativeDate(false)} className="absolute opacity-0 pointer-events-none" />
+                      <input id="hidden-native-date" type="date" value={nativeDateValue} onChange={handleNativeDateChange} onBlur={()=> setShowNativeDate(false)} className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer z-10" />
                     )}
                   </div>
                 </div>
@@ -387,29 +419,9 @@ export default function ProfilePage() {
                 <button type="submit" disabled={saving} className="mt-2 px-8 h-11 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold tracking-wide disabled:opacity-60 shadow-sm shadow-orange-500/20">{saving ? 'Đang lưu...' : 'LƯU'}</button>
               </form>
             </div>
-            <div className="w-full max-w-[280px]">
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex flex-col items-center gap-4">
-                <div className="w-full aspect-[1/1.02] min-h-[240px] rounded-lg bg-gray-50/60 border border-dashed border-gray-200 relative">
-                  <ProfileAvatar user={user} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
-                  {!user && (
-                    <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">Đang tải ảnh...</div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-600">
-                  <span className="px-2 py-1 rounded-full bg-orange-50 text-orange-600 font-semibold">Lv {user?.level || 1}</span>
-                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold"># {user?.rank ?? '—'}</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-center text-gray-600">Ảnh tải lên không được quá 3MB<br/>Nên chọn ảnh có tỉ lệ 1:1</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
-    </div>
-      <style jsx global>{`
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-      `}</style>
     </>
   );
 }

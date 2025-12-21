@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Literal
 import logging
 
 from fastapi.security import HTTPAuthorizationCredentials
@@ -172,9 +172,11 @@ async def admin_get_costs(
 # 6.3. Admin get AWS CloudWatch logs
 @router.get("/admin/log", response_model=AdminLogsResponse)
 async def get_admin_logs_endpoint(
-    filter: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    filter_key: Literal["daily", "weekly", "monthly", "hourly", "30m", "1m"] = Query(
+        "daily", pattern="^(daily|weekly|monthly|hourly|30m|1m)$"
+    ),
     service: Optional[str] = Query(None, description="Tên log group hoặc suffix service"),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    return await get_admin_logs(filter, service, credentials, db)
+    return await get_admin_logs(filter_key, service, credentials, db)

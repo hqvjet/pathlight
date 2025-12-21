@@ -60,9 +60,9 @@ export default function ResetPasswordLayout({
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex pt-20">
+      <div className="flex-1 flex flex-col lg:flex-row items-start lg:items-center pt-4 sm:pt-16 lg:pt-20 pb-8 sm:pb-12 px-4 sm:px-6 lg:px-10 gap-8 lg:gap-10">
         {/* Left side - Image */}
-        <div className="hidden lg:flex flex-1 items-center justify-center p-8">
+        <div className="hidden lg:flex flex-1 items-center justify-center p-6 bg-gray-50 rounded-2xl">
           <div className="max-w-lg w-full">
             <Image
               src={imageSrc}
@@ -76,8 +76,8 @@ export default function ResetPasswordLayout({
         </div>
 
         {/* Right side - Content */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md w-full space-y-8">
+        <div className="flex-1 flex items-start lg:items-center justify-center w-full">
+          <div className="max-w-md w-full space-y-8 px-2 sm:px-4">
             {/* Icon */}
             <div className="flex justify-center">
               {getIconElement()}

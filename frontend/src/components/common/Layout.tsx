@@ -17,7 +17,7 @@ import {
 
 interface LayoutProps {
   children: React.ReactNode;
-  title: string;
+  title?: string;
   user?: {
     id?: string;
     avatar_url?: string;
@@ -278,7 +278,9 @@ export default function Layout({ children, title, user }: LayoutProps) {
                 )}
                 <div className="flex items-center gap-2 min-w-0">
                   <Image src="/assets/icons/logo.png" alt="PathLight Logo" width={24} height={24} className="w-6 h-6 object-contain lg:hidden" />
-                  <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{title}</h1>
+                  {title ? (
+                    <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{title}</h1>
+                  ) : null}
                 </div>
               </div>
 

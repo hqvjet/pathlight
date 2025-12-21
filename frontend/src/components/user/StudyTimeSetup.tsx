@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { showToast } from '@/utils/toast';
 import { storage } from '@/utils/api';
 import { api } from '@/lib/api';
-import Header from '../layout/Header';
 import Image from 'next/image';
 import { Montserrat } from 'next/font/google';
 
@@ -72,162 +71,126 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <Header 
-        variant="minimal" 
-        showSocialLinks={false}
-        backgroundColor="transparent"
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 flex pt-20">
-        {/* Left side - Illustration */}
-        <div className="hidden lg:flex flex-1 items-center justify-center p-8">
-          <div className="max-w-lg w-full">
-            <Image
-              src="/assets/images/signup_success.png"
-              alt="Đặt thời gian học tập"
-              width={500}
-              height={400}
-              className="w-full h-auto object-contain"
-              priority
-            />
-          </div>
-        </div>
-
-        {/* Right side - Setup Form */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md w-full space-y-8">
-            {/* Header */}
-            <div className="text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="w-20 h-20 flex items-center justify-center">
-                  <svg className="w-10 h-10 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white">
+      <main className="px-4 sm:px-6 py-10 sm:py-14">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-white shadow-lg border border-orange-100 rounded-2xl p-5 sm:p-8 lg:p-10 space-y-8">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10">
+              <div className="space-y-3 flex-1">
+                <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 text-orange-700 px-3 py-1 text-sm font-semibold">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
+                  Nhắc học hằng ngày
                 </div>
-              </div>
-              
-              <h1 className={`text-3xl font-bold text-gray-900 ${montserrat.className}`}>
-                Đặt Thời Gian Học Tập
-              </h1>
-              
-              <p className="text-gray-600 text-lg leading-relaxed">
-                Chọn thời gian phù hợp để chúng tôi nhắc bạn học tập mỗi ngày. 
-                Việc học đều đặn sẽ giúp bạn tiến bộ nhanh chóng!
-              </p>
-            </div>
-
-            {/* Time Selection */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Chọn thời gian nhắc nhở:</h3>
-              
-              {/* Time Display */}
-              <div className="text-center p-6 bg-orange-50 border-2 border-orange-200 rounded-xl">
-                <div className="text-4xl font-bold text-orange-600 mb-2">
-                  {selectedTime}
-                </div>
-                <p className="text-sm text-gray-600">Thời gian nhắc nhở đã chọn</p>
-              </div>
-
-              {/* Hour and Minute Selectors */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Hour Selector */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Giờ
-                  </label>
-                  <select
-                    value={selectedHour}
-                    onChange={(e) => setSelectedHour(e.target.value)}
-                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-lg font-medium"
-                  >
-                    {hourOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Minute Selector */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Phút
-                  </label>
-                  <select
-                    value={selectedMinute}
-                    onChange={(e) => setSelectedMinute(e.target.value)}
-                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-lg font-medium"
-                  >
-                    {minuteOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Time Description */}
-              <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
-                <p className="text-sm text-gray-600">
-                  💡 Bạn có thể thay đổi thời gian này bất cứ lúc nào trong phần cài đặt
+                <h1 className={`text-2xl sm:text-3xl font-bold text-gray-900 ${montserrat.className}`}>
+                  Đặt thời gian học tập
+                </h1>
+                <p className="text-gray-600 text-base sm:text-lg leading-relaxed">
+                  Chọn khung giờ cố định để PathLight gửi nhắc nhở. Bạn có thể đổi bất cứ lúc nào trong phần cài đặt.
                 </p>
               </div>
+              <div className="flex-1 flex justify-center lg:justify-end">
+                <Image src="/assets/images/signup_success.png" alt="Đặt thời gian" width={220} height={180} className="max-w-[220px] w-full h-auto object-contain" />
+              </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <button
-                onClick={handleSetReminder}
-                disabled={isLoading}
-                className={`w-full py-4 px-6 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${montserrat.className}`}
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Đang đặt lịch...
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-orange-700 font-medium">Thời gian nhắc</p>
+                    <div className="text-3xl sm:text-4xl font-bold text-orange-600 mt-1 tracking-tight">{selectedTime}</div>
                   </div>
-                ) : (
-                  'Đặt Lịch Nhắc Nhở'
-                )}
-              </button>
-
-              {onSkip && (
-                <button
-                  onClick={onSkip}
-                  disabled={isLoading}
-                  className="w-full py-3 px-6 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
-                >
-                  Bỏ qua, thiết lập sau
-                </button>
-              )}
-            </div>
-
-            {/* Benefits Info */}
-            <div className="bg-white border border-blue-200 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0">
-                  <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <div className="text-xs text-orange-600 bg-white/80 px-3 py-1 rounded-full border border-orange-100 self-start sm:self-center">Giữ thói quen mỗi ngày</div>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-1">Tại sao nên đặt lịch nhắc?</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Duy trì thói quen học tập đều đặn</li>
-                    <li>• Tăng hiệu quả ghi nhớ kiến thức</li>
-                    <li>• Chọn chính xác thời gian phù hợp nhất</li>
-                    <li>• Có thể thay đổi thời gian bất cứ lúc nào</li>
-                  </ul>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700">Giờ</label>
+                    <select
+                      value={selectedHour}
+                      onChange={(e) => setSelectedHour(e.target.value)}
+                      className="w-full h-12 px-3 rounded-xl border border-gray-200 bg-white text-base font-medium focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition"
+                    >
+                      {hourOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700">Phút</label>
+                    <select
+                      value={selectedMinute}
+                      onChange={(e) => setSelectedMinute(e.target.value)}
+                      className="w-full h-12 px-3 rounded-xl border border-gray-200 bg-white text-base font-medium focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition"
+                    >
+                      {minuteOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                  <span className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl">
+                    <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Có thể đổi bất cứ lúc nào
+                  </span>
+                  <span className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl">
+                    <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Nhắc mỗi ngày vào giờ bạn chọn
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <button
+                    onClick={handleSetReminder}
+                    disabled={isLoading}
+                    className={`w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold shadow-md hover:shadow-lg transition transform hover:-translate-y-0.5 disabled:opacity-60 disabled:transform-none ${montserrat.className}`}
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Đang lưu...
+                      </div>
+                    ) : (
+                      'Lưu thời gian nhắc'
+                    )}
+                  </button>
+                  {onSkip && (
+                    <button
+                      onClick={onSkip}
+                      disabled={isLoading}
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 font-medium transition disabled:opacity-60"
+                    >
+                      Bỏ qua, làm sau
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50 p-5 text-sm text-gray-700">
+                <h3 className="text-base font-semibold text-gray-800">Lợi ích</h3>
+                <ul className="space-y-2">
+                  <li className="flex gap-2"><span className="text-orange-500">•</span> Giữ nhịp học ổn định mỗi ngày</li>
+                  <li className="flex gap-2"><span className="text-orange-500">•</span> Giảm quên lịch học khi bận rộn</li>
+                  <li className="flex gap-2"><span className="text-orange-500">•</span> Linh hoạt đổi giờ bất cứ lúc nào</li>
+                  <li className="flex gap-2"><span className="text-orange-500">•</span> Nhắc nhẹ, không làm phiền</li>
+                </ul>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
