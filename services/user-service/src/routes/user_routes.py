@@ -17,6 +17,11 @@ from schemas.user_schemas import (
     AdminUpdateEmailRequest,
     AdminCostResponse,
     AdminLogsResponse,
+    AdminLogStreamsResponse,
+    AdminListResponse,
+    AdminUpdateSubscriptionRequest,
+    AdminExperienceRequest,
+    AdminExperienceDeltaRequest,
     ExperienceAddRequest,
     TestStatsResponse,
     ActivityLogRequest,
@@ -36,9 +41,14 @@ from controllers.user_controller import (
     admin_delete_user,
     get_admin_aws_costs,
     get_admin_logs,
+    get_admin_log_streams,
     add_experience,
     log_learning_activity,
     get_learning_activity,
+    admin_update_subscription,
+    admin_add_experience_for_user,
+    admin_adjust_experience_step,
+    list_admin_accounts,
 )
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 
@@ -161,6 +171,36 @@ async def admin_delete_user_endpoint(
 ):
     return await admin_delete_user(user_id, credentials, db)
 
+
+@router.put("/admin/user/subscription", response_model=MessageResponse)
+async def admin_update_subscription_endpoint(
+    request: AdminUpdateSubscriptionRequest,
+    user_id: str = Query(..., alias="userid"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return await admin_update_subscription(user_id, request, credentials, db)
+
+
+@router.post("/admin/user/experience", response_model=TestStatsResponse)
+async def admin_add_experience_endpoint(
+    request: AdminExperienceRequest,
+    user_id: str = Query(..., alias="userid"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return await admin_add_experience_for_user(user_id, request, credentials, db)
+
+
+@router.post("/admin/user/experience/step", response_model=TestStatsResponse)
+async def admin_adjust_experience_step_endpoint(
+    request: AdminExperienceDeltaRequest,
+    user_id: str = Query(..., alias="userid"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return await admin_adjust_experience_step(user_id, request, credentials, db)
+
 # 6.3. Admin get AWS costs
 @router.get("/admin/cost", response_model=AdminCostResponse)
 async def admin_get_costs(
@@ -176,7 +216,28 @@ async def get_admin_logs_endpoint(
         "daily", pattern="^(daily|weekly|monthly|hourly|30m|1m)$"
     ),
     service: Optional[str] = Query(None, description="Tên log group hoặc suffix service"),
+    log_stream: Optional[str] = Query(None, description="Tên log stream"),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    return await get_admin_logs(filter_key, service, credentials, db)
+    return await get_admin_logs(filter_key, service, log_stream, credentials, db)
+
+
+@router.get("/admin/log/streams", response_model=AdminLogStreamsResponse)
+async def get_admin_log_streams_endpoint(
+    filter_key: Literal["daily", "weekly", "monthly", "hourly", "30m", "1m"] = Query(
+        "daily", pattern="^(daily|weekly|monthly|hourly|30m|1m)$"
+    ),
+    service: Optional[str] = Query(None, description="Tên log group hoặc suffix service"),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return await get_admin_log_streams(filter_key, service, credentials, db)
+
+
+@router.get("/admin/admins", response_model=AdminListResponse)
+async def list_admins_endpoint(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    return await list_admin_accounts(credentials, db)

@@ -12,7 +12,7 @@ from schemas.user_schemas import *  # noqa
 from config import config
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
-from services.admin_service import create_admin, get_admin_by_username
+from services.admin_service import create_admin, get_admin_by_username, list_admins
 from services.experience_service import (
     get_level_system_info as svc_get_level_system_info,
     update_test_stats as svc_update_test_stats,
@@ -22,9 +22,14 @@ from services.experience_service import (
 )
 from services.activity_service import log_activity as svc_log_activity, get_activity_series as svc_get_activity_series
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
+from services.user_services import get_user_by_id
 from services.external.course_client import get_course_stats
 from services.external.quiz_client import get_quiz_stats
-from services.log_service import FilterKey, get_admin_logs as fetch_admin_logs
+from services.log_service import (
+    FilterKey,
+    get_admin_logs as fetch_admin_logs,
+    list_log_streams as fetch_log_streams,
+)
 from services.user_service_auth import get_current_admin_user
 
 logger = logging.getLogger(__name__)
@@ -247,6 +252,124 @@ async def create_admin_account(request: AdminCreateRequest, credentials: HTTPAut
         logger.error(f"Unexpected error during admin creation: {e}")
         return _send_result(MessageResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại"))
 
+
+async def admin_update_subscription(user_id: str, request: AdminUpdateSubscriptionRequest, credentials: HTTPAuthorizationCredentials, db: Session) -> MessageResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    try:
+        target_user = get_user_by_id(db, user_id)
+        if not target_user:
+            return _send_result(MessageResponse(status=404, message="Không tìm thấy người dùng"))
+
+        profile = getattr(target_user, 'profile', None)
+        if not profile:
+            profile = UserProfile(
+                profile_id=str(uuid.uuid4()),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=get_exp_for_level(2),
+            )
+            db.add(profile)
+            setattr(target_user, 'profile', profile)
+            if not getattr(target_user, 'profile_id', None):
+                setattr(target_user, 'profile_id', profile.profile_id)
+
+        setattr(profile, 'subscription', request.subscription)
+        db.commit()
+        logger.info(f"Admin updated subscription for user {getattr(target_user, 'email', 'unknown')}: {request.subscription}")
+        return MessageResponse(status=200, message="Đã cập nhật gói thuê bao cho người dùng")
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Failed to update subscription for user {user_id}: {e}")
+        db.rollback()
+        return MessageResponse(status=500, message="Không thể cập nhật gói thuê bao")
+
+
+async def admin_add_experience_for_user(user_id: str, request: AdminExperienceRequest, credentials: HTTPAuthorizationCredentials, db: Session) -> TestStatsResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    try:
+        target_user = get_user_by_id(db, user_id)
+        if not target_user:
+            return _send_result(TestStatsResponse(status=404, message="Không tìm thấy người dùng"))
+
+        profile = getattr(target_user, 'profile', None)
+        if not profile:
+            profile = UserProfile(
+                profile_id=str(uuid.uuid4()),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=get_exp_for_level(2),
+            )
+            db.add(profile)
+            setattr(target_user, 'profile', profile)
+            if not getattr(target_user, 'profile_id', None):
+                setattr(target_user, 'profile_id', profile.profile_id)
+            db.commit()
+
+        return await svc_add_experience(request.exp, target_user, db)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Failed to add exp for user {user_id}: {e}")
+        db.rollback()
+        return TestStatsResponse(status=500, message="Không thể thêm exp cho người dùng")
+
+
+async def admin_adjust_experience_step(user_id: str, request: AdminExperienceDeltaRequest, credentials: HTTPAuthorizationCredentials, db: Session) -> TestStatsResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    try:
+        target_user = get_user_by_id(db, user_id)
+        if not target_user:
+            return _send_result(TestStatsResponse(status=404, message="Không tìm thấy người dùng"))
+
+        profile = getattr(target_user, 'profile', None)
+        if not profile:
+            profile = UserProfile(
+                profile_id=str(uuid.uuid4()),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=get_exp_for_level(2),
+            )
+            db.add(profile)
+            setattr(target_user, 'profile', profile)
+            if not getattr(target_user, 'profile_id', None):
+                setattr(target_user, 'profile_id', profile.profile_id)
+            db.commit()
+
+        return await svc_add_experience(request.delta, target_user, db)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Failed to adjust exp for user {user_id}: {e}")
+        db.rollback()
+        return TestStatsResponse(status=500, message="Không thể điều chỉnh exp cho người dùng")
+
+
+async def list_admin_accounts(credentials: HTTPAuthorizationCredentials, db: Session) -> AdminListResponse | JSONResponse:
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    try:
+        admins = list_admins(db)
+        admin_items = [
+            {
+                "id": str(a.id),
+                "username": a.username,
+                "created_at": getattr(a, 'created_at', None).isoformat() if getattr(a, 'created_at', None) else None,
+            }
+            for a in admins
+        ]
+        return AdminListResponse(status=200, admins=admin_items)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Failed to list admins: {e}")
+        return AdminListResponse(status=500, message="Không thể lấy danh sách admin")
+
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
     try:
@@ -397,8 +520,26 @@ async def get_admin_aws_costs(credentials: HTTPAuthorizationCredentials, db: Ses
     return get_aws_costs_last_30_days()
 
 
-async def get_admin_logs(filter_key: FilterKey, service: Optional[str], credentials: HTTPAuthorizationCredentials, db: Session):
+async def get_admin_logs(
+    filter_key: FilterKey,
+    service: Optional[str],
+    log_stream: Optional[str],
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+):
     guard = _admin_guard(credentials, db)
     if guard:
         return guard
-    return fetch_admin_logs(filter_key, service=service)
+    return fetch_admin_logs(filter_key, service=service, log_stream=log_stream)
+
+
+async def get_admin_log_streams(
+    filter_key: FilterKey,
+    service: Optional[str],
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+):
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    return fetch_log_streams(filter_key, service=service)

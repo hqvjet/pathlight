@@ -24,3 +24,7 @@ def create_admin(db: Session, username: str, password: str) -> Admin:
 
 def get_admin_by_username(db: Session, username: str) -> Admin | None:
     return db.query(Admin).filter(Admin.username == username).first()
+
+
+def list_admins(db: Session) -> list[Admin]:
+    return db.query(Admin).order_by(Admin.created_at.desc()).all()
