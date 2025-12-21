@@ -118,7 +118,8 @@ export function useDashboard(onLogout: () => void) {
         if (canUseStorage) {
           try { window.localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ user: profileData, dashboardData: dashboardInfo, timestamp: Date.now() })); } catch {}
         }
-        if (!userInfo.remind_time) setTimeout(() => router.replace('/user/study-time-setup'), 100);
+        const skipped = storage.get('study_time_setup_completed') === 'true';
+        if (!userInfo.remind_time && !skipped) setTimeout(() => router.replace('/user/study-time-setup'), 100);
       } catch (error) {
         setLoading(false);
         if (error instanceof Error && error.message === 'Request timeout') {

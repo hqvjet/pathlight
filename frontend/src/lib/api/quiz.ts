@@ -1,6 +1,7 @@
 /** Quiz domain API helpers aligned to quiz-service contract */
 import { apiClient } from './http';
 
+// For agentic quiz generation
 export type CreateQuizRequest = {
   type?: 'generate_quiz' | 'generate_course';
   short_prompt: string;
@@ -9,6 +10,27 @@ export type CreateQuizRequest = {
   course_level: string;
   course_constraint: string;
   documents?: string[];
+};
+
+// For manual quiz creation
+export type ManualQuizCard = {
+  question: string;
+  hint?: string;
+  explanation?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  option1: string;
+  option2: string;
+  option3: string;
+  option4: string;
+  answer: number;
+};
+
+export type ManualQuizRequest = {
+  title: string;
+  overview: string;
+  level: 'easy' | 'medium' | 'hard';
+  duration: number;
+  cards: ManualQuizCard[];
 };
 
 export type QuizSubmitAnswer = { card_id: string; answer: number };
@@ -44,8 +66,21 @@ export const quizApi = {
     return apiClient.get(`/quiz/${id}${query}`);
   },
 
-  /** Create quiz generation job */
+  /** Create quiz (agentic generation) */
+  /** Create quiz (agentic generation) */
   create: (data: CreateQuizRequest) => apiClient.post('/quiz/create', data),
+
+  /** Create quiz (manual) - no EXP reward */
+  createManual: (data: ManualQuizRequest) => apiClient.post('/quiz/create/manual', data),
+
+  /** Get generation status for a quiz */
+  getStatus: (quiz_id: string) => apiClient.get<{ status: number; body?: unknown; message?: string }>(`/quiz/status?quiz_id=${encodeURIComponent(quiz_id)}`),
+
+  /** List my quiz generations (tracking) */
+  listMyGenerations: () => apiClient.get<{ status: number; items?: Array<Record<string, unknown>>; message?: string }>(`/quiz/generations/my`),
+
+  /** Start quiz (logs activity) */
+  start: (id: string) => apiClient.post(`/quiz/${id}/start`, { quiz_id: id }),
 
   /** Submit answers for a quiz */
   submit: (id: string, answers: QuizSubmitAnswer[]) => apiClient.post(`/quiz/${id}/submit`, { answers }),

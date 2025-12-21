@@ -67,24 +67,26 @@ export function middleware(request: NextRequest) {
     clearExpiredCookiesResponse.cookies.set('remember_me','',{maxAge:0,path:'/'});
   }
 
-  // Protected routes that require authentication
-  const protectedRoutes = [ '/user/dashboard', '/user/profile', '/user/my-courses', '/user/my-quizzes', '/admin' ];
-  const publicRoutes = [ '/auth/signin', '/auth/signup', '/auth/forgot-password' ];
+  // Global guard: everything requires auth except home and auth/reset flows
+  const isHome = pathname === '/' || pathname === '';
+  const isAuthFlow = pathname.startsWith('/auth');
+  const isResetFlow = pathname.startsWith('/reset-password') || pathname.startsWith('/verify-email');
+  const isPublicRoute = isHome || isAuthFlow || isResetFlow;
 
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
-
-  // Redirect unauthenticated (or expired) users from protected routes
-  if (isProtectedRoute && !authToken) {
+  if (!isPublicRoute && !authToken) {
     url.pathname = '/auth/signin';
     url.searchParams.set('redirect', pathname);
-    if (clearExpiredCookiesResponse) return NextResponse.redirect(url); // cookies already cleared
-    return NextResponse.redirect(url);
+    const resp = NextResponse.redirect(url);
+    if (clearExpiredCookiesResponse) {
+      resp.cookies.set('auth_token','',{maxAge:0,path:'/'});
+      resp.cookies.set('session_token','',{maxAge:0,path:'/'});
+      resp.cookies.set('remember_me','',{maxAge:0,path:'/'});
+    }
+    return resp;
   }
 
-  // Redirect authenticated (non-expired) users away from public auth routes
-  if (isPublicRoute && authToken) {
-    // If user is navigating explicitly due to redirect param, allow staying
+  // Redirect authenticated users away from public auth screens (but keep redirect intent)
+  if (isAuthFlow && authToken) {
     const hasRedirectBack = request.nextUrl.searchParams.get('redirect');
     if (!hasRedirectBack) {
       url.pathname = '/user/dashboard';

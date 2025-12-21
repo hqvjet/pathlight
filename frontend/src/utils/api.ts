@@ -6,6 +6,10 @@ export const storage = {
   setToken: (token: string, remember: boolean = false): void => cookieStorage.setToken(token, remember),
   removeToken: (): void => cookieStorage.removeToken(),
   isRemembered: (): boolean => cookieStorage.isRemembered(),
+  // Aliases for backward compatibility
+  getAuthToken: (): string | null => cookieStorage.getToken(),
+  setAuthToken: (token: string, remember: boolean = false): void => cookieStorage.setToken(token, remember),
+  clearAuthToken: (): void => cookieStorage.removeToken(),
   getPendingEmail: (): string | null => cookieStorage.getPendingEmail(),
   setPendingEmail: (email: string): void => cookieStorage.setPendingEmail(email),
   removePendingEmail: (): void => cookieStorage.removePendingEmail(),

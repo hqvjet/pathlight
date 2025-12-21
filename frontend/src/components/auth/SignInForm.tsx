@@ -17,7 +17,7 @@ export default function SignInForm() {
       imageAlt="Login illustration"
       headerVariant="auth"
     >
-      <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
+      <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
           <input
@@ -44,7 +44,7 @@ export default function SignInForm() {
           />
         </div>
 
-        <div className="flex justify-between items-center text-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
           <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
             <input
               type="checkbox"

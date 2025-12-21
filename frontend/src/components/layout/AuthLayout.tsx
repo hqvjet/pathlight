@@ -30,7 +30,7 @@ export default function AuthLayout({
   showSocialLinks = true
 }: AuthLayoutProps) {
   return (
-    <div className={`h-screen bg-white flex flex-col overflow-hidden ${montserrat.className}`}>
+    <div className={`min-h-screen bg-white flex flex-col overflow-hidden ${montserrat.className}`}>
       {/* Header */}
       <Header 
         variant={headerVariant} 
@@ -39,37 +39,38 @@ export default function AuthLayout({
       />
 
       {/* Main Content */}
-      <div className="flex flex-1 h-[calc(100vh-80px)]">
-        {/* Left side - Image */}
-        <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-4 xl:p-6 bg-gray-50">
-          <div className="w-full max-w-3xl">
-            <Image
-              src={imageSrc}
-              alt={imageAlt}
-              width={800}
-              height={650}
-              className="w-full h-auto object-contain"
-              priority
-            />
+      <div className="flex-1 flex justify-center items-start px-4 sm:px-6 lg:px-10 pb-8 pt-4 sm:pt-16 lg:pt-20">
+        <div className="w-full max-w-6xl flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-12">
+          {/* Left side - Image */}
+          <div className="hidden lg:flex lg:w-[48%] items-center justify-center bg-gray-50 rounded-2xl p-4 xl:p-6">
+            <div className="w-full max-w-2xl">
+              <Image
+                src={imageSrc}
+                alt={imageAlt}
+                width={720}
+                height={560}
+                className="w-full h-auto max-h-[520px] object-contain"
+                priority
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Right side - Content */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-4 bg-white">
-          <div className="w-full max-w-lg space-y-8">
-            {/* Title and Subtitle */}
-            <div className="text-center space-y-4">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
+          {/* Right side - Content */}
+          <div className="w-full lg:w-[52%] flex items-start lg:items-center justify-center">
+            <div className="w-full max-w-lg space-y-6 sm:space-y-8">
+              {/* Title and Subtitle */}
+            <div className="text-center space-y-2 sm:space-y-3">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
                 {title}
               </h1>
-              <p className="text-gray-600 text-lg sm:text-xl">
-                {subtitle}
-              </p>
-            </div>
+              <p className="text-gray-600 text-base sm:text-lg lg:text-xl leading-relaxed">
+                </p>
+              </div>
 
-            {/* Children content (forms, buttons, etc.) */}
-            <div className="space-y-8">
-              {children}
+              {/* Children content (forms, buttons, etc.) */}
+              <div className="space-y-8">
+                {children}
+              </div>
             </div>
           </div>
         </div>

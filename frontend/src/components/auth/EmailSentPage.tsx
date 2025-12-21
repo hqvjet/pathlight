@@ -29,8 +29,8 @@ export default function EmailSentPage({ email, onResendEmail, isResending = fals
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-20">
-        <div className="flex flex-col lg:flex-row items-center gap-12 max-w-6xl w-full">
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-10 py-10 sm:py-16 lg:py-20">
+        <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-12 max-w-6xl w-full">
           {/* Illustration */}
           <div className="flex-shrink-0">
             <div className="relative group">
@@ -40,7 +40,7 @@ export default function EmailSentPage({ email, onResendEmail, isResending = fals
                 alt="Email sent illustration"
                 width={400}
                 height={400}
-                className="relative w-80 h-80 lg:w-96 lg:h-96 object-contain drop-shadow-xl animate-fade-in"
+                className="relative w-64 h-64 sm:w-72 sm:h-72 lg:w-96 lg:h-96 object-contain drop-shadow-xl animate-fade-in"
               />
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function EmailSentPage({ email, onResendEmail, isResending = fals
             </div>
 
             {/* Actions */}
-            <div className="pt-4 flex flex-col sm:flex-row items-center gap-4">
+            <div className="pt-4 flex flex-col sm:flex-row items-center gap-4 w-full">
               <Link href="/auth/signin" className="w-full sm:w-auto">
                 <Button variant="secondary" className="w-full sm:w-auto shadow-md hover:shadow-lg transition-shadow">
                   ← Quay lại đăng nhập

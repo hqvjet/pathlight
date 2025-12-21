@@ -50,10 +50,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 lg:space-y-10">
         <StatsGrid user={user} />
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
           <ProfileCard user={user} />
           <ActivityHeatmap
             selectedYear={selectedYear}
@@ -61,13 +61,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             generateYearActivityData={generateYearActivityData}
           />
         </div>
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
           <div>
-            <h3 className="text-lg font-semibold mb-6">Top Bảng Xếp Hạng</h3>
+            <h3 className="text-base sm:text-lg font-semibold mb-4 sm:mb-6">Top Bảng Xếp Hạng</h3>
             <Leaderboard top={dashboardData?.info?.user_top_rank || []} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold mb-6">Bảng Xếp Hạng Người Dùng</h3>
+            <h3 className="text-base sm:text-lg font-semibold mb-4 sm:mb-6">Bảng Xếp Hạng Người Dùng</h3>
             <LeaderboardTable users={dashboardData?.info?.user_top_rank || []} />
           </div>
         </div>
