@@ -64,8 +64,9 @@ export default function AuthLayout({
                 {title}
               </h1>
               <p className="text-gray-600 text-base sm:text-lg lg:text-xl leading-relaxed">
-                </p>
-              </div>
+                {subtitle}
+              </p>
+            </div>
 
               {/* Children content (forms, buttons, etc.) */}
               <div className="space-y-8">

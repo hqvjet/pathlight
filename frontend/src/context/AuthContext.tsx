@@ -210,6 +210,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export function useAuthContext(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuthContext must be used within <AuthProvider>');
-  return ctx;
+  if (ctx) return ctx;
+
+  // Fallback for routes rendered outside AuthProvider (e.g., admin pages)
+  return {
+    token: null,
+    user: null,
+    loading: false,
+    isAuthenticated: false,
+    isRemembered: false,
+    login: async () => null,
+    logout: () => {},
+    refreshUser: async () => null,
+  };
 }

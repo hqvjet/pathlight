@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { adminApi, AdminQuiz } from '@/lib/api/admin';
 import { showToast } from '@/utils/toast';
 
@@ -11,7 +11,7 @@ export default function AdminQuizzesPage() {
   const [search, setSearch] = useState('');
   const limit = 20;
 
-  const loadQuizzes = async () => {
+  const loadQuizzes = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await adminApi.listAllQuizzes({ page, limit, search: search || undefined });
@@ -21,16 +21,16 @@ export default function AdminQuizzesPage() {
       } else {
         showToast.error('Không thể tải danh sách quiz');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi tải danh sách quiz');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search]);
 
   useEffect(() => {
     loadQuizzes();
-  }, [page]);
+  }, [loadQuizzes]);
 
   const handleSearch = () => {
     setPage(1);
@@ -46,7 +46,7 @@ export default function AdminQuizzesPage() {
       } else {
         showToast.error('Cập nhật thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi cập nhật');
     }
   };
@@ -62,7 +62,7 @@ export default function AdminQuizzesPage() {
       } else {
         showToast.error('Xóa quiz thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi xóa quiz');
     }
   };

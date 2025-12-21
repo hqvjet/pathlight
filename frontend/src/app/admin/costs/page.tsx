@@ -35,7 +35,7 @@ export default function AdminCostsPage() {
       } else {
         showToast.error('Không thể tải dữ liệu chi phí');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi tải dữ liệu chi phí');
     } finally {
       setLoading(false);
@@ -239,9 +239,6 @@ function StatCard({ title, value, subtitle, tone, sparkData = [] }: StatCardProp
   };
 
   const sparkPoints = sparkData.map((d) => d.cost);
-  const sparkMax = Math.max(...sparkPoints, 1);
-  const sparkMin = Math.min(...sparkPoints, 0);
-  const sparkRange = Math.max(sparkMax - sparkMin, 1);
 
   return (
     <div className={`rounded-lg p-5 border ${toneMap[tone]} shadow-sm`}>

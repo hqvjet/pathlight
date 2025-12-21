@@ -1,9 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { RefreshCw, TrendingUp, LayoutGrid } from "lucide-react";
+import { RefreshCw, TrendingUp } from "lucide-react";
 import { showToast } from "@/utils/toast";
 import { quizApi } from "@/lib/api/quiz";
 import QuizGenerationList from "@/components/user/quiz-generation/QuizGenerationList";
@@ -24,7 +23,7 @@ export default function QuizTrackingPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(6);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await quizApi.listMyGenerations();
@@ -58,11 +57,11 @@ export default function QuizTrackingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);

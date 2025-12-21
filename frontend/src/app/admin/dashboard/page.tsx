@@ -1,6 +1,6 @@
 "use client";
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/admin';
 
 type DashboardStats = {
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
     });
   })();
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
       const [usersResp, coursesResp, quizzesResp, costsResp, logsResp] = await Promise.all([
@@ -127,12 +127,11 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadDashboard]);
 
   if (loading) {
     return (

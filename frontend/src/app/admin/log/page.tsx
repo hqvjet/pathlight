@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi, LogItem } from '@/lib/api/admin';
 import { showToast } from '@/utils/toast';
 
@@ -21,7 +21,7 @@ export default function AdminLogsPage() {
   const [service, setService] = useState('all');
   const [serviceOptions, setServiceOptions] = useState<string[]>(baseServices);
 
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await adminApi.getLogs(filterKey, service === 'all' ? undefined : service);
@@ -30,17 +30,16 @@ export default function AdminLogsPage() {
 
       const dynamicServices = Array.from(new Set(fetchedLogs.map((log) => log.source).filter(Boolean)));
       setServiceOptions(Array.from(new Set([...baseServices, ...dynamicServices])));
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi tải logs');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterKey, service]);
 
   useEffect(() => {
     loadLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, service]);
+  }, [loadLogs]);
 
   const typeCounts = useMemo(() => {
     return logs.reduce(

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { usePathname } from 'next/navigation';
 import Layout from '@/components/common/Layout';
 import { useAuthContext } from '@/context/AuthContext';
 
@@ -10,10 +9,8 @@ interface UserSectionLayoutProps {
 }
 
 export default function UserSectionLayout({ children }: UserSectionLayoutProps) {
-  const pathname = usePathname();
-
   // Derive the title from the current path (fallback generic)
-  const title = useMemo(() => '', [pathname]);
+  const title = '';
 
   const { user: authUser } = useAuthContext();
   const user = useMemo(() => {

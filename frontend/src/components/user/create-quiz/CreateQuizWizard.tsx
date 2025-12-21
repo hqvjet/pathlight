@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/context/AuthContext';
 import { v4 as uuid } from 'uuid';
-import { QuizDraftState, createEmptyQuizDraft, createEmptyCard, SubscriptionTier, UploadingFile, QuizDraftDocument } from '@/types/create-quiz';
+import { QuizDraftState, createEmptyQuizDraft, createEmptyCard, SubscriptionTier, UploadingFile } from '@/types/create-quiz';
 import { Stepper } from './Stepper';
 import { CreationTypeStep } from './CreationTypeStep';
 import { UploadStep } from './UploadStep';
@@ -14,7 +14,6 @@ import { SuccessStep } from './SuccessStep';
 import { showToast } from '@/utils/toast';
 import { quizApi } from '@/lib/api/quiz';
 import { courseApi, PresignUploadResponseItem } from '@/lib/api/course';
-import { agenticApi } from '@/lib/api/agentic';
 import { API_CONFIG } from '@/config/env';
 
 interface CreateQuizWizardProps {

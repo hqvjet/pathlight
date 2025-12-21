@@ -339,7 +339,7 @@ def list_all_quizzes_admin_controller(request: Request, page: int, limit: int, s
                 "finish": bool(q.finish),
                 "num_questions": q.num_questions,
                 "creation_type": getattr(q, "creation_type", "ai"),
-                "created_at": q.created_at.isoformat() if q.created_at else "",
+                "created_at": q.created_at.isoformat() if q.created_at is not None else "",
             }
             for q in quizzes
         ]
@@ -376,7 +376,7 @@ def toggle_quiz_visibility_admin_controller(quiz_id: str, request: Request, body
         quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
         if not quiz:
             raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
-        quiz.publish = bool(body.publish)
+        quiz.publish = body.publish  # type: ignore[assignment]
         session.commit()
         return {"status": 200, "quiz_id": quiz_id, "publish": bool(body.publish)}
     finally:
@@ -546,7 +546,7 @@ def update_visibility_controller(request: Request, body: QuizVisibilityUpdate):
         quiz = session.query(Quiz).filter(Quiz.quiz_id == body.quiz_id, Quiz.user_id == user_id).first()
         if not quiz:
             raise HTTPException(status_code=404, detail="Không tìm thấy quiz")
-        quiz.publish = bool(body.publish)  # type: ignore[assignment]
+        quiz.publish = bool(body.publish)  # type: ignore[assignment,misc]
         session.commit()
         return {"status": 200, "quiz_id": quiz.quiz_id, "publish": quiz.publish}
     finally:

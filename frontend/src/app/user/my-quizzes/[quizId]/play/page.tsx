@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { quizApi } from '@/lib/api/quiz';
 import { showToast } from '@/utils/toast';
@@ -60,11 +59,9 @@ type PageProps = { params: Promise<{ quizId: string }> };
 
 export default function QuizPlayPage({ params }: PageProps) {
   const { quizId } = use(params);
-  const router = useRouter();
   const [quiz, setQuiz] = useState<QuizDetail | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [flipped, setFlipped] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -114,13 +111,11 @@ export default function QuizPlayPage({ params }: PageProps) {
   const handleAnswer = (option: number) => {
     if (!currentCard || submitted) return;
     setAnswers((prev) => ({ ...prev, [currentCard.card_id]: option }));
-    setFlipped(true);
   };
 
   const handleNext = () => {
     if (!quiz || currentIndex >= quiz.cards.length - 1) return;
     setCurrentIndex((i) => i + 1);
-    setFlipped(false);
     setShowHint(false);
     setShowExplanation(false);
   };
@@ -128,7 +123,6 @@ export default function QuizPlayPage({ params }: PageProps) {
   const handlePrev = () => {
     if (currentIndex <= 0) return;
     setCurrentIndex((i) => i - 1);
-    setFlipped(false);
     setShowHint(false);
     setShowExplanation(false);
   };
@@ -167,7 +161,6 @@ export default function QuizPlayPage({ params }: PageProps) {
   const handleRetry = () => {
     setAnswers({});
     setCurrentIndex(0);
-    setFlipped(false);
     setShowHint(false);
     setShowExplanation(false);
     setSubmitted(false);

@@ -22,8 +22,8 @@ export default function AdminLoginPage() {
 
     setLoading(true);
     try {
-      const response: any = await authService.adminSignIn({ username, password } as any);
-      
+      const response = await authService.adminSignIn({ username, password });
+
       if (response?.data?.access_token) {
         // Store admin token
         storage.setAuthToken(response.data.access_token);
@@ -32,9 +32,14 @@ export default function AdminLoginPage() {
       } else {
         showToast.error('Invalid admin credentials');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Admin login error:', error);
-      showToast.error(error?.response?.data?.detail || 'Login failed. Please check your credentials.');
+      if (typeof error === 'object' && error && 'response' in error) {
+        const errResponse = (error as { response?: { data?: { detail?: string } } }).response;
+        showToast.error(errResponse?.data?.detail || 'Login failed. Please check your credentials.');
+      } else {
+        showToast.error('Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

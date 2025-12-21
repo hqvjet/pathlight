@@ -23,7 +23,7 @@ export default function AdminUsersPageEnhanced() {
       } else {
         showToast.error('Không thể tải danh sách người dùng');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi tải danh sách người dùng');
     } finally {
       setLoading(false);
@@ -84,7 +84,7 @@ export default function AdminUsersPageEnhanced() {
       } else {
         showToast.error(resp?.data?.message || 'Cập nhật email thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi cập nhật email');
     }
   };
@@ -100,7 +100,7 @@ export default function AdminUsersPageEnhanced() {
       } else {
         showToast.error(resp?.data?.message || 'Xóa người dùng thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi xóa người dùng');
     }
   };
@@ -164,7 +164,7 @@ export default function AdminUsersPageEnhanced() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Subscription</label>
             <select
               value={filterSub}
-              onChange={(e) => setFilterSub(e.target.value as any)}
+              onChange={(e) => setFilterSub(e.target.value as 'all' | 'free' | 'premium' | 'pro')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All</option>
@@ -177,7 +177,7 @@ export default function AdminUsersPageEnhanced() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as 'level' | 'exp' | 'email')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="level">Level (High to Low)</option>

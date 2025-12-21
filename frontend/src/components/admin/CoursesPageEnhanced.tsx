@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminCourse } from '@/lib/api/admin';
 import { showToast } from '@/utils/toast';
-import Link from 'next/link';
 
 export default function CoursesPageEnhanced() {
   const [courses, setCourses] = useState<AdminCourse[]>([]);
@@ -23,7 +22,7 @@ export default function CoursesPageEnhanced() {
       } else {
         showToast.error('Không thể tải danh sách khóa học');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi tải danh sách khóa học');
     } finally {
       setLoading(false);
@@ -68,7 +67,7 @@ export default function CoursesPageEnhanced() {
       } else {
         showToast.error(resp?.data?.message || 'Thay đổi trạng thái thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi thay đổi trạng thái khóa học');
     }
   };
@@ -84,7 +83,7 @@ export default function CoursesPageEnhanced() {
       } else {
         showToast.error(resp?.data?.message || 'Xóa khóa học thất bại');
       }
-    } catch (error) {
+    } catch {
       showToast.error('Lỗi khi xóa khóa học');
     }
   };
@@ -152,7 +151,7 @@ export default function CoursesPageEnhanced() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
             <select
               value={filterVisibility}
-              onChange={(e) => setFilterVisibility(e.target.value as any)}
+              onChange={(e) => setFilterVisibility(e.target.value as 'all' | 'public' | 'private')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="all">All</option>
