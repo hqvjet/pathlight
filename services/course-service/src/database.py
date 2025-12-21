@@ -14,6 +14,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 metadata = Base.metadata
 
+# For code paths that expect a session factory (legacy compatibility)
+def get_session():
+    return SessionLocal
+
 def get_db():
     db = SessionLocal()
     try:
