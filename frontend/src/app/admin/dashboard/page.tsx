@@ -1,7 +1,8 @@
 "use client";
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { adminApi } from '@/lib/api/admin';
+import { adminApi, AdminUser } from '@/lib/api/admin';
+import { showToast } from '@/utils/toast';
 
 type DashboardStats = {
   totalUsers: number;
@@ -28,6 +29,12 @@ type CostData = {
   cost: number;
 };
 
+type AdminAccount = {
+  id: string;
+  username: string;
+  created_at?: string;
+};
+
 const parseCostDate = (value: string) => {
   const parts = value.split('/');
   if (parts.length === 3) {
@@ -43,6 +50,8 @@ const formatVnd = (amount: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
 
 export default function AdminDashboard() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [admins, setAdmins] = useState<AdminAccount[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalCourses: 0,
@@ -58,6 +67,7 @@ export default function AdminDashboard() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [costSeries, setCostSeries] = useState<CostData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adminForm, setAdminForm] = useState({ username: '', password: '', submitting: false });
 
   const activityCostSeries = (() => {
     const len = Math.min(chartData.length, costSeries.length);
@@ -73,13 +83,25 @@ export default function AdminDashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersResp, coursesResp, quizzesResp, costsResp, logsResp] = await Promise.all([
+      const [usersRes, coursesRes, quizzesRes, costsRes, logsRes, adminsRes] = await Promise.allSettled([
         adminApi.listUsers(),
         adminApi.listAllCourses({ page: 1, limit: 1000 }),
         adminApi.listAllQuizzes({ page: 1, limit: 1000 }),
         adminApi.getCosts(),
         adminApi.getLogs('weekly'),
+        adminApi.listAdmins(),
       ]);
+
+      const safe = function <T>(res: PromiseSettledResult<T>, fallback: T): T {
+        return res.status === 'fulfilled' ? res.value : fallback;
+      };
+
+      const usersResp = safe(usersRes, { data: { status: 200, users: [] } } as Awaited<ReturnType<typeof adminApi.listUsers>>);
+      const coursesResp = safe(coursesRes, { data: { status: 200, courses: [] } } as Awaited<ReturnType<typeof adminApi.listAllCourses>>);
+      const quizzesResp = safe(quizzesRes, { data: { status: 200, quizzes: [] } } as Awaited<ReturnType<typeof adminApi.listAllQuizzes>>);
+      const costsResp = safe(costsRes, { data: { status: 200, total_cost: 0, costs: [] } } as Awaited<ReturnType<typeof adminApi.getCosts>>);
+      const logsResp = safe(logsRes, { data: { status: 200, logs: [] } } as Awaited<ReturnType<typeof adminApi.getLogs>>);
+      const adminsResp = safe(adminsRes, { data: { status: 200, admins: [] } } as Awaited<ReturnType<typeof adminApi.listAdmins>>);
 
       const users = usersResp.data?.users ?? [];
       const courses = coursesResp.data?.courses ?? [];
@@ -87,6 +109,7 @@ export default function AdminDashboard() {
       const logs = logsResp.data?.logs ?? [];
       const totalCost = costsResp.data?.total_cost ?? 0;
       const costs = costsResp.data?.costs ?? [];
+      const adminList = adminsResp.data?.admins ?? [];
 
       const avgLevel = users.length
         ? users.reduce((sum, user) => sum + (user.level ?? 0), 0) / users.length
@@ -95,6 +118,9 @@ export default function AdminDashboard() {
       const publicCourses = courses.filter((c) => c.publish).length;
       const publicQuizzes = quizzes.filter((q) => q.publish).length;
       const errorLogs = logs.filter((l) => l.type?.toLowerCase().includes('error')).length;
+
+      setUsers(users);
+      setAdmins(adminList);
 
       setStats({
         totalUsers: users.length,
@@ -115,19 +141,114 @@ export default function AdminDashboard() {
       setCostSeries(orderedCosts.slice(-10));
 
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const maxUsersLen = Math.max(users.length, 1);
       const mockData = days.map((day, idx) => ({
         date: day,
-        users: 50 + idx * 7 + (users.length % 10),
+        users: 50 + idx * 7 + (maxUsersLen % 10),
         courses: 15 + idx * 3 + (courses.length % 8),
         quizzes: 20 + idx * 4 + (quizzes.length % 6),
       }));
       setChartData(mockData);
+
+      const anyRejected = [usersRes, coursesRes, quizzesRes, costsRes, logsRes, adminsRes].some((r) => r.status === 'rejected');
+      if (anyRejected) {
+        showToast.error('Một số dữ liệu không tải được, vui lòng kiểm tra lại API');
+      }
     } catch (error) {
       console.error('Failed to load dashboard', error);
+      showToast.error('Không thể tải dashboard');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleCreateAdmin = async () => {
+    const { username, password } = adminForm;
+    if (!username.trim() || !password.trim()) {
+      showToast.error('Vui lòng nhập đủ username/password');
+      return;
+    }
+    try {
+      setAdminForm((prev) => ({ ...prev, submitting: true }));
+      const resp = await adminApi.createAdmin(username.trim(), password.trim());
+      if (resp?.data?.status === 200) {
+        showToast.success(resp.data.message || 'Đã tạo admin mới');
+        setAdminForm({ username: '', password: '', submitting: false });
+      } else {
+        showToast.error(resp?.data?.message || 'Tạo admin thất bại');
+        setAdminForm((prev) => ({ ...prev, submitting: false }));
+      }
+    } catch (error) {
+      console.error('Create admin failed', error);
+      showToast.error('Không thể tạo admin');
+      setAdminForm((prev) => ({ ...prev, submitting: false }));
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const confirmed = typeof window === 'undefined' ? true : confirm('Xoá người dùng này?');
+      if (!confirmed) return;
+      const resp = await adminApi.deleteUser(userId);
+      if (resp?.data?.status === 200) {
+        showToast.success('Đã xoá user');
+        loadDashboard();
+      } else {
+        showToast.error(resp?.data?.message || 'Xoá user thất bại');
+      }
+    } catch (error) {
+      console.error('Delete user failed', error);
+      showToast.error('Không thể xoá user');
+    }
+  };
+
+  const handlePromotePremium = (userId: string) => {
+    const input = typeof window === 'undefined' ? '1' : prompt('Nhập gói (0=Free,1=Premium,2=Pro)', '1');
+    if (input === null) return;
+    const subscription = Number.parseInt(input, 10);
+    if (![0, 1, 2].includes(subscription)) {
+      showToast.error('Giá trị gói không hợp lệ');
+      return;
+    }
+    adminApi
+      .updateUserSubscription(userId, subscription)
+      .then((resp) => {
+        if (resp?.data?.status === 200) {
+          showToast.success('Đã cập nhật gói người dùng');
+          loadDashboard();
+        } else {
+          showToast.error(resp?.data?.message || 'Không thể cập nhật gói');
+        }
+      })
+      .catch((error) => {
+        console.error('Update subscription failed', error);
+        showToast.error('Lỗi khi cập nhật gói');
+      });
+  };
+
+  const handleAddExperience = (userId: string) => {
+    const input = typeof window === 'undefined' ? '100' : prompt('Thêm bao nhiêu exp?', '100');
+    if (input === null) return;
+    const exp = Number.parseInt(input, 10);
+    if (!Number.isFinite(exp) || exp <= 0) {
+      showToast.error('Exp phải > 0');
+      return;
+    }
+    adminApi
+      .addUserExperience(userId, exp)
+      .then((resp) => {
+        if (resp?.data?.status === 200) {
+          showToast.success(resp.data.message || 'Đã thêm exp');
+          loadDashboard();
+        } else {
+          showToast.error(resp?.data?.message || 'Không thể thêm exp');
+        }
+      })
+      .catch((error) => {
+        console.error('Add exp failed', error);
+        showToast.error('Lỗi khi thêm exp');
+      });
+  };
 
   useEffect(() => {
     loadDashboard();
@@ -165,10 +286,10 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard title="Người dùng" value={stats.totalUsers.toLocaleString()} subtitle="Đang quản lý" color="from-blue-500 to-blue-600" />
-          <StatCard title="Khoá học" value={stats.totalCourses.toLocaleString()} subtitle="Trong hệ thống" color="from-emerald-500 to-emerald-600" />
-          <StatCard title="Bài kiểm tra" value={stats.totalQuizzes.toLocaleString()} subtitle="Đang xuất bản" color="from-purple-500 to-purple-600" />
-          <StatCard title="Chi phí Cloud" value={formatVnd(stats.totalCost)} subtitle="Ước tính AWS" color="from-orange-500 to-amber-500" />
+            <StatCard title="Người dùng" value={stats.totalUsers.toLocaleString()} subtitle="Đang quản lý" color="text-blue-500" />
+            <StatCard title="Khoá học" value={stats.totalCourses.toLocaleString()} subtitle="Trong hệ thống" color="text-emerald-500" />
+            <StatCard title="Bài kiểm tra" value={stats.totalQuizzes.toLocaleString()} subtitle="Đang xuất bản" color="text-purple-500" />
+            <StatCard title="Chi phí Cloud" value={formatVnd(stats.totalCost)} subtitle="Ước tính AWS" color="text-amber-500" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -176,6 +297,97 @@ export default function AdminDashboard() {
         <GaugeCard label="Người mới trong tuần" value={stats.newUsersThisWeek} max={Math.max(stats.totalUsers, 1)} color="amber" />
         <GaugeCard label="Người dùng premium" value={stats.premiumUsers} max={Math.max(stats.totalUsers, 1)} color="purple" />
         <GaugeCard label="Lỗi gần đây" value={stats.recentErrors} max={20} color="red" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-3">Tạo admin mới</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm text-slate-600">Username</label>
+              <input
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={adminForm.username}
+                onChange={(e) => setAdminForm((prev) => ({ ...prev, username: e.target.value }))}
+                placeholder="admin_name"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Password</label>
+              <input
+                type="password"
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={adminForm.password}
+                onChange={(e) => setAdminForm((prev) => ({ ...prev, password: e.target.value }))}
+                placeholder="••••••••"
+              />
+            </div>
+            <button
+              onClick={handleCreateAdmin}
+              disabled={adminForm.submitting}
+              className="w-full px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60"
+            >
+              {adminForm.submitting ? 'Đang tạo...' : 'Tạo admin'}
+            </button>
+            <p className="text-xs text-slate-500">Yêu cầu token admin hiện tại để gọi API.</p>
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-slate-800">Admins hiện có</h4>
+              <span className="text-xs text-slate-500">{admins.length}</span>
+            </div>
+            {admins.length ? (
+              <div className="divide-y divide-slate-200 max-h-64 overflow-y-auto">
+                {admins.slice(0, 8).map((a) => (
+                  <div key={a.id} className="py-2 flex items-center justify-between">
+                    <div className="text-sm text-slate-800 truncate">{a.username}</div>
+                    <div className="text-[11px] text-slate-500">{a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Chưa có dữ liệu admin.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-slate-900">Người dùng (top 5)</h3>
+            <span className="text-xs text-slate-500">Tổng: {users.length}</span>
+          </div>
+          {users.length ? (
+            <div className="divide-y divide-slate-200">
+              {users
+                .slice()
+                .sort((a, b) => (b.level || 0) - (a.level || 0))
+                .slice(0, 5)
+                .map((u) => (
+                  <div key={u.user_id} className="py-3 flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{u.email || 'Không email'}</p>
+                      <p className="text-xs text-slate-500">Level {u.level ?? '-'} · ID {u.user_id.slice(0, 8)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handlePromotePremium(u.user_id)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">
+                        Premium
+                      </button>
+                      <button onClick={() => handleAddExperience(u.user_id)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">
+                        +Exp
+                      </button>
+                      <button onClick={() => handleDeleteUser(u.user_id)} className="px-3 py-1.5 rounded-lg border border-rose-200 text-xs text-rose-600 hover:bg-rose-50">
+                        Xoá
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Chưa tải được danh sách người dùng.</p>
+          )}
+          <p className="text-[11px] text-slate-500 mt-2">Nâng cấp premium / thêm exp cần API backend mới.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -404,14 +616,14 @@ type StatCardProps = {
 
 function StatCard({ title, value, subtitle, color }: StatCardProps) {
   return (
-    <div className={`bg-gradient-to-br ${color} rounded-xl p-5 text-white shadow-md`}>
-      <div className="flex items-center justify-between">
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-white/80">{title}</p>
-          <p className="text-3xl font-bold mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-white/70 mt-1">{subtitle}</p>}
+          <p className="text-sm text-slate-600">{title}</p>
+          <p className="text-3xl font-bold mt-1 text-slate-900">{value}</p>
+          {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
         </div>
-        <span className="text-2xl">📈</span>
+        <span className={`text-xl ${color}`}>●</span>
       </div>
     </div>
   );

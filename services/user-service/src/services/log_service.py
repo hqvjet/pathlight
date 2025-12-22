@@ -7,7 +7,12 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from config import config
-from schemas.user_schemas import AdminLogsResponse, AdminLogItem
+from schemas.user_schemas import (
+    AdminLogsResponse,
+    AdminLogItem,
+    AdminLogStreamsResponse,
+    AdminLogStreamItem,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,11 +117,88 @@ def _format_events(events: Sequence[dict], source: str) -> list[AdminLogItem]:
     return formatted
 
 
-def get_admin_logs(filter_key: FilterKey, *, service: Optional[str] = None, logs_client=None) -> AdminLogsResponse:
+def _format_stream_item(stream: dict, log_group: str) -> AdminLogStreamItem:
+    last_event_ms = stream.get("lastEventTimestamp")
+    last_ingestion_ms = stream.get("lastIngestionTime")
+    return AdminLogStreamItem(
+        log_group=log_group,
+        log_stream=stream.get("logStreamName", ""),
+        last_event_time=_to_vietnam_time(last_event_ms) if last_event_ms else None,
+        last_ingestion_time=_to_vietnam_time(last_ingestion_ms) if last_ingestion_ms else None,
+        stored_bytes=stream.get("storedBytes"),
+    )
+
+
+def list_log_streams(filter_key: FilterKey, *, service: Optional[str] = None, logs_client=None) -> AdminLogStreamsResponse:
+    if filter_key not in _FILTER_TO_WINDOW:
+        allowed = ", ".join(_FILTER_TO_WINDOW.keys())
+        return AdminLogStreamsResponse(status=400, message=f"filter must be one of: {allowed}", streams=[])
+
+    log_groups = _resolve_log_groups(service)
+    if not log_groups:
+        return AdminLogStreamsResponse(status=400, message="Log group không hợp lệ", streams=[])
+
+    start_time, end_time = _resolve_time_window(filter_key)
+    start_ms = int(start_time.timestamp() * 1000)
+    _ = end_time  # kept for parity if future filters need upper bound
+
+    client = logs_client or boto3.client(
+        "logs",
+        region_name=config.AWS_REGION,
+        aws_access_key_id=config.AWS_ACCESS_KEY_ID or None,
+        aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY or None,
+    )
+
+    items: list[AdminLogStreamItem] = []
+
+    for group in log_groups:
+        next_token: Optional[str] = None
+        try:
+            while True:
+                params = {
+                    "logGroupName": group,
+                    "orderBy": "LastEventTime",
+                    "descending": True,
+                    "limit": 50,
+                }
+                if next_token:
+                    params["nextToken"] = next_token
+
+                response = client.describe_log_streams(**params)
+                for stream in response.get("logStreams", []):
+                    last_event_ms = stream.get("lastEventTimestamp")
+                    if last_event_ms is not None and last_event_ms < start_ms:
+                        continue
+                    items.append(_format_stream_item(stream, log_group=group))
+
+                new_token = response.get("nextToken")
+                if not new_token or new_token == next_token:
+                    break
+                next_token = new_token
+        except (ClientError, BotoCoreError) as exc:
+            logger.error(f"Failed to list CloudWatch log streams for {group}: {exc}")
+            return AdminLogStreamsResponse(status=502, message="Không thể lấy log stream từ CloudWatch", streams=[])
+        except Exception as exc:  # pragma: no cover - safety net
+            logger.error(f"Unexpected error while listing log streams for {group}: {exc}")
+            return AdminLogStreamsResponse(status=500, message="Có lỗi xảy ra khi lấy log stream", streams=[])
+
+    # sort by last_event_time desc
+    items.sort(key=lambda s: s.last_event_time or "", reverse=True)
+    return AdminLogStreamsResponse(status=200, streams=items)
+
+
+def get_admin_logs(
+    filter_key: FilterKey,
+    *,
+    service: Optional[str] = None,
+    log_stream: Optional[str] = None,
+    logs_client=None,
+) -> AdminLogsResponse:
     """Fetch logs from CloudWatch for the requested window and convert to VN time.
 
     - filter_key: daily | weekly | monthly
     - service: optional specific log group (full name or suffix). If None, aggregate all known groups.
+    - log_stream: optional specific log stream inside the selected log group. If provided, service must map to a single group.
     """
     if filter_key not in _FILTER_TO_WINDOW:
         allowed = ", ".join(_FILTER_TO_WINDOW.keys())
@@ -125,6 +207,9 @@ def get_admin_logs(filter_key: FilterKey, *, service: Optional[str] = None, logs
     log_groups = _resolve_log_groups(service)
     if not log_groups:
         return AdminLogsResponse(status=400, message="Log group không hợp lệ", logs=[])
+
+    if log_stream and len(log_groups) != 1:
+        return AdminLogsResponse(status=400, message="Vui lòng chọn 1 dịch vụ khi lấy log theo stream", logs=[])
 
     start_time, end_time = _resolve_time_window(filter_key)  # UTC datetimes
     start_ms = int(start_time.timestamp() * 1000)
@@ -150,6 +235,8 @@ def get_admin_logs(filter_key: FilterKey, *, service: Optional[str] = None, logs
                     "endTime": end_ms,
                     "limit": 1000,
                 }
+                if log_stream:
+                    params["logStreamNames"] = [log_stream]
                 if next_token:
                     params["nextToken"] = next_token
                 response = client.filter_log_events(**params)

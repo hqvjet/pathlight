@@ -74,6 +74,40 @@ class AdminUpdateEmailRequest(BaseModel):
         return v
 
 
+class AdminUpdateSubscriptionRequest(BaseModel):
+    subscription: int
+
+    @validator('subscription')
+    def validate_subscription(cls, v):
+        if v not in [0, 1, 2]:
+            raise ValueError('Subscription phải là 0 (Free), 1 (Premium), hoặc 2 (Pro)')
+        return v
+
+
+class AdminExperienceRequest(BaseModel):
+    exp: int
+
+    @validator('exp')
+    def validate_exp(cls, v):
+        if v <= 0:
+            raise ValueError('Giá trị exp phải lớn hơn 0')
+        return v
+
+
+class AdminExperienceDeltaRequest(BaseModel):
+    delta: int
+
+    @validator('delta')
+    def validate_delta(cls, v):
+        if v == 0:
+            raise ValueError('Delta không được bằng 0')
+        if v % 100 != 0:
+            raise ValueError('Delta phải bội số của 100 (ví dụ ±100)')
+        if abs(v) > 10000:
+            raise ValueError('Delta không được vượt quá ±10000')
+        return v
+
+
 class CostItem(BaseModel):
     date: str
     cost: float
@@ -99,6 +133,18 @@ class AdminUsersResponse(BaseModel):
     message: Optional[str] = None
 
 
+class AdminItem(BaseModel):
+    id: str
+    username: str
+    created_at: Optional[str] = None
+
+
+class AdminListResponse(BaseModel):
+    status: int
+    admins: Optional[List[AdminItem]] = None
+    message: Optional[str] = None
+
+
 class AdminLogItem(BaseModel):
     timestamp: str
     type: str
@@ -109,6 +155,20 @@ class AdminLogItem(BaseModel):
 class AdminLogsResponse(BaseModel):
     status: int
     logs: Optional[List[AdminLogItem]] = None
+    message: Optional[str] = None
+
+
+class AdminLogStreamItem(BaseModel):
+    log_group: str
+    log_stream: str
+    last_event_time: Optional[str] = None
+    last_ingestion_time: Optional[str] = None
+    stored_bytes: Optional[int] = None
+
+
+class AdminLogStreamsResponse(BaseModel):
+    status: int
+    streams: Optional[List[AdminLogStreamItem]] = None
     message: Optional[str] = None
 
 class TestStatsRequest(BaseModel):
