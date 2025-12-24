@@ -33,7 +33,7 @@ class S3Client:
         """
         self.environment = get_environment_type()
         self.region = region
-        # print(f"Access Key ID: {access_key_id}, Secret Access Key: {secret_access_key}")
+
         self.client = self._initialize_client(access_key_id, secret_access_key)
         
     def _initialize_client(self, access_key_id: str, secret_access_key: str) -> boto3.client:

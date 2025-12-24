@@ -6,6 +6,7 @@ Smart enough to know when it should work and when to gracefully skip.
 """
 
 import asyncio
+import time
 from opensearchpy import OpenSearch, OpenSearchException
 from requests.exceptions import Timeout, ConnectionError
 from typing import Optional, Dict, Any
@@ -13,9 +14,9 @@ from typing import Optional, Dict, Any
 from core.logging import setup_logger, log_exception
 from core.exceptions import OpenSearchConfigurationError, OpenSearchOperationError
 from core.environment import get_environment_type
-from core.retry import async_retry
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 
 logger = setup_logger(__name__)
@@ -187,19 +188,28 @@ class OpenSearchClient:
             raise OpenSearchConfigurationError("OpenSearch client not available")
         return self.client.info()
 
-    async def search(self, index: str, body: Dict[str, Any]) -> Dict[str, Any]:
-        """Async wrapper around the synchronous opensearchpy search call."""
+    def search(self, index: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Search documents in OpenSearch with retry logic."""
         if not self.is_available():
             raise OpenSearchOperationError("OpenSearch client not available")
         
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self.client.search(index=index, body=body)
-        )
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return self.client.search(index=index, body=body)
+            except (OpenSearchException, ConnectionError, Timeout) as e:
+                if attempt < max_retries - 1:
+                    delay = 2 ** attempt
+                    logger.warning(f"OpenSearch search attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+                log_exception(logger, f"Failed to search after {max_retries} attempts", e)
+                raise OpenSearchOperationError(f"Search failed after {max_retries} attempts: {str(e)}")
+            except Exception as e:
+                log_exception(logger, f"Failed to search OpenSearch", e)
+                raise OpenSearchOperationError(f"Search failed: {str(e)}")
 
-    @async_retry(max_retries=3, exceptions=(OpenSearchException, ConnectionError, Timeout))
-    async def index_document(self, index_name: str, document: Dict[str, Any], doc_id: str) -> Dict:
+    def index_document(self, index_name: str, document: Dict[str, Any], doc_id: str) -> Dict:
         """
         Index a document to OpenSearch with retry logic.
         
@@ -216,20 +226,32 @@ class OpenSearchClient:
         """
         if not self.is_available():
             raise OpenSearchOperationError("OpenSearch client not available")
-            
-        try:
-            return self.client.index(
-                index=index_name,
-                body=document,
-                id=doc_id,
-                refresh=True,
-                timeout=60
-            )
-        except Exception as e:
-            log_exception(logger, f"Failed to index document {doc_id}", e)
-            raise OpenSearchOperationError(f"Indexing failed: {str(e)}")
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return self.client.index(
+                    index=index_name,
+                    body=document,
+                    id=doc_id,
+                    refresh=True,
+                    timeout=60
+                )
+            except (OpenSearchException, ConnectionError, Timeout) as e:
+                if attempt < max_retries - 1:
+                    delay = 2 ** attempt
+                    logger.warning(f"OpenSearch indexing attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+                # Last attempt failed
+                log_exception(logger, f"Failed to index document {doc_id} after {max_retries} attempts", e)
+                raise OpenSearchOperationError(f"Indexing failed after {max_retries} attempts: {str(e)}")
+            except Exception as e:
+                # Unexpected error - don't retry
+                log_exception(logger, f"Failed to index document {doc_id}", e)
+                raise OpenSearchOperationError(f"Indexing failed: {str(e)}")
 
-    async def index_material_data(self, index_name: str, material_data: Dict[str, Any], material_id: str) -> None:
+    def index_material_data(self, index_name: str, material_data: Dict[str, Any], material_id: str) -> None:
         """
         Index material data to OpenSearch if available.
         
@@ -257,7 +279,7 @@ class OpenSearchClient:
             if not index_name:
                 raise OpenSearchConfigurationError("Index name not configured")
             
-            response = await self.index_document(index_name, material_data, material_id)
+            response = self.index_document(index_name, material_data, material_id)
             logger.info(f"Successfully indexed material data: {response.get('_id', 'Unknown ID')}")
             
         except Exception as e:

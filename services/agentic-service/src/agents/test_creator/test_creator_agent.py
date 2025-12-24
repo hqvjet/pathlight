@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from typing import List, Optional
-import asyncio
 import json
 import os
 from agents.base.base_agent import BaseAgent
@@ -15,6 +14,23 @@ from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
 from core import status_tracker as status
+from constant import MAX_TOOL_CALLS_PER_AGENT
+
+# Token optimization: Keep only recent messages
+MAX_HISTORY_MESSAGES = 10
+
+def trim_history(history: List, max_messages: int = MAX_HISTORY_MESSAGES) -> List:
+    """Keep only recent messages to prevent token explosion."""
+    if len(history) <= max_messages:
+        return history
+    
+    # Always keep system message (first)
+    system_msg = history[0] if history and isinstance(history[0], SystemMessage) else None
+    recent = history[-max_messages:]
+    
+    if system_msg and recent[0] != system_msg:
+        return [system_msg] + recent
+    return recent
 
 
 class TestCreatorAgent(BaseAgent):
@@ -35,47 +51,50 @@ class TestCreatorAgent(BaseAgent):
         self.chain = self.build_chain(self.llm)
         self.logger = setup_logger(__name__)
 
-    async def __call__(self, state: State) -> State:
+    def __call__(self, state: State) -> State:
         tracer = StepTracer(self.name, state.id, logger=self.logger)
         tracer.record("start", "invoke test creator", lessons=len(state.lessons or []))
         if not state.lessons:
             tracer.record("skip", "no lessons found in state")
             return state
 
-        # Pick lessons that still need tests
-        target_lessons = [l for l in state.lessons if not getattr(l, "tests", None)]
+        # Pick lessons that still need assessments
+        target_lessons = [l for l in state.lessons if not getattr(l, "assessments", None)]
         if not target_lessons:
-            tracer.record("skip", "all lessons already have tests")
+            tracer.record("skip", "all lessons already have assessments")
             return state
 
-        concurrency = int(os.getenv("TEST_CREATOR_CONCURRENCY", "4"))
-        tracer.record("batch", "generate tests concurrently", targets=len(target_lessons), concurrency=concurrency)
+        tracer.record("sequential", "generate assessments sequentially (LangChain not thread-safe)", targets=len(target_lessons))
 
-        # Launch per-lesson test generation
-        tasks = [self._generate_single_lesson_tests(state, lesson) for lesson in target_lessons]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
+        # Generate assessments sequentially - LangChain chain.invoke() is NOT thread-safe
+        # ThreadPoolExecutor causes all generations to fail
         failures = 0
-        for lesson, res in zip(target_lessons, results):
-            if isinstance(res, Exception):
+        for idx, lesson in enumerate(target_lessons, 1):
+            try:
+                self._generate_single_lesson_tests(state, lesson)
+                tracer.record("progress", f"assessment {idx}/{len(target_lessons)} completed", lesson_id=lesson.lesson_id)
+            except Exception as e:
                 failures += 1
-                tracer.record("error", "test generation failed", lesson_id=lesson.lesson_id, error=str(res))
+                import traceback
+                error_detail = traceback.format_exc()
+                tracer.record("error", "test generation failed", lesson_id=lesson.lesson_id, error=str(e), traceback=error_detail[:500])
+                self.logger.error(f"Test generation failed for {lesson.lesson_id}: {error_detail}")
+                # Continue to next lesson instead of stopping
 
         tracer.record("done", "tests generation completed", failures=failures)
         try:
-            # If all lessons have tests now, mark lessons_ready
-            if all(getattr(l, "tests", None) for l in state.lessons or []):
+            # If all lessons have assessments now, mark lessons_ready
+            if all(getattr(l, "assessments", None) for l in state.lessons or []):
                 status.mark_lessons_ready(state.id, len(state.lessons or []))
         except Exception:
             pass
         return state
 
-    async def _generate_single_lesson_tests(self, state: State, lesson) -> None:
+    def _generate_single_lesson_tests(self, state: State, lesson) -> None:
         """Generate tests for a single lesson, with tool-call cap and forced finalization."""
         tracer = StepTracer(self.name, state.id, logger=self.logger)
-        max_tool_rounds = int(os.getenv("AGENT_TOOL_MAX_ROUNDS", "10"))
 
-        content = getattr(lesson, "lesson_content", None)
+        content = getattr(lesson, "content", None) or getattr(lesson, "lesson_content", None)
         if isinstance(content, str) and len(content) > 800:
             preview = content[:800] + "…"
         else:
@@ -84,9 +103,9 @@ class TestCreatorAgent(BaseAgent):
         lessons_payload = [
             {
                 "lesson_id": lesson.lesson_id,
-                "lesson_name": getattr(lesson, "lesson_name", None),
-                "lesson_description": getattr(lesson, "lesson_description", None),
-                "lesson_content": preview,
+                "title": getattr(lesson, "title", None) or getattr(lesson, "lesson_name", None),
+                "overview": getattr(lesson, "overview", None) or getattr(lesson, "lesson_description", None),
+                "content": preview,
             }
         ]
 
@@ -102,7 +121,7 @@ class TestCreatorAgent(BaseAgent):
             )
         ]
 
-        ai: AIMessage = await self.chain.ainvoke(
+        ai: AIMessage = self.chain.invoke(
             {
                 "id": state.id,
                 "history": history,
@@ -114,8 +133,8 @@ class TestCreatorAgent(BaseAgent):
         tracer.record("llm", "initial response", lesson_id=lesson.lesson_id, content_preview=str(ai.content)[:200])
 
         count = 1
-        while getattr(ai, "tool_calls", None) and count <= max_tool_rounds:
-            tracer.record("tools", "llm requested tools", lesson_id=lesson.lesson_id, tool_calls=ai.tool_calls)
+        while getattr(ai, "tool_calls", None) and count <= MAX_TOOL_CALLS_PER_AGENT:
+            tracer.record("tools", "llm requested tools", lesson_id=lesson.lesson_id, tool_calls=ai.tool_calls, iteration=count)
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]
@@ -123,10 +142,12 @@ class TestCreatorAgent(BaseAgent):
                 if tool_name not in self.tools:
                     raise ValueError(f"Tool {tool_name} not found in tools.")
 
-                result = await self.tool_manager.execute_tool(tool_name, args)
+                result = self.tool_manager.execute_tool_sync(tool_name, args)
                 history.append(
                     ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
                 )
+                # Token optimization: Trim history to prevent explosion
+                history = trim_history(history)
                 tracer.record(
                     "tool_result",
                     f"{tool_name} executed",
@@ -135,7 +156,7 @@ class TestCreatorAgent(BaseAgent):
                     result_preview=str(result)[:200],
                 )
 
-                ai = await self.chain.ainvoke(
+                ai = self.chain.invoke(
                     {
                         "id": state.id,
                         "history": history,
@@ -152,16 +173,17 @@ class TestCreatorAgent(BaseAgent):
                 "tool budget exhausted; forcing final JSON output",
                 lesson_id=lesson.lesson_id,
                 rounds=count - 1,
-                max_rounds=max_tool_rounds,
+                max_rounds=MAX_TOOL_CALLS_PER_AGENT,
             )
+            self.logger.warning(f"Test Creator hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
             history.append(
                 SystemMessage(
                     content=(
-                        "Dừng gọi công cụ ngay. Hãy xuất JSON cuối cùng với trường tests theo schema, không thêm giải thích."
+                        "Dừng gọi công cụ ngay. Hãy xuất JSON cuối cùng với trường assessments theo schema, không thêm giải thích."
                     )
                 )
             )
-            ai = await self.chain.ainvoke(
+            ai = self.chain.invoke(
                 {
                     "id": state.id,
                     "history": history,
@@ -171,44 +193,121 @@ class TestCreatorAgent(BaseAgent):
                 }
             )
 
-        # Parse response, accept map keyed by lesson_id or a direct list under tests
+        # Parse response, accept map keyed by lesson_id or a direct list under assessments
         try:
             json_content = json.loads(ai.content)
         except Exception as e:
-            tracer.record("error", "failed to parse ai json", lesson_id=lesson.lesson_id, error=str(e))
-            return
+            tracer.record("error", "failed to parse ai json", lesson_id=lesson.lesson_id, error=str(e), content=str(ai.content)[:500])
+            # FALLBACK: Try to force JSON response
+            history.append(
+                SystemMessage(
+                    content=(
+                        'CRITICAL: Trả về JSON với format:\n{"assessments": {"' + lesson.lesson_id + '": [...]}}.\n'
+                        'Chỉ JSON, không text khác.'
+                    )
+                )
+            )
+            ai = self.chain.invoke(
+                {
+                    "id": state.id,
+                    "history": history,
+                    "difficulty": state.difficulty,
+                    "duration": str(state.duration),
+                    "lessons": lessons_payload,
+                }
+            )
+            try:
+                json_content = json.loads(ai.content)
+            except Exception:
+                tracer.record("error", "fallback also failed", lesson_id=lesson.lesson_id)
+                return
 
-        tests_payload = json_content.get("tests")
+        # Try both old format (tests) and new format (assessments)
+        # Format: {"tests": {"lesson_id": [{question, options, answer, ...}]}}
+        assessments_payload = json_content.get("assessments") or json_content.get("tests")
         arr: Optional[List] = None
-        if isinstance(tests_payload, dict):
-            arr = tests_payload.get(lesson.lesson_id)
-        elif isinstance(tests_payload, list):
-            arr = tests_payload
+        
+        if assessments_payload is None:
+            tracer.record("error", "no assessments/tests field in response", lesson_id=lesson.lesson_id, keys=list(json_content.keys()))
+            # FALLBACK 2: Force explicit JSON request
+            history.append(
+                SystemMessage(
+                    content=(
+                        'Response thiếu field "assessments". Hãy trả về lại với format:\n'
+                        '{"assessments": {"' + lesson.lesson_id + '": [{...}]}}'
+                    )
+                )
+            )
+            ai = self.chain.invoke(
+                {
+                    "id": state.id,
+                    "history": history,
+                    "difficulty": state.difficulty,
+                    "duration": str(state.duration),
+                    "lessons": lessons_payload,
+                }
+            )
+            try:
+                json_content = json.loads(ai.content)
+                assessments_payload = json_content.get("assessments") or json_content.get("tests")
+                if assessments_payload is None:
+                    tracer.record("error", "fallback 2 failed - giving up", lesson_id=lesson.lesson_id)
+                    return
+            except Exception:
+                tracer.record("error", "fallback 2 parse failed", lesson_id=lesson.lesson_id)
+                return
+            
+        if isinstance(assessments_payload, dict):
+            # Try exact match first
+            arr = assessments_payload.get(lesson.lesson_id)
+            # If not found, might be the only lesson
+            if not arr and len(assessments_payload) == 1:
+                arr = list(assessments_payload.values())[0]
+        elif isinstance(assessments_payload, list):
+            arr = assessments_payload
 
         if arr and isinstance(arr, list):
-            # Coerce items to TestQA model shape
+            # Coerce items to TestQA model shape with proper validation
             coerced: List[TestQA] = []
             for item in arr:
                 try:
                     if isinstance(item, dict):
-                        coerced.append(TestQA(**item))
-                    else:
+                        # Answer từ LLM là string (text của option đúng), convert sang index 1-4
+                        answer_raw = item.get("answer")
+                        options = item.get("options", [])
+                        
+                        if isinstance(answer_raw, str) and options:
+                            # Tìm index của answer trong options (1-based)
+                            try:
+                                answer = options.index(answer_raw) + 1
+                            except ValueError:
+                                # Fallback: try to find partial match
+                                answer = 1
+                                for i, opt in enumerate(options):
+                                    if answer_raw.strip().lower() in opt.strip().lower():
+                                        answer = i + 1
+                                        break
+                        elif isinstance(answer_raw, int):
+                            answer = answer_raw
+                        else:
+                            answer = 1
+                        
+                        if not (1 <= answer <= 4):
+                            answer = 1
+                        
                         coerced.append(TestQA(
-                            question=str(item),
-                            options=[],
-                            answer="",
-                            explaination="",
+                            question=item.get("question", ""),
+                            options=item.get("options", [])[:4],
+                            answer=answer,
+                            hint=item.get("hint", ""),
+                            explanation=item.get("explanation", "") or item.get("explaination", ""),
+                            difficulty=item.get("difficulty", "medium")
                         ))
-                except Exception:
-                    # Best-effort coercion for malformed dicts
-                    d = item if isinstance(item, dict) else {}
-                    coerced.append(TestQA(
-                        question=str(d.get("question", "")),
-                        options=list(d.get("options", []))[:4],
-                        answer=str(d.get("answer", "")),
-                        explaination=str(d.get("explaination", "")),
-                    ))
-            lesson.tests = coerced
-            tracer.record("done", "tests attached", lesson_id=lesson.lesson_id, count=len(coerced))
+                except Exception as e:
+                    tracer.record("warn", "failed to parse single assessment", error=str(e))
+                    continue
+            
+            lesson.assessments = coerced
+            tracer.record("done", "assessments attached", lesson_id=lesson.lesson_id, count=len(coerced))
         else:
-            tracer.record("warn", "no tests returned for lesson", lesson_id=lesson.lesson_id)
+            tracer.record("warn", "no assessments returned for lesson", lesson_id=lesson.lesson_id)

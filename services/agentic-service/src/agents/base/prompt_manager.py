@@ -3,7 +3,6 @@ from langchain_core.prompts import PromptTemplate
 
 from utils import read_yaml_file
 from constant import (
-    FINAL_TEST_CREATOR_AGENT_NAME, 
     ORCHESTRATOR_AGENT_NAME, 
     LESSON_CREATOR_AGENT_NAME, 
     PLANNER_AGENT_NAME, 
@@ -15,7 +14,6 @@ class PromptManager:
         self.catalog = read_yaml_file("agents/prompts/catalog.yaml")
         self.ai_prompts = {
             PLANNER_AGENT_NAME: self.catalog['planner']['prompt_path'],
-            FINAL_TEST_CREATOR_AGENT_NAME: self.catalog['final_test_creator']['prompt_path'],
             # ORCHESTRATOR_AGENT_NAME: self.catalog['orchestrator']['prompt_path'],
             LESSON_CREATOR_AGENT_NAME: self.catalog['lesson_creator']['prompt_path'],
             TEST_CREATOR_AGENT_NAME: self.catalog['test_creator']['prompt_path'],

@@ -25,7 +25,7 @@ class Clients:
 
 
 def _init_s3() -> S3Client:
-    # print(f"Access Key ID: {config.ACCESS_KEY_ID}, Secret Access Key: {config.SECRET_ACCESS_KEY}")
+
     return S3Client(
         region=config.REGION,
         access_key_id=config.ACCESS_KEY_ID,

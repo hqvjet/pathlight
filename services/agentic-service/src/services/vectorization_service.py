@@ -99,7 +99,7 @@ class VectorizationService:
             log_exception(logger, "Failed to create MaterialData object", e)
             raise ProcessingError(f"Failed to prepare data for indexing: {str(e)}")
 
-    async def vectorize_files(
+    def vectorize_files(
         self,
         file_streams_dict: Dict[str, BytesIO],
         material_id: str,
@@ -129,14 +129,14 @@ class VectorizationService:
 
         # Process files and create embeddings
         try:
-            file_contents, processing_errors = await self.file_processor.process_multiple_files(file_streams_dict)
+            file_contents, processing_errors = self.file_processor.process_multiple_files(file_streams_dict)
         except FileProcessingError as e:
             # Re-raise as is – controller will map to HTTP 500
             log_exception(logger, "All files failed during processing", e)
             raise
 
         try:
-            documents, embedding_errors = await self.embedding_service.create_document_embeddings(file_contents)
+            documents, embedding_errors = self.embedding_service.create_document_embeddings(file_contents)
         except EmbeddingCreationError as e:
             log_exception(logger, "Embedding creation failed for all documents", e)
             raise
@@ -144,7 +144,7 @@ class VectorizationService:
 
         # Index to OpenSearch if available: one document per chunk
         try:
-            async def index_single_chunk(doc, chunk):
+            def index_single_chunk(doc, chunk):
                 payload = {
                     "id": str(material_data.id),
                     "category": int(material_data.category),
@@ -164,27 +164,22 @@ class VectorizationService:
                 }
                 # Composite _id ensures uniqueness per chunk
                 composite_id = f"{material_id}:{int(doc.document_id)}:{int(chunk.chunk_id)}"
-                return await self.opensearch_client.index_document(
+                return self.opensearch_client.index_document(
                     self.opensearch_index_name,
                     payload,
                     composite_id,
                 )
 
-            # Create concurrent indexing tasks
-            tasks = []
+            # Index chunks sequentially
             for doc in material_data.documents:
                 for chunk in doc.chunks:
-                    tasks.append(index_single_chunk(doc, chunk))
-
-            # Run indexing tasks, capture individual failures
-            if tasks:
-                results = await __import__('asyncio').gather(*tasks, return_exceptions=True)
-                for res in results:
-                    if isinstance(res, Exception):
+                    try:
+                        index_single_chunk(doc, chunk)
+                    except Exception as e:
                         if not processing_errors:
                             processing_errors = []
                         processing_errors.append({
-                            "opensearch": f"Indexing chunk failed: {str(res)}"
+                            "opensearch": f"Indexing chunk failed: {str(e)}"
                         })
         except Exception as e:
             log_exception(logger, "OpenSearch indexing failed", e)

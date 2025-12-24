@@ -65,7 +65,7 @@ class FileProcessor:
         
         return extension
 
-    async def process_single_file(self, filename: str, file_stream: BytesIO) -> ProcessedFile:
+    def process_single_file(self, filename: str, file_stream: BytesIO) -> ProcessedFile:
         """
         Process a single file and extract its content.
         
@@ -124,7 +124,7 @@ class FileProcessor:
                 error=f"Failed to extract content: {str(e)}"
             )
 
-    async def process_multiple_files(self, file_streams_dict: Dict[str, BytesIO]) -> Tuple[Dict[str, str], List[Dict]]:
+    def process_multiple_files(self, file_streams_dict: Dict[str, BytesIO]) -> Tuple[Dict[str, str], List[Dict]]:
         """
         Process multiple files in parallel.
         
@@ -140,28 +140,19 @@ class FileProcessor:
         file_contents = {}
         processing_errors = []
         
-        # Process files in parallel for better performance
-        tasks = []
+        # Process files sequentially
         for filename, file_stream in file_streams_dict.items():
-            task = asyncio.create_task(self.process_single_file(filename, file_stream))
-            tasks.append(task)
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for i, result in enumerate(results):
-            filename = list(file_streams_dict.keys())[i]
-            
-            if isinstance(result, Exception):
-                error_msg = f"Failed to process file {filename}"
-                log_exception(logger, error_msg, result)
-                processing_errors.append({"filename": filename, "error": f"{error_msg}: {str(result)}"})
-            elif isinstance(result, ProcessedFile):
+            try:
+                result = self.process_single_file(filename, file_stream)
+                
                 if result.success:
                     file_contents[filename] = result.content
                 else:
                     processing_errors.append({"filename": filename, "error": result.error})
-            else:
-                processing_errors.append({"filename": filename, "error": "Unknown processing error"})
+            except Exception as e:
+                error_msg = f"Failed to process file {filename}"
+                log_exception(logger, error_msg, e)
+                processing_errors.append({"filename": filename, "error": f"{error_msg}: {str(e)}"})
         
         if not file_contents:
             raise FileProcessingError(

@@ -12,8 +12,8 @@ def save_architecture(app: StateGraph, filename: str = "architecture.png"):
     """
     try:
         png_bytes = app.get_graph().draw_mermaid_png()
-    except Exception as e:  # pragma: no cover - defensive
-        print(f"[save_architecture] Failed to render graph: {e}")
+    except Exception:  # pragma: no cover - defensive
+        # Skip silently in Lambda environment
         return
 
     # Repo root is 3 levels up from this file: src/utils.py -> src -> service root -> monorepo root
@@ -24,9 +24,9 @@ def save_architecture(app: StateGraph, filename: str = "architecture.png"):
         out_path = assets_dir / filename
         with open(out_path, "wb") as f:
             f.write(png_bytes)
-        print(f"Architecture saved as {out_path}")
-    except Exception as e:  # pragma: no cover - best-effort only
-        print(f"[save_architecture] Could not write architecture image: {e}")
+    except Exception:  # pragma: no cover - best-effort only
+        # Skip silently in Lambda (read-only filesystem)
+        pass
 
 def read_yaml_file(file_path: str) -> Dict[str, Any]:
     """Read a YAML file and return its contents as a dict.
