@@ -13,6 +13,23 @@ from agents.base.tool_manager import ToolManager
 from core.logging import setup_logger
 from core.tracing import StepTracer
 from core import status_tracker as status
+from constant import MAX_TOOL_CALLS_PER_AGENT
+
+# Token optimization: Keep only recent messages
+MAX_HISTORY_MESSAGES = 10
+
+def trim_history(history: List, max_messages: int = MAX_HISTORY_MESSAGES) -> List:
+    """Keep only recent messages to prevent token explosion."""
+    if len(history) <= max_messages:
+        return history
+    
+    # Always keep system message (first)
+    system_msg = history[0] if history and isinstance(history[0], SystemMessage) else None
+    recent = history[-max_messages:]
+    
+    if system_msg and recent[0] != system_msg:
+        return [system_msg] + recent
+    return recent
 
 
 class PlannerAgent(BaseAgent):
@@ -35,7 +52,7 @@ class PlannerAgent(BaseAgent):
         self.chain = self.build_chain(self.llm)
         self.logger = setup_logger(__name__)
 
-    async def __call__(self, state: State) -> State:
+    def __call__(self, state: State) -> State:
         tracer = StepTracer(self.name, state.id, logger=self.logger)
         tracer.record(
             "start",
@@ -52,7 +69,7 @@ class PlannerAgent(BaseAgent):
             )
         ]
 
-        ai: AIMessage = await self.chain.ainvoke(
+        ai: AIMessage = self.chain.invoke(
             {
                 "id": state.id,
                 "history": history,
@@ -64,8 +81,8 @@ class PlannerAgent(BaseAgent):
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
         count = 1
-        while ai.tool_calls:
-            tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls)
+        while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
+            tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]
@@ -73,10 +90,12 @@ class PlannerAgent(BaseAgent):
                 if tool_name not in self.tools:
                     raise ValueError(f"Tool {tool_name} not found in tools.")
 
-                result = await self.tool_manager.execute_tool(tool_name, args)
+                result = self.tool_manager.execute_tool_sync(tool_name, args)
                 history.append(
                     ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
                 )
+                # Token optimization: Trim history to prevent explosion
+                history = trim_history(history)
                 tracer.record(
                     "tool_result",
                     f"{tool_name} executed",
@@ -84,7 +103,7 @@ class PlannerAgent(BaseAgent):
                     result_preview=str(result)[:200],
                 )
 
-                ai = await self.chain.ainvoke(
+                ai = self.chain.invoke(
                     {
                         "id": state.id,
                         "history": history,
@@ -94,13 +113,25 @@ class PlannerAgent(BaseAgent):
                 )
             count += 1
 
+        if count > MAX_TOOL_CALLS_PER_AGENT:
+            tracer.record("warn", f"Hit max tool calls limit: {MAX_TOOL_CALLS_PER_AGENT}")
+            self.logger.warning(f"Planner hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
+
         tracer.record("llm", "final response", content_preview=str(ai.content)[:200])
         json_content = json.loads(ai.content)
         state.title = json_content.get("course_name")
         state.description = json_content.get("course_description")
         state.roadmap = json_content.get("course_roadmap")
+        
+        # Set lessons_expected based on roadmap length
+        if state.roadmap:
+            state.lessons_expected = len(state.roadmap)
+        
         tracer.record(
-            "done", "plan extracted", title=state.title, roadmap_len=len(state.roadmap or [])
+            "done", "plan extracted", 
+            title=state.title, 
+            roadmap_len=len(state.roadmap or []),
+            lessons_expected=state.lessons_expected
         )
         try:
             status.mark_plan_ready(state.id, state.title, state.description, len(state.roadmap or []))

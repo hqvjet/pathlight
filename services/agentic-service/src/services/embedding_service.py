@@ -41,7 +41,7 @@ class EmbeddingService:
         self.openai_client = openai_client
         self.max_tokens_per_chunk = max_tokens_per_chunk
 
-    async def create_single_embedding(self, filename: str, chunk_idx: int, chunk: Dict) -> EmbeddingResult:
+    def create_single_embedding(self, filename: str, chunk_idx: int, chunk: Dict) -> EmbeddingResult:
         """
         Create embedding for a single chunk.
         
@@ -56,7 +56,7 @@ class EmbeddingService:
         try:
             logger.info(f"Creating embedding for chunk {chunk_idx} of {filename}")
             
-            embedding_data = await self.openai_client.create_embedding(chunk["chunk_text"])
+            embedding_data = self.openai_client.create_embedding(chunk["chunk_text"])
             
             chunk_data = ChunkData(
                 chunk_id=chunk["chunk_id"],
@@ -78,9 +78,9 @@ class EmbeddingService:
                 error=error_msg
             )
 
-    async def process_chunks_for_embeddings(self, filename: str, file_chunks: List[Dict]) -> Tuple[List[ChunkData], List[Dict]]:
+    def process_chunks_for_embeddings(self, filename: str, file_chunks: List[Dict]) -> Tuple[List[ChunkData], List[Dict]]:
         """
-        Process chunks and create embeddings with parallel processing.
+        Process chunks and create embeddings sequentially.
         
         Args:
             filename: Source filename
@@ -104,39 +104,30 @@ class EmbeddingService:
             logger.warning(f"No valid chunks found in {filename}")
             return [], [{"filename": filename, "error": "No valid chunks found"}]
         
-        # Create tasks for parallel embedding creation
-        tasks = []
+        # Process embeddings sequentially
         for chunk_idx, chunk in valid_chunks:
-            task = asyncio.create_task(self.create_single_embedding(filename, chunk_idx, chunk))
-            tasks.append(task)
-        
-        # Process results
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for i, result in enumerate(results):
-            chunk_idx, _ = valid_chunks[i]
-            
-            if isinstance(result, Exception):
-                error_msg = f"Failed to create embedding for chunk {chunk_idx} in {filename}"
-                log_exception(logger, error_msg, result)
-                embedding_errors.append({
-                    "filename": filename, 
-                    "chunk_id": chunk_idx, 
-                    "error": f"{error_msg}: {str(result)}"
-                })
-            elif isinstance(result, EmbeddingResult):
-                if result.success:
+            try:
+                result = self.create_single_embedding(filename, chunk_idx, chunk)
+                if result.success and result.chunk_data:
                     chunks.append(result.chunk_data)
                 else:
                     embedding_errors.append({
                         "filename": filename,
-                        "chunk_id": chunk_idx,
-                        "error": result.error
+                        "chunk_idx": chunk_idx,
+                        "error": result.error or "Unknown error"
                     })
+            except Exception as e:
+                error_msg = f"Failed to create embedding for chunk {chunk_idx} in {filename}"
+                log_exception(logger, error_msg, e)
+                embedding_errors.append({
+                    "filename": filename,
+                    "chunk_idx": chunk_idx,
+                    "error": str(e)
+                })
         
         return chunks, embedding_errors
 
-    async def create_document_embeddings(self, file_contents: Dict[str, str]) -> Tuple[List[DocumentData], List[Dict]]:
+    def create_document_embeddings(self, file_contents: Dict[str, str]) -> Tuple[List[DocumentData], List[Dict]]:
         """
         Create embeddings for all documents.
         
@@ -168,7 +159,7 @@ class EmbeddingService:
                     embedding_errors.append({"filename": filename, "error": error_msg})
                     continue
                 
-                chunks, chunk_errors = await self.process_chunks_for_embeddings(filename, file_chunks)
+                chunks, chunk_errors = self.process_chunks_for_embeddings(filename, file_chunks)
                 
                 # Extend embedding errors with chunk errors
                 embedding_errors.extend(chunk_errors)

@@ -129,7 +129,7 @@ class FileController:
             total_failed=result["total_failed"],
         )
 
-    async def vectorize_files(
+    def vectorize_files(
         self, 
         file_streams_dict: Dict[str, BytesIO], 
         material_id: str, 
@@ -151,7 +151,7 @@ class FileController:
         """
         try:
             # fail_on_any_error default True in service ensures any warning -> error
-            return await self.vectorization_service.vectorize_files(
+            return self.vectorization_service.vectorize_files(
                 file_streams_dict, material_id, category
             )
         except AgenticServiceError as e:

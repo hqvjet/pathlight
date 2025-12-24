@@ -27,18 +27,13 @@ logger = setup_logger(__name__)
 def _handle_generate_course_with_vectorize(msg: GenerateCourseWithVectorizeMessage) -> None:
     from controllers.combined_controller import CombinedController
     controller = CombinedController()
-    import asyncio
-
-    async def _run():
-        await controller.run(
-            course_id=msg.payload.id,
-            s3_keys=msg.payload.s3_keys,
-            difficulty=msg.payload.difficulty,
-            duration=msg.payload.duration,
-            user_id=msg.payload.user_id,
-        )
-
-    asyncio.run(_run())
+    controller.run(
+        course_id=msg.payload.id,
+        s3_keys=msg.payload.s3_keys,
+        difficulty=msg.payload.difficulty,
+        duration=msg.payload.duration,
+        user_id=msg.payload.user_id,
+    )
 
 def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
     """Process AWS SQS batch event and return batchItemFailures on error per record."""

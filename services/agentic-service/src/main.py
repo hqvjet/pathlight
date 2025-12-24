@@ -37,8 +37,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     return resp.model_dump()
 
 
-# Optional: local debug runner to invoke with a sample SQS event
+# Optional: local debug runner
 if __name__ == "__main__":
-    logger.info("Running in local mode. Provide a sample SQS event to test.")
-    # Minimal no-op
-    print({"status": "ok", "message": "agentic-service ready for SQS events"})
+    logger.info("Running in local mode - agentic-service ready for SQS events")

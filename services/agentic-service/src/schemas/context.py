@@ -4,16 +4,19 @@ from typing import List, Optional
 class TestQA(BaseModel):
     question: str
     options: List[str]
-    answer: str
-    explaination: str
+    answer: int  # 1, 2, 3, or 4
+    hint: str = ""
+    explanation: str = ""
+    difficulty: str = "medium"  # easy, medium, hard
 
 class Lesson(BaseModel):
     lesson_id: str
-    lesson_name: Optional[str] = None
-    lesson_description: Optional[str] = None
-    lesson_content: Optional[str] = None
-    # Full in-memory tests for the lesson
-    tests: Optional[List[TestQA]] = None
+    title: str
+    overview: str
+    content: str
+    duration: int  # in minutes
+    # Assessments for the lesson
+    assessments: Optional[List[TestQA]] = None
 
 class Roadmap(BaseModel):
     title: str
@@ -28,8 +31,6 @@ class State(BaseModel):
     roadmap: Optional[List[Roadmap]] = None
     lessons: Optional[List[Lesson]] = None
     user_id: Optional[str] = None
-    # Final test content for the whole course
-    final_test: Optional[List[TestQA]] = None
     s3_bucket: Optional[str] = None
     # Iterative lesson creation progress
     lessons_expected: Optional[int] = None
@@ -44,4 +45,3 @@ class StateResponse(BaseModel):
     description: Optional[str] = None
     roadmap: Optional[List[Roadmap]] = None
     lessons: Optional[List[Lesson]] = None
-    final_test: Optional[List[TestQA]] = None

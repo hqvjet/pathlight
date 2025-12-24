@@ -10,7 +10,6 @@ from typing import List
 
 from core.logging import setup_logger, log_exception
 from core.exceptions import OpenAIConfigurationError, EmbeddingCreationError
-from core.retry import async_retry
 
 
 logger = setup_logger(__name__)
@@ -44,8 +43,7 @@ class OpenAIClient:
             log_exception(logger, "Failed to configure OpenAI client", e)
             raise OpenAIConfigurationError("OpenAI configuration error. Please check API key configuration.")
 
-    @async_retry(max_retries=3, exceptions=(Exception,))
-    async def create_embedding(self, text: str) -> List[float]:
+    def create_embedding(self, text: str) -> List[float]:
         """
         Create embedding for text with retry logic.
         
@@ -58,36 +56,44 @@ class OpenAIClient:
         Raises:
             EmbeddingCreationError: If embedding creation fails
         """
-        try:
-            logger.debug(f"Creating embedding for text (length: {len(text)})")
-            response = self.client.embeddings.create(
-                input=text,
-                model=self.model
-            )
-            
-            if not response or not response.data or not response.data[0].embedding:
-                raise EmbeddingCreationError("Invalid response from OpenAI API")
-            
-            embedding_data = response.data[0].embedding
-            if not embedding_data:
-                raise EmbeddingCreationError("Empty embedding returned from OpenAI API")
-            
-            return embedding_data
-            
-        except Exception as e:
-            error_type = type(e).__name__
-            
-            # Handle rate limiting
-            if "rate" in str(e).lower() or "quota" in str(e).lower() or error_type in ["RateLimitError"]:
-                logger.warning(f"Rate limit hit: {e}")
-                raise
-            
-            # Handle API errors  
-            elif "api" in str(e).lower() or error_type in ["APIError", "AuthenticationError", "PermissionDeniedError"]:
-                log_exception(logger, "OpenAI API error", e)
-                raise
-            
-            # Handle other errors
-            else:
-                log_exception(logger, "Unexpected error creating embedding", e)
-                raise
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.debug(f"Creating embedding for text (length: {len(text)})")
+                response = self.client.embeddings.create(
+                    input=text,
+                    model=self.model
+                )
+                
+                if not response or not response.data or not response.data[0].embedding:
+                    raise EmbeddingCreationError("Invalid response from OpenAI API")
+                
+                embedding_data = response.data[0].embedding
+                if not embedding_data:
+                    raise EmbeddingCreationError("Empty embedding returned from OpenAI API")
+                
+                return embedding_data
+                
+            except Exception as e:
+                error_type = type(e).__name__
+                
+                # Handle rate limiting
+                if "rate" in str(e).lower() or "quota" in str(e).lower() or error_type in ["RateLimitError"]:
+                    if attempt < max_retries - 1:
+                        import time
+                        delay = 2 ** attempt
+                        logger.warning(f"Rate limit hit (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay}s...")
+                        time.sleep(delay)
+                        continue
+                    logger.warning(f"Rate limit hit: {e}")
+                    raise
+                
+                # Handle API errors  
+                elif "api" in str(e).lower() or error_type in ["APIError", "AuthenticationError", "PermissionDeniedError"]:
+                    log_exception(logger, "OpenAI API error", e)
+                    raise
+                
+                # Handle other errors
+                else:
+                    log_exception(logger, "Unexpected error creating embedding", e)
+                    raise

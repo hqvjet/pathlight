@@ -46,7 +46,7 @@ class Orchestrator:
                 pass
             return "create_plan"
 
-        # 2) Generate lessons iteratively until complete
+        # 2) Generate ALL lessons in ONE call (not iterative) for speed
         planned_total = expected or (len(roadmap) if roadmap else None)
         if planned_total is None:
             if len(lessons) == 0:
@@ -58,29 +58,24 @@ class Orchestrator:
                     pass
                 return "create_lesson"
         else:
-            if len(lessons) < planned_total:
+            # Only call lesson creator ONCE if no lessons exist yet
+            if len(lessons) == 0:
                 tracer.record(
                     "decide",
-                    "lesson creator iterative",
-                    have=len(lessons),
+                    "lesson creator batch (all at once)",
                     planned=planned_total,
                 )
                 try:
-                    status.mark_lessons_progress(id, len(lessons), planned_total)
+                    status.mark_lessons_progress(id, 0, planned_total)
                 except Exception:
                     pass
                 return "create_lesson"
 
         # 3) After lessons done, create tests if any lesson lacks tests
         for l in lessons:
-            if not getattr(l, "tests", None):
+            if not getattr(l, "assessments", None):
                 tracer.record("decide", "test creator needed", lesson_id=l.lesson_id)
                 return "create_test"
-
-        # 4) If all lessons have tests but no final test, create final test
-        if lessons and not state.final_test:
-            tracer.record("decide", "final test creator needed")
-            return "create_final_test"
 
         tracer.record("done", "workflow complete")
         # Update final readiness statuses
@@ -89,8 +84,6 @@ class Orchestrator:
                 status.mark_plan_ready(id, title, description, len(roadmap))
             if lessons:
                 status.mark_lessons_ready(id, len(lessons))
-            if state.final_test:
-                status.mark_final_ready(id, len(state.final_test))
         except Exception:
             pass
         return "done"

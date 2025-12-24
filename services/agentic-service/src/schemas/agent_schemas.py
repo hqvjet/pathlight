@@ -24,6 +24,9 @@ class AgentResponse(BaseModel):
 
 # Tool schemas
 class RetrievalArgs(BaseModel):
+    """Arguments for retrieval tool with strict schema for OpenAI."""
+    model_config = {"extra": "forbid"}  # Strict mode: no additional properties
+    
     id: str = Field(..., description="ID of the Course/Quiz for retrieval")
     query: str = Field(..., description="Query string for the retrieval")
     k: int = Field(..., description="Number of results to return")

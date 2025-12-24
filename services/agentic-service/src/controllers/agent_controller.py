@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, Dict
 from factories.agent_factory import invoke_course_agent
 from schemas.agent_schemas import AgentRequest, AgentResponse
@@ -11,7 +10,7 @@ class AgentController:
     def __init__(self):
         self.logger = setup_logger(__name__)
 
-    async def generate_course(self, request: AgentRequest) -> State:
+    def generate_course(self, request: AgentRequest) -> State:
         # Build initial state for the agent graph
         init_state = State(
             id=request.id,
@@ -21,11 +20,10 @@ class AgentController:
         )
 
         try:
-            # 15-minute timeout guard
             self.logger.info("Invoking course agent with recursion_limit=%s", getattr(__import__('config').config, 'RECURSION_LIMIT', 500))
-            result = await asyncio.wait_for(invoke_course_agent(init_state), timeout=900)
-        except asyncio.TimeoutError:
-            raise InternalServerError("Course generation timed out after 15 minutes")
+            result = invoke_course_agent(init_state)
+        except Exception as e:
+            raise InternalServerError(f"Course generation failed: {str(e)}")
 
         # concise summary instead of full payload to console
         try:
