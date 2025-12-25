@@ -984,7 +984,7 @@ def get_assessment_list_controller(
 	include_explanations: bool = True,
 ) -> AssessmentListResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Assessment
+	from src.models import Course, Lesson, Assessment, LearningProgress
 
 	user_id = _verify_token(request)
 	if not user_id:
