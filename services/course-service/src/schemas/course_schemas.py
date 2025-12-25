@@ -7,7 +7,7 @@ class CreateCourseRequest(BaseModel):
         description="Job type required by SQS. Defaults to GENERATE_COURSE_WITH_VECTORIZE"
     )
     id: str = Field(default=None, description="Course ID to create; auto-generated if omitted")
-    s3_keys: List[str] = Field(default=None, description="Backward-compatible array of S3 keys")
+    s3_keys: List[str] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: str = Field(default=None, description="Owner user id; will be overridden by token if present")
 
     # Generation knobs (mapped to agentic-service payload)

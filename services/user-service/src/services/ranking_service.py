@@ -41,7 +41,15 @@ def _build_avatar_url(user: User) -> str | None:
 
 def get_leaderboard_data(db: Session, limit: int = 10) -> list:
     try:
-        top_users = db.query(User).filter(User.is_active == True).order_by(User.current_exp.desc()).limit(limit).all()  # noqa: E712
+        # Join with UserProfile to get correct exp ordering
+        top_users = (
+            db.query(User)
+            .outerjoin(UserProfile, User.profile_id == UserProfile.profile_id)
+            .filter(User.is_active == True)  # noqa: E712
+            .order_by(UserProfile.current_exp.desc().nullslast())
+            .limit(limit)
+            .all()
+        )
         leaderboard = []
         for i, user in enumerate(top_users):
             avatar_url = _build_avatar_url(user)

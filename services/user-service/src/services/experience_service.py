@@ -312,7 +312,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to add experience for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
-        return TestStatsResponse(status=500, message="Có lỗi xảy ra khi thêm kinh nghiệm")
+        return TestStatsResponse(status=500, message="Có lỗi xảy ra khi thêm kinh nghiệm", updated_stats=None)
 
 async def get_level_system_info() -> dict:
     try:

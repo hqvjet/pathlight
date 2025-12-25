@@ -64,6 +64,7 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
     default_job = "GENERATE_COURSE_WITH_VECTORIZE"
     course_id = body.id or f"course-{uuid4()}"
     s3_keys = body.s3_keys or []
+    logger.info("create_course_controller: course_id=%s, s3_keys_count=%d, s3_keys=%s", course_id, len(s3_keys), s3_keys)
     difficulty = (body.difficulty or "medium").strip()
     try:
         duration = int(body.duration or 0)
@@ -110,6 +111,8 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
             return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
     try:
+        logger.info("Sending to SQS: course_id=%s, user_id=%s, s3_keys_count=%d, duration=%d, difficulty=%s", 
+                    course_id, user_id, len(s3_keys), duration, difficulty)
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
             course_id=course_id,
@@ -121,6 +124,7 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
             group_id=os.getenv("SQS_GROUP_ID"),
             job_type=default_job,
         )
+        logger.info("SQS message sent successfully: message_id=%s, course_id=%s", resp.get("MessageId"), course_id)
         _log_activity(request, user_id, "create_course")
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
     except Exception as e:
@@ -637,7 +641,6 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 				duration=r.duration or 0,
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
-				owner_id=r.user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -764,7 +767,6 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			duration=getattr(course, "duration", 0) or 0,
 			publish=bool(getattr(course, "publish", False)),
 			finish=bool(getattr(course, "finish", False)),
-			owner_id=getattr(course, "user_id", ""),
 			lesson=lesson_models,
 			progress_finished_lessons=finished_lessons,
 			progress_total_lessons=len(lessons),
@@ -825,7 +827,6 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
-				owner_id=user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				updated_at=r.created_at.isoformat() if r.created_at else "",

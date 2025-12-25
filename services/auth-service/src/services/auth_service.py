@@ -78,7 +78,7 @@ def create_user(db: Session, email: str, password: str, google_id: Optional[str]
 
     try:
         profile = _create_profile(db)
-        db.flush([profile])
+        db.flush()
 
         user = User(
             email=email,

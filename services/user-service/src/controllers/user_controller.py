@@ -284,9 +284,7 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             setattr(target_user, 'profile', profile)
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
-
-        # Direct column update to ensure persistence
-        profile.subscription = request.subscription
+        setattr(target_user, 'subscription', request.subscription)
         db.flush()  # Force write to DB
         db.commit()
         
@@ -365,11 +363,14 @@ async def admin_adjust_experience_step(user_id: str, request: AdminExperienceDel
                 setattr(target_user, 'profile_id', profile.profile_id)
             db.commit()
 
-        return await svc_add_experience(request.delta, target_user, db)
+        result = await svc_add_experience(request.delta, target_user, db)
+        # Always return the result status without wrapping in _send_result
+        # to avoid double wrapping
+        return result
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to adjust exp for user {user_id}: {e}", exc_info=True)
         db.rollback()
-        return TestStatsResponse(status=500, message="Không thể điều chỉnh exp cho người dùng")
+        return TestStatsResponse(status=500, message="Không thể điều chỉnh exp cho người dùng", updated_stats=None)
 
 
 async def list_admin_accounts(credentials: HTTPAuthorizationCredentials, db: Session) -> AdminListResponse | JSONResponse:
