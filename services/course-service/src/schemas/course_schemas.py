@@ -96,6 +96,7 @@ class AssessmentItem(BaseModel):
     lesson_id: str
     question: str
     hint: str | None = None
+    has_hint: bool = False  # Flag to show hint button in UI
     explanation: str
     difficulty: str
     option1: str

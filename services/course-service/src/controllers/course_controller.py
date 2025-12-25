@@ -171,8 +171,9 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 	"""Call user-service to add experience for the current user.
 
 	Returns a dict with status_code and body when the call was attempted, otherwise None.
+	exp_amount can be negative for penalties (hint usage, etc.)
 	"""
-	if exp_amount <= 0:
+	if exp_amount == 0:
 		return None
 	base_url = _user_service_base_url()
 	auth_header = request.headers.get("Authorization")
@@ -1042,7 +1043,8 @@ def get_assessment_list_controller(
 				assessment_id=cast(str, getattr(a, "assessment_id")),
 				lesson_id=cast(str, getattr(a, "lesson_id")),
 				question=cast(str, getattr(a, "question")),
-				hint=cast(str | None, getattr(a, "hint")) if include_hints else None,
+				hint=None,  # Never send hint text upfront - must request via hint API
+				has_hint=bool(getattr(a, "hint")),  # Flag to show hint button
 				explanation=cast(str, getattr(a, "explanation") or "") if include_explanations else "",
 				difficulty=cast(str, getattr(a, "difficulty") or ""),
 				option1=cast(str, getattr(a, "option1") or ""),
