@@ -30,7 +30,6 @@ class Lesson(Base):
     overview = Column(String, nullable=False)
     content = Column(String, nullable=False)
     duration = Column(Integer, nullable=False)
-    finish = Column(Boolean, nullable=False, default=False, server_default=func.false())
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     course = relationship("Course", back_populates="lessons")
