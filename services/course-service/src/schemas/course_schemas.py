@@ -33,7 +33,7 @@ class CourseFullInfo(BaseModel):
     duration: int
     publish: bool = False
     finish: bool = False
-    owner_id: str
+    user_id: str
     lesson: List[LessonInfo]
     progress_finished_lessons: int = 0
     progress_total_lessons: int = 0
@@ -53,7 +53,7 @@ class CourseSummary(BaseModel):
     duration: int
     finish: bool
     publish: bool = False
-    owner_id: str
+    user_id: str
     lesson_num: int
     finish_lesson_num: int
     updated_at: str

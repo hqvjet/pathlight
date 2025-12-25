@@ -603,7 +603,7 @@ def update_course_visibility_controller(request: Request, body: CourseVisibility
 		session.close()
 
 
-def list_public_courses_controller(search: str | None = None, owner_id: str | None = None) -> CourseListResponse:
+def list_public_courses_controller(search: str | None = None, user_id: str | None = None) -> CourseListResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson
 
@@ -620,8 +620,8 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 			Course.user_id,
 		)
 		query = query.filter(Course.publish.is_(True))
-		if owner_id:
-			query = query.filter(Course.user_id == owner_id)
+		if user_id:
+			query = query.filter(Course.user_id == user_id)
 		if search:
 			pattern = f"%{search}%"
 			query = query.filter(Course.title.ilike(pattern))
@@ -641,6 +641,7 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 				duration=r.duration or 0,
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
+				user_id=r.user_id or "",
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -767,6 +768,7 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			duration=getattr(course, "duration", 0) or 0,
 			publish=bool(getattr(course, "publish", False)),
 			finish=bool(getattr(course, "finish", False)),
+			user_id=getattr(course, "user_id", ""),
 			lesson=lesson_models,
 			progress_finished_lessons=finished_lessons,
 			progress_total_lessons=len(lessons),
@@ -827,6 +829,7 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
+				user_id=user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				updated_at=r.created_at.isoformat() if r.created_at else "",
