@@ -1060,7 +1060,7 @@ def get_assessment_list_controller(
 
 def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Assessment
+	from src.models import Course, Lesson, Assessment, LearningProgress
 	import math
 
 	user_id = _verify_token(request)
