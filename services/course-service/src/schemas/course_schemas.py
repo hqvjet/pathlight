@@ -157,6 +157,19 @@ class AssessmentSubmitResponse(BaseModel):
     experience: ExperienceSnapshot | None = None
 
 
+# ---- Hint request schemas ----
+
+class GetHintRequest(BaseModel):
+    assessment_id: str
+
+
+class GetHintResponse(BaseModel):
+    status: int
+    hint: str | None = None
+    message: str | None = None
+    exp_penalty: int = 0
+
+
 # ---- Upload presign schemas ----
 
 class PresignUploadItem(BaseModel):

@@ -1049,11 +1049,98 @@ def get_assessment_list_controller(
 				option2=cast(str, getattr(a, "option2") or ""),
 				option3=cast(str, getattr(a, "option3") or ""),
 				option4=cast(str, getattr(a, "option4") or ""),
-				answer=cast(int, getattr(a, "answer")),
+				answer=0,  # NEVER send correct answer to client for security
 			)
 			for a in assessments
 		]
 		return AssessmentListResponse(status=200, assessments=items)
+	finally:
+		session.close()
+
+
+def get_assessment_hint_controller(
+	request: Request,
+	course_id: str,
+	lesson_id: str,
+	assessment_id: str,
+) -> dict:
+	"""Get hint for a specific assessment with exp penalty."""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Assessment, LearningProgress
+	
+	user_id = _verify_token(request)
+	if not user_id:
+		return {"status": 401, "message": "Bạn không có quyền truy cập"}
+	
+	session = SessionLocal()
+	try:
+		# Verify course and lesson access
+		course = session.query(Course).filter(Course.course_id == course_id).first()
+		if not course:
+			return {"status": 404, "message": "Không tìm thấy khóa học"}
+		
+		lesson = session.query(Lesson).filter(
+			Lesson.lesson_id == lesson_id,
+			Lesson.course_id == course_id
+		).first()
+		if not lesson:
+			return {"status": 404, "message": "Không tìm thấy bài học"}
+		
+		lessons = session.query(Lesson).filter(
+			Lesson.course_id == course_id
+		).order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc()).all()
+		
+		order_map = {cast(str, getattr(l, "lesson_id")): idx for idx, l in enumerate(lessons)}
+		target_idx = order_map.get(cast(str, lesson_id))
+		
+		finished_lessons = 0
+		progress = session.query(LearningProgress).filter(
+			LearningProgress.course_id == course_id,
+			LearningProgress.user_id == user_id,
+		).first()
+		if progress:
+			finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
+		
+		is_locked = target_idx is not None and target_idx > finished_lessons
+		is_owner = course.user_id == user_id
+		if is_locked and not is_owner:
+			return {"status": 403, "message": "Bạn cần hoàn thành các bài học trước đó"}
+		
+		# Get assessment
+		assessment = session.query(Assessment).filter(
+			Assessment.assessment_id == assessment_id,
+			Assessment.lesson_id == lesson_id
+		).first()
+		if not assessment:
+			return {"status": 404, "message": "Không tìm thấy câu hỏi"}
+		
+		hint = cast(str | None, getattr(assessment, "hint"))
+		if not hint:
+			return {"status": 404, "message": "Câu hỏi này không có gợi ý"}
+		
+		# Calculate penalty based on difficulty
+		try:
+			difficulty = int(str(getattr(assessment, "difficulty", None) or 1))
+		except Exception:
+			difficulty = 1
+		
+		exp_penalty = DIFFICULTY_EXP.get(difficulty, DIFFICULTY_EXP[1]) // 2  # 50% of question exp
+		
+		# Deduct exp (negative exp)
+		if exp_penalty > 0:
+			logger.info(f"Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
+			penalty_result = _award_experience(request, user_id, -exp_penalty)
+			if penalty_result:
+				logger.info(f"Hint penalty response: status={penalty_result.get('status_code')}")
+		
+		return {
+			"status": 200,
+			"hint": hint,
+			"exp_penalty": exp_penalty
+		}
+	except Exception as e:
+		logger.error(f"get_assessment_hint error: {e}")
+		return {"status": 500, "message": "Có lỗi xảy ra"}
 	finally:
 		session.close()
 
@@ -1183,8 +1270,16 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		)
 		experience = None
 		if passed and applied_exp > 0:
-			experience = _experience_payload(applied_exp, _award_experience(request, user_id, applied_exp))
-		_log_activity(request, user_id, "assessment_move")
+			logger.info(f"Awarding {applied_exp} exp to user {user_id} for passing lesson {lesson_id}")
+			award_result = _award_experience(request, user_id, applied_exp)
+			if award_result:
+				logger.info(f"Experience award response: status={award_result.get('status_code')}, body={award_result.get('body')}")
+			else:
+				logger.warning(f"Failed to award experience to user {user_id} - no response from user-service")
+			experience = _experience_payload(applied_exp, award_result)
+		else:
+			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}")
+		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
 		logger.error("submit_assessment_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)
