@@ -25,6 +25,10 @@ logger = setup_logger(__name__)
 
 
 def _handle_generate_course_with_vectorize(msg: GenerateCourseWithVectorizeMessage) -> None:
+    # Validate required fields
+    if not msg.payload.user_id:
+        raise ValueError(f"user_id is required for course {msg.payload.id}")
+    
     from controllers.combined_controller import CombinedController
     controller = CombinedController()
     controller.run(
