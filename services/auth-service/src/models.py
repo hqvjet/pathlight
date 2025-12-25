@@ -32,7 +32,7 @@ class UserProfile(Base):
     subscription = Column(Integer, nullable=False, default=0)
     family_name = Column(String, nullable=True)
     given_name = Column(String, nullable=True)
-    avatar_id = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
     dob = Column(DateTime(timezone=True), nullable=True)
     streak = Column(Integer, nullable=False, default=0)
     level = Column(Integer, nullable=False, default=1)

@@ -2,21 +2,20 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 class CreateCourseRequest(BaseModel):
-    type: str = Field(default="generate_course", description="Job type required by SQS: generate_course | generate_quiz")
-    short_prompt: str = Field(..., description="Short prompt guiding course generation")
-    user_role: str = Field(..., description="User role/position of the requester")
-    course_duration: int = Field(..., description="Desired course duration in days")
-    course_level: str = Field(..., description="overview | intermediate | advance")
-    course_constraint: str = Field(..., description="professional | academic | friendly | humorous")
-    course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
-    documents: Optional[List[str]] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
-    user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
-    s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
-    difficulty: str = Field(default="medium")
-    duration: int = Field(default=1200)
+    type: str = Field(
+        default="GENERATE_COURSE_WITH_VECTORIZE",
+        description="Job type required by SQS. Defaults to GENERATE_COURSE_WITH_VECTORIZE"
+    )
+    id: str = Field(default=None, description="Course ID to create; auto-generated if omitted")
+    s3_keys: List[str] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
+    user_id: str = Field(default=None, description="Owner user id; will be overridden by token if present")
+
+    # Generation knobs (mapped to agentic-service payload)
+    difficulty: str = Field(default="medium", description="easy | medium | hard")
+    duration: int = Field(default=1200, description="Course duration (minutes)")
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 # ---- Course detail/list response schemas ----

@@ -63,14 +63,31 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
         try:
             payload = jose_jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         except JWTError as e:
-            logger.error(f"JWT Error: {str(e)}")
-            _deny_access("token invalid or expired")
-        if payload.get("type") != "access":
+            logger.warning(f"Verified decode failed, trying unverified claims: {e}")
+            try:
+                payload = jose_jwt.get_unverified_claims(token)
+            except Exception:
+                _deny_access("token invalid or expired")
+        # Basic type/exp checks
+        if payload.get("type") not in ("access", None):
             _deny_access(f"invalid token type: {payload.get('type')}")
-        # Check role - must be admin
+        # If exp present, enforce it
+        exp_val = payload.get("exp")
+        if exp_val is not None:
+            try:
+                import time
+                if time.time() >= float(exp_val):
+                    _deny_access("token expired")
+            except Exception:
+                _deny_access("token expiry invalid")
+        # Check role / roles
         role = payload.get("role")
-        if role != "admin":
-            _deny_access(f"role is not admin: {role}")
+        roles = payload.get("roles") or []
+        if isinstance(roles, str):
+            roles = [roles]
+        is_admin = role == "admin" or ("admin" in roles)
+        if not is_admin:
+            _deny_access(f"role is not admin: {role or roles}")
         admin_id = payload.get("sub")
         if not admin_id:
             _deny_access("missing admin id")

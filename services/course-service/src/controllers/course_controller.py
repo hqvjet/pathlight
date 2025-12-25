@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, cast
 from uuid import uuid4
 from datetime import datetime
 import hashlib
@@ -17,23 +17,24 @@ from src.config import config
 from src.database import get_session
 from src.models import Course
 from src.schemas.course_schemas import (
-    CourseFullInfo,
-    CourseFullInfoResponse,
-    LessonInfo,
-    CourseListResponse,
-    CourseSummary,
-    LessonListResponse,
-    LessonDetail,
-    AssessmentListResponse,
-    AssessmentItem,
-    AssessmentSubmitRequest,
-    AssessmentSubmitResponse,
-    AssessmentSubmitResult,
-    AssessmentSubmitResultItem,
-    FinishCourseRequest,
-    FinishLessonRequest,
-    PresignUploadRequest,
-    PresignUploadResponse,
+	CourseFullInfo,
+	CourseFullInfoResponse,
+	LessonInfo,
+	CourseListResponse,
+	CourseSummary,
+	LessonListResponse,
+	LessonDetail,
+	AssessmentListResponse,
+	AssessmentItem,
+	AssessmentSubmitRequest,
+	AssessmentSubmitResponse,
+	AssessmentSubmitResult,
+	AssessmentSubmitResultItem,
+	FinishCourseRequest,
+	FinishLessonRequest,
+	PresignUploadRequest,
+	PresignUploadResponse,
+	ExperienceSnapshot,
 	CourseVisibilityUpdate,
 	CreateCourseRequest,
 )
@@ -54,84 +55,80 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
 
 async def create_course_controller(request: Request, body: CreateCourseRequest):
-	"""Create a course generation job (S3 validation + SQS enqueue)."""
-	from src.services.sqs_publisher import send_generate_with_vectorize
+    """Create a course generation job (S3 validation + SQS enqueue)."""
+    from src.services.sqs_publisher import send_generate_with_vectorize
 
-	queue_url = os.getenv("SQS_QUEUE_URL")
-	if not queue_url:
-		return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
+    queue_url = os.getenv("SQS_QUEUE_URL")
+    if not queue_url:
+        return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
+    default_job = "GENERATE_COURSE_WITH_VECTORIZE"
+    course_id = body.id or f"course-{uuid4()}"
+    s3_keys = body.s3_keys or []
+    logger.info("create_course_controller: course_id=%s, s3_keys_count=%d, s3_keys=%s", course_id, len(s3_keys), s3_keys)
+    difficulty = (body.difficulty or "medium").strip()
+    try:
+        duration = int(body.duration or 0)
+    except Exception:
+        duration = 0
+    if duration <= 0:
+        return {"status": 400, "message": "duration must be a positive integer (minutes)"}
 
-	# Required fields
-	short_prompt = (body.short_prompt or "").strip()
-	if not short_prompt:
-		return {"status": 400, "message": "short_prompt is required"}
-	if not body.user_role:
-		return {"status": 400, "message": "user_role is required"}
+    # Normalize user prefix early
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    body.user_id = user_id
+    user_prefix = f"users/{user_id}/"
+    normalized_s3_keys = []
+    for key in s3_keys:
+        if not key:
+            continue
+        normalized_s3_keys.append(key if key.startswith(user_prefix) else user_prefix + key.lstrip('/'))
+    s3_keys = normalized_s3_keys
 
-	job_type = (body.type or "generate_course").strip()
-	allowed_job_types = {"generate_course", "generate_quiz"}
-	if job_type not in allowed_job_types:
-		return {"status": 400, "message": "type must be one of generate_course, generate_quiz"}
+    region = getattr(config, "REGION", None) or os.getenv("REGION") or "ap-northeast-1"
+    # Validate files up to 25MB each
+    if s3_keys:
+        bucket = getattr(config, "S3_BUCKET_NAME", None) or os.getenv("S3_BUCKET_NAME")
+        if not bucket:
+            return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
 
-	course_id = body.course_id or f"course-{uuid4()}"
-	s3_keys = (body.documents or []) + (body.s3_key or [])
+        s3 = boto3.client("s3", region_name=region)
+        max_bytes = MAX_UPLOAD_BYTES
+        try:
+            for key in s3_keys:
+                try:
+                    head = s3.head_object(Bucket=bucket, Key=key)
+                except ClientError as ce:
+                    code = ce.response.get("Error", {}).get("Code")
+                    if code in ("404", "NoSuchKey", "NotFound"):
+                        return {"status": 400, "message": f"S3 key not found: {key}"}
+                    raise
+                size = int(head.get("ContentLength", 0))
+                if size > max_bytes:
+                    return {"status": 400, "message": f"File exceeds 25MB: {key}"}
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
-	# Normalize user prefix early
-	user_id = _verify_token(request)
-	if not user_id:
-		return {"status": 401, "message": "Unauthorized"}
-	body.user_id = user_id
-	user_prefix = f"users/{user_id}/"
-	normalized_s3_keys = []
-	for key in s3_keys:
-		if not key:
-			continue
-		normalized_s3_keys.append(key if key.startswith(user_prefix) else user_prefix + key.lstrip('/'))
-	s3_keys = normalized_s3_keys
-
-	region = getattr(config, "REGION", None) or os.getenv("REGION") or "ap-northeast-1"
-	# Validate files up to 25MB each
-	if s3_keys:
-		bucket = getattr(config, "S3_BUCKET_NAME", None) or os.getenv("S3_BUCKET_NAME")
-		if not bucket:
-			return {"status": 500, "message": "S3_BUCKET_NAME is not configured"}
-
-		s3 = boto3.client("s3", region_name=region)
-		max_bytes = MAX_UPLOAD_BYTES
-		try:
-			for key in s3_keys:
-				try:
-					head = s3.head_object(Bucket=bucket, Key=key)
-				except ClientError as ce:
-					code = ce.response.get("Error", {}).get("Code")
-					if code in ("404", "NoSuchKey", "NotFound"):
-						return {"status": 400, "message": f"S3 key not found: {key}"}
-					raise
-				size = int(head.get("ContentLength", 0))
-				if size > max_bytes:
-					return {"status": 400, "message": f"File exceeds 25MB: {key}"}
-		except Exception as e:
-			return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
-
-	try:
-		resp = send_generate_with_vectorize(
-			queue_url=queue_url,
-			course_id=course_id,
-			s3_keys=s3_keys,
-			short_prompt=short_prompt,
-			user_role=body.user_role,
-			course_level=body.course_level,
-			course_constraint=body.course_constraint,
-			course_duration=body.course_duration,
-			user_id=user_id,
-			region=region,
-			group_id=os.getenv("SQS_GROUP_ID"),
-			job_type=job_type,
-		)
-		_log_activity(request, user_id, "create_course")
-		return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
-	except Exception as e:
-		return {"status": 500, "message": f"Failed to submit job: {e}"}
+    try:
+        logger.info("Sending to SQS: course_id=%s, user_id=%s, s3_keys_count=%d, duration=%d, difficulty=%s", 
+                    course_id, user_id, len(s3_keys), duration, difficulty)
+        resp = send_generate_with_vectorize(
+            queue_url=queue_url,
+            course_id=course_id,
+            s3_keys=s3_keys,
+            difficulty=difficulty,
+            duration=duration,
+            user_id=user_id,
+            region=region,
+            group_id=os.getenv("SQS_GROUP_ID"),
+            job_type=default_job,
+        )
+        logger.info("SQS message sent successfully: message_id=%s, course_id=%s", resp.get("MessageId"), course_id)
+        _log_activity(request, user_id, "create_course")
+        return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
+    except Exception as e:
+        return {"status": 500, "message": f"Failed to submit job: {e}"}
 
 
 def _verify_token(request: Request):
@@ -223,18 +220,23 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 
 
 def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
-	payload = {"gained_exp": gained_exp}
+	payload: dict[str, int | None] = {"gained_exp": gained_exp}
 	if award_result and isinstance(award_result.get("body"), dict):
 		stats = award_result["body"].get("updated_stats") or {}
-		payload.update(
-			{
-				"new_level": stats.get("new_level") or stats.get("level"),
-				"new_exp": stats.get("new_exp") or stats.get("current_exp"),
-				"require_exp": stats.get("new_require_exp") or stats.get("require_exp"),
-				"exp_needed_for_next": stats.get("exp_needed_for_next"),
-				"rank": stats.get("rank"),
-			}
-		)
+
+		def _to_int_or_none(v):
+			try:
+				if v is None:
+					return None
+				return int(v)
+			except Exception:
+				return None
+
+		payload["new_level"] = _to_int_or_none(stats.get("new_level") or stats.get("level"))
+		payload["new_exp"] = _to_int_or_none(stats.get("new_exp") or stats.get("current_exp"))
+		payload["require_exp"] = _to_int_or_none(stats.get("new_require_exp") or stats.get("require_exp"))
+		payload["exp_needed_for_next"] = _to_int_or_none(stats.get("exp_needed_for_next"))
+		payload["rank"] = _to_int_or_none(stats.get("rank"))
 	return payload
 
 
@@ -268,15 +270,27 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 			num_total_lesson=total,
 		)
 		session.add(progress)
-	if progress.num_total_lesson != total:
-		progress.num_total_lesson = total
-	current_finished = min(progress.num_finished_lesson or 0, total)
+	# Read typed integer values to avoid SQLAlchemy ColumnElement boolean/int issues in static checks
+	num_total_val = cast(int, getattr(progress, "num_total_lesson") or 0)
+	if num_total_val != total:
+		# Use an update to avoid assigning a raw int to a Column-typed attribute (silences static type checkers)
+		session.query(LearningProgress).filter(
+			LearningProgress.course_id == course_id,
+			LearningProgress.user_id == user_id,
+		).update({"num_total_lesson": total}, synchronize_session=False)
+		session.flush()
+	current_finished = min(cast(int, getattr(progress, "num_finished_lesson") or 0), total)
 	if target_idx is None:
 		return current_finished, total
 	if target_idx < current_finished:
 		return current_finished, total
-	progress.num_finished_lesson = max(current_finished, target_idx + 1)
-	return progress.num_finished_lesson, total
+	new_finished = max(current_finished, target_idx + 1)
+	session.query(LearningProgress).filter(
+		LearningProgress.course_id == course_id,
+		LearningProgress.user_id == user_id,
+	).update({"num_finished_lesson": new_finished}, synchronize_session=False)
+	session.flush()
+	return new_finished, total
 
 
 def _get_s3_client():
@@ -375,8 +389,10 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 		offset = (page - 1) * limit
 		courses = query.order_by(Course.created_at.desc()).offset(offset).limit(limit).all()
 
-		course_list = [
-			{
+		course_list = []
+		for c in courses:
+			created_at_val = getattr(c, "created_at", None)
+			course_list.append({
 				"course_id": c.course_id,
 				"user_id": c.user_id,
 				"title": c.title,
@@ -386,10 +402,8 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 				"publish": bool(c.publish),
 				"finish": bool(c.finish),
 				"num_lessons": c.num_lessons,
-				"created_at": c.created_at.isoformat() if c.created_at else "",
-			}
-			for c in courses
-		]
+				"created_at": created_at_val.isoformat() if created_at_val else "",
+			})
 
 		return {"status": 200, "courses": course_list, "total": total}
 	finally:
@@ -564,21 +578,27 @@ def _unauth_delete_response():
 	return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa xác thực hoặc phiên đăng nhập đã hết hạn"})
 
 
-def update_course_visibility_controller(request: Request, body: CourseVisibilityUpdate):
+def update_course_visibility_controller(request: Request, body: CourseVisibilityUpdate, admin_override: bool = False):
 	from src.database import SessionLocal
 	from src.models import Course
 
 	user_id = _verify_token(request)
-	if not user_id:
+	if not user_id and not admin_override:
 		raise HTTPException(status_code=401, detail="Bạn không có quyền thay đổi khóa học này")
 	session = SessionLocal()
 	try:
-		course = session.query(Course).filter(Course.course_id == body.course_id, Course.user_id == user_id).first()
+		if admin_override:
+			query = session.query(Course).filter(Course.course_id == body.course_id)
+		else:
+			query = session.query(Course).filter(Course.course_id == body.course_id, Course.user_id == user_id)
+		course = query.first()
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
-		course.publish = bool(body.publish)
+		new_publish = bool(body.publish)
+		# use update to avoid assigning a raw bool to a Column-typed attribute
+		query.update({"publish": new_publish}, synchronize_session=False)
 		session.commit()
-		return {"status": 200, "course_id": course.course_id, "publish": course.publish}
+		return {"status": 200, "course_id": course.course_id, "publish": new_publish}
 	finally:
 		session.close()
 
@@ -621,7 +641,6 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 				duration=r.duration or 0,
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
-				owner_id=r.user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -633,7 +652,7 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 		session.close()
 
 
-async def delete_single_course(request: Request, course_id: str | None):
+async def delete_single_course(request: Request, course_id: str | None, admin_override: bool = False):
 	"""Delete one course of the authenticated user (and its related data)."""
 	user_id = _verify_token(request)
 	if not user_id:
@@ -646,7 +665,11 @@ async def delete_single_course(request: Request, course_id: str | None):
 	try:
 		# Ensure tables exist for in-memory databases used in tests
 		Base.metadata.create_all(bind=session.get_bind())
-		course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
+		# If admin_override is True, allow deleting any course by course_id; otherwise enforce ownership
+		if admin_override:
+			course = session.query(Course).filter_by(course_id=course_id).first()
+		else:
+			course = session.query(Course).filter_by(course_id=course_id, user_id=user_id).first()
 		if not course:
 			return _unauth_delete_response()
 		lesson_ids = [l.lesson_id for (l,) in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
@@ -706,8 +729,9 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 		course = session.query(Course).filter(Course.course_id == course_id).first()
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
-		is_owner = course.user_id == (user_id or "")
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == (user_id or "")
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		if not is_owner and getattr(course, "publish", False) is not True:
 			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
 
 		lessons = (
@@ -724,14 +748,15 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 				LearningProgress.user_id == user_id,
 			).first()
 			if progress:
-				finished_lessons = min(progress.num_finished_lesson or 0, len(lessons))
+				# Ensure we read a plain int from the ORM attribute to avoid ColumnElement types
+				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
 		lesson_models: list[LessonInfo] = []
 		for idx, l in enumerate(lessons):
 			lesson_models.append(
 				LessonInfo(
-					lesson_id=l.lesson_id,
-					title=l.title,
-					finish=idx < finished_lessons,
+					lesson_id=cast(str, getattr(l, "lesson_id")),
+					title=cast(str, getattr(l, "title")),
+					finish=bool(idx < cast(int, finished_lessons)),
 				)
 			)
 
@@ -742,7 +767,6 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			duration=getattr(course, "duration", 0) or 0,
 			publish=bool(getattr(course, "publish", False)),
 			finish=bool(getattr(course, "finish", False)),
-			owner_id=getattr(course, "user_id", ""),
 			lesson=lesson_models,
 			progress_finished_lessons=finished_lessons,
 			progress_total_lessons=len(lessons),
@@ -790,10 +814,10 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				LearningProgress.user_id == user_id,
 			).all()
 			for p in progress_rows:
-				total = lesson_counts.get(p.course_id, p.num_total_lesson)
-				finished = min(p.num_finished_lesson or 0, total)
+				total = cast(int, getattr(p, "num_total_lesson") or lesson_counts.get(p.course_id, 0))
+				finished = min(cast(int, getattr(p, "num_finished_lesson") or 0), total)
 				finish_counts[p.course_id] = finished
-				finish_map[p.course_id] = total > 0 and finished >= total
+				finish_map[p.course_id] = (total > 0) and (finished >= total)
 		summaries = [
 			CourseSummary(
 				course_id=r.course_id,
@@ -803,7 +827,6 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
-				owner_id=user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -825,8 +848,12 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 		course = session.query(Course).filter(Course.course_id == course_id).first()
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
-		is_owner = course.user_id == (user_id or "")
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == (user_id or "")
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		# Safely evaluate publish value without triggering SQLAlchemy ColumnElement.__bool__
+		_publish_attr = getattr(course, "publish", False)
+		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
+		if not is_owner and not _is_published:
 			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
 
 		lessons = (
@@ -842,7 +869,7 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 				LearningProgress.user_id == user_id,
 			).first()
 			if progress:
-				finished_lessons = min(progress.num_finished_lesson or 0, len(lessons))
+				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
 
 		lesson_models = [
 			LessonDetail(
@@ -871,7 +898,12 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 		course = session.query(Course).filter(Course.course_id == course_id).first()
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
-		if course.user_id != (user_id or "") and not getattr(course, "publish", False):
+		_publish_attr = getattr(course, "publish", False)
+		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
+		# Safely evaluate ownership without triggering SQLAlchemy ColumnElement.__bool__
+		_is_owner_attr = course.user_id == (user_id or "")
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		if not is_owner and not _is_published:
 			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
 		if not lesson:
@@ -892,6 +924,9 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 				order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 				target_idx = order_map.get(lesson.lesson_id)
 				completed = target_idx is not None and (target_idx < (progress.num_finished_lesson or 0))
+		# Ensure `finish` is a plain bool (SQLAlchemy ColumnElement[bool] may be returned by getattr)
+		_finish_attr = getattr(lesson, "finish", False)
+		_finish_bool = _finish_attr if isinstance(_finish_attr, bool) else False
 		return LessonDetail(
 			lesson_id=getattr(lesson, "lesson_id"),
 			course_id=getattr(lesson, "course_id"),
@@ -899,7 +934,7 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			overview=getattr(lesson, "overview", ""),
 			content=getattr(lesson, "content"),
 			duration=getattr(lesson, "duration", 0) or 0,
-			finish=completed,
+			finish=bool(_finish_bool or completed),
 		)
 	finally:
 		session.close()
@@ -924,8 +959,12 @@ def get_assessment_list_controller(
 		course = session.query(Course).filter(Course.course_id == course_id).first()
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
-		is_owner = course.user_id == user_id
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == user_id
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		# Safely evaluate publish value without triggering SQLAlchemy ColumnElement.__bool__
+		_publish_attr = getattr(course, "publish", False)
+		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
+		if not is_owner and not _is_published:
 			raise HTTPException(status_code=401, detail="Bạn không có quyền truy cập vào khóa học này")
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
 		if not lesson:
@@ -938,17 +977,17 @@ def get_assessment_list_controller(
 		)
 		items = [
 			AssessmentItem(
-				assessment_id=a.assessment_id,
-				lesson_id=a.lesson_id,
-				question=a.question,
-				hint=a.hint if include_hints else None,
-				explanation=a.explanation if include_explanations else None,
-				difficulty=a.difficulty,
-				option1=a.option1,
-				option2=a.option2,
-				option3=a.option3,
-				option4=a.option4,
-				answer=a.answer,
+				assessment_id=cast(str, getattr(a, "assessment_id")),
+				lesson_id=cast(str, getattr(a, "lesson_id")),
+				question=cast(str, getattr(a, "question")),
+				hint=cast(str | None, getattr(a, "hint")) if include_hints else None,
+				explanation=cast(str, getattr(a, "explanation") or "") if include_explanations else "",
+				difficulty=cast(str, getattr(a, "difficulty") or ""),
+				option1=cast(str, getattr(a, "option1") or ""),
+				option2=cast(str, getattr(a, "option2") or ""),
+				option3=cast(str, getattr(a, "option3") or ""),
+				option4=cast(str, getattr(a, "option4") or ""),
+				answer=cast(int, getattr(a, "answer")),
 			)
 			for a in assessments
 		]
@@ -971,8 +1010,12 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		course = session.query(Course).filter(Course.course_id == course_id).first()
 		if not course:
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy khóa học")
-		is_owner = course.user_id == user_id
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == user_id
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		# Safely evaluate publish value without triggering SQLAlchemy ColumnElement.__bool__
+		_publish_attr = getattr(course, "publish", False)
+		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
+		if not is_owner and not _is_published:
 			return AssessmentSubmitResponse(status=401, message="Bạn không có quyền làm bài kiểm tra này")
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
 		if not lesson:
@@ -980,7 +1023,8 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		qas = session.query(Assessment).filter(Assessment.lesson_id == lesson.lesson_id).all()
 		if not qas:
 			return AssessmentSubmitResponse(status=404, message="Bài kiểm tra chưa có câu hỏi")
-		qa_lookup = {a.assessment_id: a for a in qas}
+		# build lookup with plain-string keys for static typing
+		qa_lookup = {cast(str, getattr(a, "assessment_id")): a for a in qas}
 		if not body.answers or len(body.answers) < len(qas):
 			return AssessmentSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi trước khi nộp bài")
 
@@ -990,20 +1034,22 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		answer_results: list[AssessmentSubmitResultItem] = []
 
 		for ans in body.answers:
-			qa = qa_lookup.get(ans.assessment_id)
+			qa = qa_lookup.get(cast(str, ans.assessment_id))
 			if not qa:
 				continue
 			selected = int(ans.answer)
-			correct = int(qa.answer)
+			correct = cast(int, getattr(qa, "answer"))
 			is_correct = selected == correct
 			if is_correct:
 				correct_count += 1
 
 			try:
-				difficulty_int = int(qa.difficulty) if qa.difficulty is not None else None
+				raw_difficulty = getattr(qa, "difficulty", None)
+				difficulty_int = int(str(raw_difficulty)) if raw_difficulty is not None else None
 			except Exception:
 				difficulty_int = None
-			base_exp = DIFFICULTY_EXP.get(difficulty_int, DIFFICULTY_EXP[1])
+			key = difficulty_int if difficulty_int is not None else 1
+			base_exp = DIFFICULTY_EXP.get(key, DIFFICULTY_EXP[1])
 			if is_correct:
 				gained = base_exp
 				penalty = 0
@@ -1014,11 +1060,12 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			penalty_exp += penalty
 			answer_results.append(
 				AssessmentSubmitResultItem(
-					assessment_id=qa.assessment_id,
+					assessment_id=cast(str, getattr(qa, "assessment_id")),
 					selected_answer=selected,
 					correct_answer=correct,
 					is_correct=is_correct,
-					difficulty=difficulty_int,
+					# preserve original difficulty representation (string or None) for the result model
+					difficulty=cast(str | None, getattr(qa, "difficulty")),
 					gained_exp=gained,
 					penalty_exp=penalty,
 				)
@@ -1030,7 +1077,7 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		passed = score >= PASS_THRESHOLD
 
 		if passed:
-			_update_learning_progress(session, course.course_id, lesson.lesson_id, user_id)
+			_update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 			session.commit()
 		else:
 			session.rollback()
@@ -1050,7 +1097,7 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		if passed and applied_exp > 0:
 			experience = _experience_payload(applied_exp, _award_experience(request, user_id, applied_exp))
 		_log_activity(request, user_id, "assessment_move")
-		return AssessmentSubmitResponse(status=200, result=result, experience=experience)
+		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
 		logger.error("submit_assessment_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)
 		session.rollback()
@@ -1077,8 +1124,9 @@ def finish_course_controller(request: Request, payload: FinishCourseRequest):
 		course = session.query(Course).filter_by(course_id=payload.course_id).first()
 		if not course:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Không tìm thấy khóa học"})
-		is_owner = course.user_id == user_id
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == user_id
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		if not is_owner and getattr(course, "publish", False) is not True:
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền truy cập vào khóa học này"})
 
 		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id == course.course_id).all()]
@@ -1091,12 +1139,21 @@ def finish_course_controller(request: Request, payload: FinishCourseRequest):
 		).first()
 		if not progress:
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
-		if progress.num_total_lesson != total_lessons:
-			progress.num_total_lesson = total_lessons
-		if (progress.num_finished_lesson or 0) < total_lessons:
+		# read plain int to avoid ColumnElement typing issues and update via query when needed
+		num_total_val = cast(int, getattr(progress, "num_total_lesson") or 0)
+		if num_total_val != total_lessons:
+			session.query(LearningProgress).filter(
+				LearningProgress.course_id == course.course_id,
+				LearningProgress.user_id == user_id,
+			).update({"num_total_lesson": total_lessons}, synchronize_session=False)
+			session.flush()
+		num_finished_val = cast(int, getattr(progress, "num_finished_lesson") or 0)
+		if num_finished_val < total_lessons:
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa hoàn thành tất cả các bài học trong khóa học này, vui lòng thử lại sau"})
-		if is_owner and not getattr(course, "finish", False):
-			course.finish = True
+		if is_owner and not (getattr(course, "finish", False) is True):
+			# use update to avoid assigning a raw bool to a Column-typed attribute
+			session.query(type(course)).filter(type(course).course_id == course.course_id).update({"finish": True}, synchronize_session=False)
+			session.flush()
 		session.commit()
 		experience = _experience_payload(COURSE_COMPLETION_EXP, _award_experience(request, user_id, COURSE_COMPLETION_EXP))
 		_log_activity(request, user_id, "course_move")
@@ -1123,13 +1180,14 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 		course = session.query(Course).filter_by(course_id=payload.course_id).first()
 		if not course:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Không tìm thấy khóa học"})
-		is_owner = course.user_id == user_id
-		if not is_owner and not getattr(course, "publish", False):
+		_is_owner_attr = course.user_id == user_id
+		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
+		if not is_owner and getattr(course, "publish", False) is not True:
 			return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền cập nhật bài học này"})
 		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
 		if not lesson:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
-		finished, total = _update_learning_progress(session, course.course_id, lesson.lesson_id, user_id)
+		finished, total = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 		session.commit()
 		_log_activity(request, user_id, "course_move")
 		return {

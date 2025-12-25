@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Response
 from sqlalchemy.orm import Session
 from typing import Optional, Literal
 import logging
@@ -212,15 +212,33 @@ async def admin_get_costs(
 # 6.3. Admin get AWS CloudWatch logs
 @router.get("/admin/log", response_model=AdminLogsResponse)
 async def get_admin_logs_endpoint(
+    response: Response,
     filter_key: Literal["daily", "weekly", "monthly", "hourly", "30m", "1m"] = Query(
-        "daily", pattern="^(daily|weekly|monthly|hourly|30m|1m)$"
+        "hourly", pattern="^(daily|weekly|monthly|hourly|30m|1m)$"
     ),
-    service: Optional[str] = Query(None, description="Tên log group hoặc suffix service"),
+    service: Optional[str] = Query("pathlight-user-service", description="Tên log group hoặc suffix service"),
     log_stream: Optional[str] = Query(None, description="Tên log stream"),
+    level: Optional[Literal["error", "warn", "warning", "info", "debug"]] = Query(
+        None, description="Lọc theo cấp log: error/warn/info/debug"
+    ),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    return await get_admin_logs(filter_key, service, log_stream, credentials, db)
+    resp = await get_admin_logs(filter_key, service, log_stream, level, credentials, db)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+
+
+# Explicit CORS preflight handlers for admin log endpoints (API Gateway sometimes blocks OPTIONS with auth)
+@router.options("/admin/log")
+async def admin_log_options():
+    return Response(status_code=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,OPTIONS", "Access-Control-Allow-Headers": "*"})
+
+
+@router.options("/admin/log/streams")
+async def admin_log_streams_options():
+    return Response(status_code=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,OPTIONS", "Access-Control-Allow-Headers": "*"})
 
 
 @router.get("/admin/log/streams", response_model=AdminLogStreamsResponse)

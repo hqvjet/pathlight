@@ -124,7 +124,10 @@ class AdminUserItem(BaseModel):
     user_id: str
     email: Optional[str]
     given_name: Optional[str]
-    level: Optional[int]
+    family_name: Optional[str] = None
+    level: Optional[int] = None
+    current_exp: Optional[int] = None
+    subscription: Optional[int] = None
 
 
 class AdminUsersResponse(BaseModel):

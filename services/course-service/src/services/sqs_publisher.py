@@ -28,15 +28,12 @@ def send_generate_with_vectorize(
     course_id: str,
     s3_keys: Optional[List[str]],
     *,
-    short_prompt: str,
-    user_role: str,
-    course_duration: int,
-    course_level: str,
-    course_constraint: str,
+    difficulty: str,
+    duration: int,
     user_id: Optional[str] = None,
     region: Optional[str] = None,
     group_id: Optional[str] = None,
-    job_type: str = "generate_course",
+    job_type: str = "GENERATE_COURSE_WITH_VECTORIZE",
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
@@ -45,13 +42,8 @@ def send_generate_with_vectorize(
     payload = {
         "id": course_id,
         "user_id": user_id,
-        "user_role": user_role,
-        "short_prompt": short_prompt,
-        "course_duration": course_duration,
-        "course_level": course_level,
-        "course_constraint": course_constraint,
-        "documents": s3_keys or [],
-        # Backward compatibility
+        "difficulty": difficulty,
+        "duration": duration,
         "s3_keys": s3_keys or [],
     }
 

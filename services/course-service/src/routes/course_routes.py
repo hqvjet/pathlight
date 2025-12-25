@@ -151,7 +151,7 @@ async def update_visibility(request: Request, body: CourseVisibilityUpdate, _aut
 async def list_all_courses_admin(
     request: Request,
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=1000),
     search: Optional[str] = Query(default=None),
     _auth=Depends(require_bearer)
 ):
