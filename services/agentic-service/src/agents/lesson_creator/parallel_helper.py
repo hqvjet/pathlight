@@ -23,7 +23,7 @@ def trim_history(history: List, max_messages: int = 10) -> List:
     return recent
 
 
-async def generate_single_lesson_async(agent, state: State, index: int, prev_lessons: List[str]) -> Optional[Lesson]:
+async def generate_single_lesson_async(agent, state: State, index: int, prev_lessons: List[str], timeout: int = 120) -> Optional[Lesson]:
     """
     Async version for generating a single lesson in parallel.
     
@@ -32,6 +32,7 @@ async def generate_single_lesson_async(agent, state: State, index: int, prev_les
         state: Current state
         index: Lesson index (1-based)
         prev_lessons: List of previous lesson IDs
+        timeout: Timeout in seconds for lesson generation (default: 120s)
     
     Returns:
         Lesson object or None if failed
@@ -63,22 +64,29 @@ async def generate_single_lesson_async(agent, state: State, index: int, prev_les
         )
     ]
     
-    # Use async invoke
-    ai: AIMessage = await agent.chain.ainvoke(
-        {
-            "id": state.id,
-            "history": history,
-            "difficulty": state.difficulty,
-            "duration": str(state.duration),
-            "title": state.title,
-            "description": state.description,
-            "roadmap": slim_roadmap or state.roadmap,
-            "lessons_expected": state.lessons_expected or "",
-            "next_lesson_index": str(index),
-            "prev_lessons": prev_lessons,
-        }
-    )
-    tracer.record("llm", f"lesson {index} initial", content_preview=str(ai.content)[:100])
+    # Use async invoke with timeout
+    try:
+        ai: AIMessage = await asyncio.wait_for(
+            agent.chain.ainvoke(
+                {
+                    "id": state.id,
+                    "history": history,
+                    "difficulty": state.difficulty,
+                    "duration": str(state.duration),
+                    "title": state.title,
+                    "description": state.description,
+                    "roadmap": slim_roadmap or state.roadmap,
+                    "lessons_expected": state.lessons_expected or "",
+                    "next_lesson_index": str(index),
+                    "prev_lessons": prev_lessons,
+                }
+            ),
+            timeout=timeout
+        )
+        tracer.record("llm", f"lesson {index} initial", content_preview=str(ai.content)[:100])
+    except asyncio.TimeoutError:
+        tracer.record("error", f"lesson {index} timed out after {timeout}s")
+        return None
     
     iteration = 1
     while getattr(ai, "tool_calls", None) and iteration <= MAX_TOOL_CALLS_PER_AGENT:
@@ -100,20 +108,27 @@ async def generate_single_lesson_async(agent, state: State, index: int, prev_les
             )
             history = trim_history(history)
         
-        ai = await agent.chain.ainvoke(
-            {
-                "id": state.id,
-                "history": history,
-                "difficulty": state.difficulty,
-                "duration": str(state.duration),
-                "title": state.title,
-                "description": state.description,
-                "roadmap": slim_roadmap or state.roadmap,
-                "lessons_expected": state.lessons_expected or "",
-                "next_lesson_index": str(index),
-                "prev_lessons": prev_lessons,
-            }
-        )
+        try:
+            ai = await asyncio.wait_for(
+                agent.chain.ainvoke(
+                    {
+                        "id": state.id,
+                        "history": history,
+                        "difficulty": state.difficulty,
+                        "duration": str(state.duration),
+                        "title": state.title,
+                        "description": state.description,
+                        "roadmap": slim_roadmap or state.roadmap,
+                        "lessons_expected": state.lessons_expected or "",
+                        "next_lesson_index": str(index),
+                        "prev_lessons": prev_lessons,
+                    }
+                ),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            tracer.record("error", f"lesson {index} tool iteration {iteration} timed out")
+            return None
         iteration += 1
     
     if getattr(ai, "tool_calls", None):
@@ -192,50 +207,85 @@ def generate_lessons_parallel(agent, state: State, count: int) -> Optional[List[
     """
     Generate multiple lessons in TRUE PARALLEL using ThreadPoolExecutor.
     Each lesson runs in its own thread, making independent LLM calls.
+    
+    Timeout configuration:
+    - Per LLM call: 60s (LLM request_timeout)
+    - Per async operation: 120s (timeout parameter)
+    - Per lesson thread: 150s (overall timeout with buffer)
     """
     tracer = StepTracer(agent.name, state.id, logger=agent.logger)
-    tracer.record("start", "TRUE parallel lesson generation with threads", count=count)
+    tracer.record("start", "TRUE parallel lesson generation with threads", 
+                 count=count, timeout_per_lesson=150)
     
     def generate_one_lesson_sync(index: int) -> tuple:
         """Wrapper to run async lesson generation in sync context"""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            # Add overall timeout of 150s per lesson (120s + 30s buffer)
             result = loop.run_until_complete(
-                generate_single_lesson_async(agent, state, index, [])
+                asyncio.wait_for(
+                    generate_single_lesson_async(agent, state, index, [], timeout=120),
+                    timeout=150
+                )
             )
             return (index, result, None)
+        except asyncio.TimeoutError as e:
+            tracer.record("error", f"lesson {index} overall timeout (150s)")
+            return (index, None, e)
         except Exception as e:
+            tracer.record("error", f"lesson {index} exception", error=str(e))
             return (index, None, e)
         finally:
-            loop.close()
+            try:
+                # Cleanup pending tasks
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception:
+                pass
+            finally:
+                loop.close()
     
     # Use ThreadPoolExecutor for TRUE parallelism (multiple threads)
     lessons_dict = {}
     errors = {}
     
-    with ThreadPoolExecutor(max_workers=min(count, 6)) as executor:  # Max 6 parallel to avoid rate limits
+    # Increase max_workers to 10 for faster parallel processing
+    max_workers = min(count, 10)
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         futures = {
             executor.submit(generate_one_lesson_sync, i + 1): i + 1
             for i in range(count)
         }
         
-        tracer.record("parallel", f"launched {count} threads (max_workers=6)")
+        tracer.record("parallel", f"launched {count} threads (max_workers={max_workers})")
         
-        # Collect results as they complete
-        for future in as_completed(futures):
-            index, result, error = future.result()
-            
-            if error:
-                tracer.record("error", f"lesson {index} failed", error=str(error))
-                errors[index] = error
-            elif result:
-                lessons_dict[index] = result
-                tracer.record("progress", f"lesson {index} completed", 
-                            done=len(lessons_dict), total=count)
-            else:
-                tracer.record("warn", f"lesson {index} returned None")
+        # Collect results as they complete with overall timeout
+        # Give 180s per lesson max (with parallelism, should be much faster)
+        timeout_per_future = 180
+        
+        for future in as_completed(futures, timeout=timeout_per_future * count / max_workers + 60):
+            try:
+                index, result, error = future.result(timeout=5)  # Quick result fetch
+                
+                if error:
+                    tracer.record("error", f"lesson {index} failed", error=str(error))
+                    errors[index] = error
+                elif result:
+                    lessons_dict[index] = result
+                    progress_pct = int(len(lessons_dict) * 100 / count)
+                    tracer.record("progress", f"lesson {index} completed ({progress_pct}%)", 
+                                done=len(lessons_dict), total=count)
+                else:
+                    tracer.record("warn", f"lesson {index} returned None")
+            except Exception as e:
+                index = futures.get(future, "unknown")
+                tracer.record("error", f"lesson {index} future exception", error=str(e))
+                errors[index] = e
     
     # Build ordered list with placeholders for failed lessons
     lessons = []
