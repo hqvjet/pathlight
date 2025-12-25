@@ -29,7 +29,8 @@ from src.schemas.quiz_schemas import (
 )
 from src.services.status_service import fetch_generation_status, fetch_user_quiz_generations
 
-router = APIRouter(prefix="/quiz", tags=["Quiz"])
+# Prefix is attached in main.py via include_router(prefix="/quiz"), so keep router prefix empty to avoid double /quiz/quiz.
+router = APIRouter(prefix="", tags=["Quiz"])
 
 
 @router.get("/status")
@@ -115,7 +116,7 @@ def delete_quiz(request: Request, quiz_id: str):
 def list_all_quizzes_admin(
     request: Request,
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=1000),
     search: Optional[str] = Query(default=None),
 ):
     """Admin endpoint to list all quizzes in the system."""

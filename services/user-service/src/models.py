@@ -49,20 +49,62 @@ class User(Base):
         return getattr(self._p(), "given_name", None) if self._p() else None
 
     @property
-    def avatar_id(self):
-        return getattr(self._p(), "avatar_id", None) if self._p() else None
+    def avatar_url(self):
+        return getattr(self._p(), "avatar_url", None) if self._p() else None
+
+    @avatar_url.setter
+    def avatar_url(self, value):
+        if self._p():
+            setattr(self._p(), "avatar_url", value)
+        else:
+            try:
+                from services.experience_service import get_exp_for_level 
+
+                next_req = get_exp_for_level(2)
+            except Exception:
+                next_req = 10
+
+            profile = UserProfile(
+                profile_id=_generate_id(),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=next_req,
+            )
+            setattr(self, "profile", profile)
+            setattr(self, "profile_id", profile.profile_id)
+            setattr(profile, "avatar_url", value)
 
     @property
-    def level(self):
-        return getattr(self._p(), "level", 1) if self._p() else 1
+    def avatar_id(self):
+        return self.avatar_url
 
     @property
     def current_exp(self):
         return getattr(self._p(), "current_exp", 0) if self._p() else 0
 
+    @current_exp.setter
+    def current_exp(self, value):
+        profile = self._ensure_profile()
+        setattr(profile, "current_exp", value)
+
     @property
     def require_exp(self):
-        return getattr(self._p(), "require_exp", 10) if self._p() else 10
+        try:
+            from services.experience_service import get_exp_for_level 
+
+            default_req = get_exp_for_level(2)
+        except Exception:
+            default_req = 10
+        if self._p():
+            return getattr(self._p(), "require_exp", default_req)
+        return default_req
+
+    @require_exp.setter
+    def require_exp(self, value):
+        profile = self._ensure_profile()
+        setattr(profile, "require_exp", value)
 
     @property
     def remind_time(self):
@@ -76,6 +118,11 @@ class User(Base):
     def bio(self):
         return getattr(self._p(), "bio", None) if self._p() else None
 
+    @bio.setter
+    def bio(self, value):
+        profile = self._ensure_profile()
+        setattr(profile, "bio", value)
+
     @property
     def streak(self):
         return getattr(self._p(), "streak", 0) if self._p() else 0
@@ -83,6 +130,39 @@ class User(Base):
     @property
     def subscription(self):
         return getattr(self._p(), "subscription", 0) if self._p() else 0
+
+    @property
+    def level(self):
+        return getattr(self._p(), "level", 1) if self._p() else 1
+
+    @level.setter
+    def level(self, value):
+        profile = self._ensure_profile()
+        setattr(profile, "level", value)
+
+    def _ensure_profile(self):
+        profile = getattr(self, "profile", None)
+        if profile:
+            return profile
+        try:
+            from services.experience_service import get_exp_for_level
+
+            default_req = get_exp_for_level(2)
+        except Exception:
+            default_req = 10
+
+        profile = UserProfile(
+            profile_id=_generate_id(),
+            subscription=0,
+            streak=0,
+            level=1,
+            current_exp=0,
+            require_exp=default_req,
+        )
+        setattr(self, "profile", profile)
+        if not getattr(self, "profile_id", None):
+            setattr(self, "profile_id", profile.profile_id)
+        return profile
 
 
 class UserProfile(Base):
@@ -92,7 +172,7 @@ class UserProfile(Base):
     subscription = Column(Integer, nullable=False, default=0)
     family_name = Column(String, nullable=True)
     given_name = Column(String, nullable=True)
-    avatar_id = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
     dob = Column(DateTime(timezone=True), nullable=True)
     streak = Column(Integer, nullable=False, default=0)
     level = Column(Integer, nullable=False, default=1)

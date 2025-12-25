@@ -2,7 +2,7 @@
 import logging
 from sqlalchemy.orm import Session
 from typing import List, Dict
-from models import User
+from models import User, UserProfile
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,13 @@ __all__ = ["calculate_user_rank", "get_leaderboard_data", "get_users_by_ids"]
 
 def calculate_user_rank(current_user: User, db: Session) -> dict:
     try:
-        users = db.query(User).filter(User.is_active == True).order_by(User.current_exp.desc()).all()  # noqa: E712
+        users = (
+            db.query(User)
+            .outerjoin(UserProfile, User.profile_id == UserProfile.profile_id)
+            .filter(User.is_active == True)  # noqa: E712
+            .order_by(UserProfile.current_exp.desc().nullslast())
+            .all()
+        )
         user_rank = 1
         total_users = len(users)
         for i, user in enumerate(users):

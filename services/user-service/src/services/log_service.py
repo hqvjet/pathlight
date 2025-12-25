@@ -30,6 +30,17 @@ _FILTER_TO_WINDOW = {
 }
 
 _LOG_LEVEL_PREFIXES = ["ERROR", "WARN", "WARNING", "INFO", "DEBUG"]
+_NOISE_PREFIXES = ("START RequestId", "END RequestId", "REPORT RequestId")
+_NOISE_PATTERNS = [
+    "Lambda Event:",
+    '"resource":',
+    '"httpMethod":',
+    '"queryStringParameters":',
+    '"requestContext":',
+    "Valid config keys have changed",
+    "UserWarning",
+    "warnings.warn",
+]
 
 # Default log groups for the Pathlight stack (can be overridden via env CLOUDWATCH_LOG_GROUP_NAME_LIST)
 _DEFAULT_LOG_GROUPS = [
@@ -102,10 +113,37 @@ def _detect_log_level(message: str) -> str:
     return "INFO"
 
 
+def _normalize_level(value: str | None) -> str | None:
+    if not value:
+        return None
+    upper = value.strip().upper()
+    if upper == "WARNING":
+        return "WARN"
+    allowed = {"ERROR", "WARN", "INFO", "DEBUG"}
+    return upper if upper in allowed else None
+
+
+def _level_passes_filter(log_type: str, level_filter: str | None) -> bool:
+    if not level_filter:
+        return True
+    weights = {"DEBUG": 0, "INFO": 1, "WARN": 2, "ERROR": 3}
+    return weights.get(log_type.upper(), 1) >= weights.get(level_filter, 1)
+
+
+def _is_noise_log(message: str) -> bool:
+    stripped = (message or "").strip()
+    if any(stripped.startswith(prefix) for prefix in _NOISE_PREFIXES):
+        return True
+    # Filter out verbose Lambda event dumps and framework warnings
+    return any(pattern in stripped for pattern in _NOISE_PATTERNS)
+
+
 def _format_events(events: Sequence[dict], source: str) -> list[AdminLogItem]:
     formatted: list[AdminLogItem] = []
     for event in events:
         message = (event.get("message") or "").rstrip()
+        if _is_noise_log(message):
+            continue
         formatted.append(
             AdminLogItem(
                 timestamp=_to_vietnam_time(int(event.get("timestamp", 0))),
@@ -192,6 +230,7 @@ def get_admin_logs(
     *,
     service: Optional[str] = None,
     log_stream: Optional[str] = None,
+    level_filter: Optional[str] = None,
     logs_client=None,
 ) -> AdminLogsResponse:
     """Fetch logs from CloudWatch for the requested window and convert to VN time.
@@ -215,32 +254,55 @@ def get_admin_logs(
     start_ms = int(start_time.timestamp() * 1000)
     end_ms = int(end_time.timestamp() * 1000)
 
+    from botocore.config import Config as BotoConfig
+    boto_config = BotoConfig(
+        connect_timeout=3,
+        read_timeout=8,
+        retries={'max_attempts': 1}
+    )
+
     client = logs_client or boto3.client(
         "logs",
         region_name=config.AWS_REGION,
         aws_access_key_id=config.AWS_ACCESS_KEY_ID or None,
         aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY or None,
+        config=boto_config,
     )
 
     formatted: list[AdminLogItem] = []
+    normalized_level = _normalize_level(level_filter)
+
+    MAX_ITERATIONS = 2  # Prevent infinite loops - reduced from 5
+    MAX_EVENTS_PER_GROUP = 500  # Cap total events to avoid timeout - reduced from 5000
 
     for group in log_groups:
         events: list[dict] = []
         next_token: Optional[str] = None
+        iteration = 0
         try:
-            while True:
+            while iteration < MAX_ITERATIONS:
+                iteration += 1
                 params = {
                     "logGroupName": group,
                     "startTime": start_ms,
                     "endTime": end_ms,
-                    "limit": 1000,
+                    "limit": 200,  # Reduced from 1000 for faster response
                 }
                 if log_stream:
                     params["logStreamNames"] = [log_stream]
                 if next_token:
                     params["nextToken"] = next_token
+                
                 response = client.filter_log_events(**params)
-                events.extend(response.get("events", []))
+                batch = response.get("events", [])
+                events.extend(batch)
+                
+                # Early exit if we hit limit
+                if len(events) >= MAX_EVENTS_PER_GROUP:
+                    logger.warning(f"Hit max events ({MAX_EVENTS_PER_GROUP}) for {group}, truncating")
+                    events = events[:MAX_EVENTS_PER_GROUP]
+                    break
+                
                 new_token = response.get("nextToken")
                 if not new_token or new_token == next_token:
                     break
@@ -256,5 +318,15 @@ def get_admin_logs(
         formatted.extend(_format_events(events, source=group))
 
     # Sort combined logs by timestamp
+    if normalized_level:
+        formatted = [log for log in formatted if _level_passes_filter(log.type, normalized_level)]
+
     formatted.sort(key=lambda e: e.timestamp)
+    
+    # Final safety cap: limit total logs returned to prevent slow frontend rendering
+    MAX_TOTAL_LOGS = 1000
+    if len(formatted) > MAX_TOTAL_LOGS:
+        logger.warning(f"Total logs ({len(formatted)}) exceeds max ({MAX_TOTAL_LOGS}), truncating")
+        formatted = formatted[-MAX_TOTAL_LOGS:]  # Keep most recent
+    
     return AdminLogsResponse(status=200, logs=formatted)

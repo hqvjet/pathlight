@@ -8,7 +8,7 @@ from config import config
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 5
+DEFAULT_TIMEOUT = 1.5
 
 __all__ = ["get_quiz_stats"]
 
