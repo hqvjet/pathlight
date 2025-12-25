@@ -11,6 +11,10 @@ class AgentController:
         self.logger = setup_logger(__name__)
 
     def generate_course(self, request: AgentRequest) -> State:
+        # Validate user_id is present (required by DB)
+        if not request.user_id:
+            raise InternalServerError("user_id is required to generate a course")
+        
         # Build initial state for the agent graph
         init_state = State(
             id=request.id,
@@ -42,13 +46,16 @@ class AgentController:
             init_database()
             # Ensure user_id survives through the agent pipeline
             if isinstance(result, State):
-                if not getattr(result, "user_id", None) and request.user_id:
+                if not result.user_id and request.user_id:
                     result.user_id = request.user_id
                 save_course_state(result)
             else:
                 if not result.get("user_id") and request.user_id:
                     result["user_id"] = request.user_id
                 save_course_state(State(**result))  # type: ignore[arg-type]
+        except ValueError as e:
+            # Re-raise validation errors (like missing user_id)
+            raise InternalServerError(str(e))
         except Exception:
             self.logger.exception("Course persistence step failed for %s", request.id)
 

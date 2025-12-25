@@ -9,6 +9,7 @@ class Course(Base):
     __tablename__ = "course"
 
     course_id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False, index=True)  # FK to users.user_id (owner)
     publish = Column(Boolean, nullable=False, default=False)
     finish = Column(Boolean, nullable=False, default=False)
     title = Column(String, nullable=False)

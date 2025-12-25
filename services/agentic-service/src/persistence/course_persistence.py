@@ -27,13 +27,18 @@ def _gen_id(prefix: str) -> str:
 
 
 def save_course_state(state: State) -> None:
-    """Persist generated course State to Postgres theo ERD mới.
+    """Persist generated course State to Postgres theo ERD.
     
     Schema:
-    - course: course_id, publish, finish, title, overview, level, duration
+    - course: course_id, user_id (FK to users), publish, finish, title, overview, level, duration
     - lesson: lesson_id, course_id, title, overview, content, duration
     - assessment: assessment_id, lesson_id, question, hint, explanation, difficulty, option1-4, answer (int)
     """
+    # Validate user_id exists (required by DB constraint)
+    if not state.user_id:
+        logger.error("Cannot save course %s: user_id is required", state.id)
+        raise ValueError(f"user_id is required to save course {state.id}")
+    
     # If DATABASE_URL is not set, don't fail the main pipeline
     if not (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or os.getenv("PG_DSN")):
         logger.warning("DATABASE_URL not set; skipping DB persistence for course %s", state.id)
@@ -49,6 +54,7 @@ def save_course_state(state: State) -> None:
             if not course:
                 course = m.Course(
                     course_id=course_id,
+                    user_id=state.user_id,  # Required: owner user id
                     publish=False,
                     finish=False,
                     title=state.title or "Untitled Course",
@@ -63,6 +69,7 @@ def save_course_state(state: State) -> None:
                 course.overview = state.description or course.overview
                 course.level = state.difficulty
                 course.duration = int(state.duration)
+                # user_id should not change after creation
 
             # Lessons
             for idx, lesson in enumerate(state.lessons or [], start=1):
