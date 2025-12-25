@@ -22,7 +22,7 @@ def upgrade():
         sa.Column("subscription", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("family_name", sa.String(), nullable=True),
         sa.Column("given_name", sa.String(), nullable=True),
-        sa.Column("avatar_id", sa.String(), nullable=True),
+        sa.Column("avatar_url", sa.String(), nullable=True),
         sa.Column("dob", sa.DateTime(timezone=True), nullable=True),
         sa.Column("streak", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("level", sa.Integer(), nullable=False, server_default=sa.text("1")),

@@ -19,7 +19,7 @@ def _create_course_tables():
     op.create_table(
         'course',
         sa.Column('course_id', sa.String(), primary_key=True),
-        sa.Column('user_id', sa.String(), nullable=False, index=True),
+        sa.Column('user_id', sa.String(), sa.ForeignKey('user.user_id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('publish', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('finish', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('title', sa.String(), nullable=False),
