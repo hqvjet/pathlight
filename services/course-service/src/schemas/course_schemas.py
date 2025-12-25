@@ -82,6 +82,7 @@ class LessonDetail(BaseModel):
     content: str
     duration: int
     finish: bool
+    is_locked: bool = False
 
 
 class LessonListResponse(BaseModel):

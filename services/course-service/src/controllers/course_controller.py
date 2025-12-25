@@ -241,8 +241,9 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 
 
 def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int]:
-	"""Increment learning progress for a user on a course based on lesson order.
+	"""Mark a lesson as finished and increment learning progress sequentially.
 
+	Only allows finishing lessons in order (must complete lesson N before N+1).
 	Returns (finished_count, total_lessons).
 	"""
 	from src.models import Lesson, LearningProgress
@@ -256,8 +257,15 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	total = len(lessons)
 	if total == 0:
 		return 0, 0
+	
 	order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 	target_idx = order_map.get(lesson_id)
+	
+	if target_idx is None:
+		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
+		return 0, total
+
+	# Get or create progress record
 	progress = session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
 		LearningProgress.user_id == user_id,
@@ -270,27 +278,41 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 			num_total_lesson=total,
 		)
 		session.add(progress)
-	# Read typed integer values to avoid SQLAlchemy ColumnElement boolean/int issues in static checks
+		session.flush()
+	
+	# Update total lesson count if changed
 	num_total_val = cast(int, getattr(progress, "num_total_lesson") or 0)
 	if num_total_val != total:
-		# Use an update to avoid assigning a raw int to a Column-typed attribute (silences static type checkers)
 		session.query(LearningProgress).filter(
 			LearningProgress.course_id == course_id,
 			LearningProgress.user_id == user_id,
 		).update({"num_total_lesson": total}, synchronize_session=False)
 		session.flush()
+	
 	current_finished = min(cast(int, getattr(progress, "num_finished_lesson") or 0), total)
-	if target_idx is None:
+	
+	# Check if trying to finish a lesson out of order
+	if target_idx > current_finished:
+		logger.warning(f"User {user_id} trying to finish lesson {target_idx} but only completed {current_finished} lessons")
 		return current_finished, total
-	if target_idx < current_finished:
-		return current_finished, total
-	new_finished = max(current_finished, target_idx + 1)
-	session.query(LearningProgress).filter(
-		LearningProgress.course_id == course_id,
-		LearningProgress.user_id == user_id,
-	).update({"num_finished_lesson": new_finished}, synchronize_session=False)
-	session.flush()
-	return new_finished, total
+	
+	# Mark the target lesson as finished
+	target_lesson = lessons[target_idx]
+	if not getattr(target_lesson, "finish", False):
+		session.query(Lesson).filter(Lesson.lesson_id == lesson_id).update({"finish": True}, synchronize_session=False)
+	
+	# If this is the next lesson in sequence, increment progress
+	if target_idx == current_finished:
+		new_finished = current_finished + 1
+		session.query(LearningProgress).filter(
+			LearningProgress.course_id == course_id,
+			LearningProgress.user_id == user_id,
+		).update({"num_finished_lesson": new_finished}, synchronize_session=False)
+		session.flush()
+		logger.info(f"User {user_id} completed lesson {target_idx} ({lesson_id}), progress: {new_finished}/{total}")
+		return new_finished, total
+	
+	return current_finished, total
 
 
 def _get_s3_client():
@@ -882,7 +904,8 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 				overview=getattr(l, "overview", ""),
 				content=getattr(l, "content"),
 				duration=getattr(l, "duration", 0) or 0,
-				finish=idx < finished_lessons,
+				finish=getattr(l, "finish", False) or (idx < finished_lessons),
+				is_locked=(idx > finished_lessons),
 			)
 			for idx, l in enumerate(lessons)
 		]
@@ -911,7 +934,9 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
 		if not lesson:
 			raise HTTPException(status_code=404, detail="Lesson not found")
+		
 		completed = False
+		is_locked = True
 		if user_id:
 			progress = session.query(LearningProgress).filter(
 				LearningProgress.course_id == course.course_id,
@@ -926,10 +951,17 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 				)
 				order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 				target_idx = order_map.get(lesson.lesson_id)
-				completed = target_idx is not None and (target_idx < (progress.num_finished_lesson or 0))
-		# Ensure `finish` is a plain bool (SQLAlchemy ColumnElement[bool] may be returned by getattr)
-		_finish_attr = getattr(lesson, "finish", False)
-		_finish_bool = _finish_attr if isinstance(_finish_attr, bool) else False
+				finished_count = cast(int, getattr(progress, "num_finished_lesson") or 0)
+				if target_idx is not None:
+					completed = getattr(lesson, "finish", False) or (target_idx < finished_count)
+					is_locked = target_idx > finished_count
+		else:
+			# No user_id means public access, first lesson unlocked
+			lessons = session.query(Lesson).filter(Lesson.course_id == course.course_id).order_by(Lesson.created_at.asc()).all()
+			order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
+			target_idx = order_map.get(lesson.lesson_id, 0)
+			is_locked = target_idx > 0
+		
 		return LessonDetail(
 			lesson_id=getattr(lesson, "lesson_id"),
 			course_id=getattr(lesson, "course_id"),
@@ -937,7 +969,8 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			overview=getattr(lesson, "overview", ""),
 			content=getattr(lesson, "content"),
 			duration=getattr(lesson, "duration", 0) or 0,
-			finish=bool(_finish_bool or completed),
+			finish=completed,
+			is_locked=is_locked,
 		)
 	finally:
 		session.close()

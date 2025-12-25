@@ -85,7 +85,7 @@ async def request_create_course(
     request: Request,
     _auth=Depends(require_bearer),
 ):
-    return await create_course_controller(request, body)
+    return create_course_controller(request, body)
 
 
 @router.get("/all", response_model=CourseListResponse)
