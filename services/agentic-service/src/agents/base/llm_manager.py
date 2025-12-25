@@ -34,6 +34,8 @@ class LLMManager:
             model_name=model_name,
             openai_api_key=self.api_key,
             temperature=0.3,  # Lower temperature for more consistent output
+            request_timeout=60,  # Timeout after 60 seconds
+            max_retries=2,  # Retry up to 2 times on failure
             **llm_kwargs
         )
 
