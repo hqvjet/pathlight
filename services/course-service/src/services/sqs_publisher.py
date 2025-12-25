@@ -34,7 +34,6 @@ def send_generate_with_vectorize(
     region: Optional[str] = None,
     group_id: Optional[str] = None,
     job_type: str = "GENERATE_COURSE_WITH_VECTORIZE",
-    metadata: Optional[dict] = None,
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
@@ -47,9 +46,6 @@ def send_generate_with_vectorize(
         "duration": duration,
         "s3_keys": s3_keys or [],
     }
-
-    if metadata:
-        payload["metadata"] = metadata
 
     body = json.dumps(
         {

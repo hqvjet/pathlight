@@ -20,7 +20,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=_generate_id)
-    profile_id = Column(String, ForeignKey("user_profile.profile_id", ondelete="SET NULL"), nullable=True)
+    profile_id = Column(String, ForeignKey("user_profile.profile_id", ondelete="CASCADE"), nullable=True)
     email = Column(String, nullable=False, unique=True, index=True)
     password = Column(String, nullable=True)  # nullable for OAuth flows
     google_id = Column(String, nullable=True, unique=True)
@@ -33,7 +33,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
-    profile = relationship("UserProfile", back_populates="user", lazy="joined")
+    profile = relationship("UserProfile", back_populates="user", lazy="joined", cascade="all, delete-orphan", single_parent=True)
     activities = relationship("LearningActivity", back_populates="user", cascade="all, delete-orphan")
 
     # Proxy properties to profile for compatibility with existing code

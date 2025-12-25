@@ -6,25 +6,16 @@ class CreateCourseRequest(BaseModel):
         default="GENERATE_COURSE_WITH_VECTORIZE",
         description="Job type required by SQS. Defaults to GENERATE_COURSE_WITH_VECTORIZE"
     )
-    course_id: Optional[str] = Field(default=None, description="Course ID to create; auto-generated if omitted")
-    documents: Optional[List[str]] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
-    s3_key: Optional[List[str]] = Field(default=None, description="Backward-compatible array of S3 keys")
-    s3_keys: Optional[List[str]] = Field(default=None, description="Alias for documents")
-    user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
+    id: str = Field(default=None, description="Course ID to create; auto-generated if omitted")
+    s3_keys: List[str] = Field(default=None, description="Backward-compatible array of S3 keys")
+    user_id: str = Field(default=None, description="Owner user id; will be overridden by token if present")
 
     # Generation knobs (mapped to agentic-service payload)
     difficulty: str = Field(default="medium", description="easy | medium | hard")
     duration: int = Field(default=1200, description="Course duration (minutes)")
 
-    # Legacy prompt fields (kept for forward compatibility, ignored by agentic-service contract)
-    short_prompt: Optional[str] = Field(default=None, description="Optional prompt guiding course generation")
-    user_role: Optional[str] = Field(default=None, description="User role/position of the requester")
-    course_level: Optional[str] = Field(default=None, description="overview | intermediate | advance")
-    course_constraint: Optional[str] = Field(default=None, description="professional | academic | friendly | humorous")
-    course_duration: Optional[int] = Field(default=None, description="Legacy duration field (days)")
-
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 # ---- Course detail/list response schemas ----

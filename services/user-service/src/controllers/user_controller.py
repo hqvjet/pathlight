@@ -217,16 +217,23 @@ async def get_admin_user_overview(credentials: HTTPAuthorizationCredentials, db:
     if guard:
         return guard
     try:
-        users = db.query(User).all()
-        user_items = [
-            AdminUserItem(
-                user_id=str(user.id),
-                email=getattr(user, 'email', None),
-                given_name=getattr(user, 'given_name', None),
-                level=getattr(user, 'level', None),
+        # Fetch users with profiles via join to get accurate data
+        users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
+        user_items = []
+        for user in users:
+            # Get actual values from profile, don't use defaults
+            profile = getattr(user, 'profile', None)
+            user_items.append(
+                AdminUserItem(
+                    user_id=str(user.id),
+                    email=getattr(user, 'email', None),
+                    given_name=getattr(user, 'given_name', None),
+                    family_name=getattr(user, 'family_name', None),
+                    level=getattr(profile, 'level', None) if profile else None,
+                    current_exp=getattr(profile, 'current_exp', None) if profile else None,
+                    subscription=getattr(profile, 'subscription', None) if profile else None,
+                )
             )
-            for user in users
-        ]
         return AdminUsersResponse(status=200, users=user_items)
     except Exception as e:  # pragma: no cover
         logger.error(f"Error retrieving admin user overview: {e}")
@@ -278,12 +285,23 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
 
-        setattr(profile, 'subscription', request.subscription)
+        # Direct column update to ensure persistence
+        profile.subscription = request.subscription
+        db.flush()  # Force write to DB
         db.commit()
-        db.refresh(target_user)
-        db.refresh(profile)
-        logger.info(f"Admin updated subscription for user {getattr(target_user, 'email', 'unknown')}: {request.subscription} (verified: {getattr(profile, 'subscription')})")
-        return MessageResponse(status=200, message="Đã cập nhật gói thuê bao cho người dùng")
+        
+        # Verify by re-querying
+        db.expire_all()
+        verified_user = get_user_by_id(db, user_id)
+        verified_sub = getattr(verified_user, 'subscription', None)
+        
+        logger.info(f"Admin updated subscription for user {getattr(target_user, 'email', 'unknown')}: requested={request.subscription}, verified={verified_sub}")
+        
+        if verified_sub != request.subscription:
+            logger.error(f"Subscription update failed: expected {request.subscription}, got {verified_sub}")
+            return MessageResponse(status=500, message=f"Lỗi: Gói không được lưu (hiện tại: {verified_sub})")
+        
+        return MessageResponse(status=200, message=f"Đã cập nhật gói thuê bao thành {verified_sub}")
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to update subscription for user {user_id}: {e}")
         db.rollback()
@@ -535,9 +553,14 @@ async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredenti
         if not target_user:
             return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
 
+        # Explicitly delete profile first to ensure cleanup
+        profile = getattr(target_user, 'profile', None)
+        if profile:
+            db.delete(profile)
+        
         db.delete(target_user)
         db.commit()
-        logger.info(f"Admin deleted user {user_id} and all related resources")
+        logger.info(f"Admin deleted user {user_id} and profile")
         return _send_result(MessageResponse(status=200, message="Xóa người dùng thành công"))
     except Exception as e:  # pragma: no cover
         logger.error(f"Admin delete user error: {e}")

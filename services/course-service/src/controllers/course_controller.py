@@ -61,21 +61,12 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
     queue_url = os.getenv("SQS_QUEUE_URL")
     if not queue_url:
         return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
-
-    job_type_raw = (body.type or "").strip()
     default_job = "GENERATE_COURSE_WITH_VECTORIZE"
-    allowed_jobs = {default_job, "GENERATE_COURSE"}  # allow legacy/alias without blocking
-    job_type = job_type_raw or default_job
-    if job_type not in allowed_jobs:
-        logger.warning("Unsupported job type '%s', fallback to %s", job_type, default_job)
-        job_type = default_job
-
-    course_id = body.course_id or f"course-{uuid4()}"
-    s3_keys = (body.documents or []) + (body.s3_key or []) + (body.s3_keys or [])
-
+    course_id = body.id or f"course-{uuid4()}"
+    s3_keys = body.s3_keys or []
     difficulty = (body.difficulty or "medium").strip()
     try:
-        duration = int(body.duration or body.course_duration or 0)
+        duration = int(body.duration or 0)
     except Exception:
         duration = 0
     if duration <= 0:
@@ -119,15 +110,6 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
             return {"status": 500, "message": f"Failed to validate S3 objects: {e}"}
 
     try:
-        metadata = {
-            "short_prompt": (body.short_prompt or "").strip() or None,
-            "user_role": body.user_role,
-            "course_level": body.course_level,
-            "course_constraint": body.course_constraint,
-        }
-        # prune None metadata to keep payload lean
-        metadata = {k: v for k, v in metadata.items() if v}
-
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
             course_id=course_id,
@@ -137,8 +119,7 @@ async def create_course_controller(request: Request, body: CreateCourseRequest):
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),
-            job_type=job_type,
-            metadata=metadata or None,
+            job_type=default_job,
         )
         _log_activity(request, user_id, "create_course")
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "course_id": course_id}
