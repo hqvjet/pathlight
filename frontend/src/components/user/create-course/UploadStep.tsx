@@ -48,8 +48,8 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemoveUpl
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold text-gray-800">Thêm tài liệu (tuỳ chọn)</h2>
-        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Có thể bỏ qua bước này và chỉ dùng Prompt ngắn.</p>
+        <h2 className="text-lg font-semibold text-gray-800">Tải lên tài liệu <span className="text-red-500">*</span></h2>
+        <p className="text-sm text-gray-500">Hỗ trợ pdf, docx, pptx. Vui lòng tải lên ít nhất 1 tài liệu để tạo khóa học.</p>
       </div>
 
       <div
@@ -160,14 +160,14 @@ export function UploadStep({ documents, uploading, onFiles, onRetry, onRemoveUpl
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onCancel} className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Quay lại</button>
         <button
-          disabled={uploading.length > 0}
+          disabled={uploading.length > 0 || documents.length === 0}
           onClick={onNext}
           className={cn(
             'px-6 py-2 rounded-md text-white font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed',
-            uploading.length === 0 ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-400'
+            uploading.length === 0 && documents.length > 0 ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-400'
           )}
         >
-          {hasFiles ? 'Tiếp tục' : 'Tiếp tục (không cần file)'}
+          Tiếp tục
         </button>
       </div>
     </div>

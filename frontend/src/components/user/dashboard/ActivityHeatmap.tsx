@@ -9,13 +9,13 @@ interface ActivityHeatmapProps {
 
 export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, setSelectedYear, generateYearActivityData }) => {
   return (
-    <Card className="md:col-span-2 bg-[#0d1117] text-gray-200 border border-gray-700/60 overflow-hidden">
+    <Card className="md:col-span-2 bg-cyan-50 border border-cyan-200 overflow-hidden">
       <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between">
-        <CardTitle className="text-base text-gray-100">Hoạt động {selectedYear}</CardTitle>
+        <CardTitle className="text-base text-gray-800">Hoạt động {selectedYear}</CardTitle>
         <select
           value={selectedYear}
           onChange={(e) => setSelectedYear(+e.target.value)}
-          className="text-[11px] rounded-full border border-gray-600 bg-[#161b22] text-gray-300 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="text-[11px] rounded-full border border-cyan-300 bg-white/80 text-gray-700 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-cyan-400"
         >
           {[new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map((y) => (
             <option key={y}>{y}</option>
@@ -24,7 +24,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, 
       </CardHeader>
       <CardContent className="px-4 pt-0 pb-4">
         <div className="space-y-2">
-          <div className="flex text-[10px] text-gray-500 mb-1 px-px select-none">
+          <div className="flex text-[10px] text-gray-600 mb-1 px-px select-none">
             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(m => (
               <div key={m} className="flex-1 text-center font-medium tracking-wide">{m}</div>
             ))}
@@ -33,11 +33,11 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, 
             <div className="grid grid-rows-7 gap-[3px]" style={{ gridTemplateColumns: 'repeat(53, 1fr)' }}>
               {(() => {
                 const yearActivityData = generateYearActivityData(selectedYear);
-                const colors = ['#161b22','#003820','#005c31','#238b45','#2ea043'];
+                const colors = ['#e0f2fe','#7dd3fc','#38bdf8','#0284c7','#0369a1']; // cyan shades
                 return yearActivityData.map((activity, i) => {
                   const isCurrentYear = activity.isCurrentYear;
                   const bg = isCurrentYear ? colors[activity.level] : 'transparent';
-                  const border = isCurrentYear ? '#30363d' : 'transparent';
+                  const border = isCurrentYear ? '#bae6fd' : 'transparent';
                   return (
                     <div
                       key={i}
@@ -54,11 +54,11 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, 
             {['Mon','Wed','Fri'].map(d => <span key={d}>{d}</span>)}
           </div>
         </div>
-        <div className="flex items-center justify-end mt-3 gap-2 text-[10px] text-gray-500">
+        <div className="flex items-center justify-end mt-3 gap-2 text-[10px] text-gray-600">
           <span>Less</span>
           {[0,1,2,3,4].map(l => {
-            const legendColors = ['#161b22','#003820','#005c31','#238b45','#2ea043'];
-            return <span key={l} className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: legendColors[l], border: '1px solid #30363d' }} />
+            const legendColors = ['#e0f2fe','#7dd3fc','#38bdf8','#0284c7','#0369a1'];
+            return <span key={l} className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: legendColors[l], border: '1px solid #bae6fd' }} />
           })}
           <span>More</span>
         </div>

@@ -3,11 +3,11 @@ import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CourseDraftState } from '@/types/create-course';
-import { AgenticCourseResponse } from '@/lib/api/agentic';
+import { AgenticCourseResponse, AgenticCreateCourseResponse } from '@/lib/api/agentic';
 
 interface SuccessStepProps {
   draft: CourseDraftState;
-  result: AgenticCourseResponse | null;
+  result: AgenticCreateCourseResponse | null;
   onRestart: () => void;
   onGoToCourses: () => void;
 }
@@ -21,10 +21,18 @@ const levelLabel = (level?: number) => {
   return 'Rất khó (5)';
 };
 
+const isCourseResponse = (value: AgenticCreateCourseResponse | null): value is AgenticCourseResponse => {
+  return Boolean(value && 'course_title' in value && 'course_lessons' in value);
+};
+
 export function SuccessStep({ draft, result, onRestart, onGoToCourses }: SuccessStepProps) {
-  const lessons = useMemo(() => result?.course_lessons || [], [result]);
-  const hasResult = Boolean(result);
-  const isPending = !result || lessons.length === 0;
+  const lessons = useMemo(() => (isCourseResponse(result) ? result.course_lessons : []), [result]);
+  const hasResult = isCourseResponse(result);
+  const isPending = !hasResult || lessons.length === 0;
+  const courseTitle = hasResult ? result.course_title : 'Đang chờ phản hồi...';
+  const courseOverview = hasResult ? result.course_overview : 'Hệ thống đang xử lý phản hồi.';
+  const courseLevel = hasResult ? result.course_level : undefined;
+  const courseDuration = hasResult ? result.course_duration : undefined;
 
   const renderContent = (content: string) => {
     const segments = content.split(/```/);
@@ -121,14 +129,14 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">Kết quả khóa học</p>
-            <h3 className="text-2xl font-bold text-gray-900">{result?.course_title || 'Đang chờ phản hồi...'}</h3>
-            <p className="text-gray-700 leading-relaxed max-w-3xl">{result?.course_overview || 'Hệ thống đang xử lý phản hồi.'}</p>
+            <h3 className="text-2xl font-bold text-gray-900">{courseTitle}</h3>
+            <p className="text-gray-700 leading-relaxed max-w-3xl">{courseOverview}</p>
           </div>
           <div className="flex flex-col items-end gap-2 text-sm text-gray-700">
-            <Badge className={result ? 'bg-orange-500 text-white border-none' : 'bg-gray-200 text-gray-700 border-none'}>
-              {result ? `Level ${result.course_level} · ${levelLabel(result.course_level)}` : 'Đang tạo' }
+            <Badge className={hasResult ? 'bg-orange-500 text-white border-none' : 'bg-gray-200 text-gray-700 border-none'}>
+              {hasResult && courseLevel ? `Level ${courseLevel} · ${levelLabel(courseLevel)}` : 'Đang tạo' }
             </Badge>
-            <span className="text-gray-600">Thời lượng: {result?.course_duration ? `${result.course_duration} ngày` : 'Đang tính toán'}</span>
+            <span className="text-gray-600">Thời lượng: {courseDuration ? `${courseDuration} ngày` : 'Đang tính toán'}</span>
           </div>
         </div>
 

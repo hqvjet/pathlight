@@ -75,6 +75,10 @@ export const courseApi = {
     lesson_id: string,
     payload: { answers: Array<{ assessment_id: string; answer: number }> },
   ) => apiClient.post(`/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/assessments/submit`, payload),
+  getHint: (course_id: string, lesson_id: string, assessment_id: string) =>
+    apiClient.get<{ status: number; hint?: string; exp_penalty?: number; message?: string }>(
+      `/course/${encodeURIComponent(course_id)}/lessons/${encodeURIComponent(lesson_id)}/assessments/${encodeURIComponent(assessment_id)}/hint`
+    ),
   getQuiz: (course_id: string) => apiClient.get(`/course/${encodeURIComponent(course_id)}/quiz`),
   submitQuiz: (
     course_id: string,

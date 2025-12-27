@@ -8,13 +8,12 @@ export type AgenticCourseConstraint =
   | 'humorous';
 
 export interface CreateAgenticCourseRequest {
-  type?: 'generate_course' | 'generate_quiz';
-  user_role: string;
-  short_prompt: string;
-  course_duration: number; // unit: days
-  documents?: string[];
-  course_level: AgenticCourseLevel;
-  course_constraint: AgenticCourseConstraint | string;
+  type?: 'GENERATE_COURSE_WITH_VECTORIZE';
+  id?: string; // Course ID, auto-generated if omitted
+  s3_keys: string[]; // Required: array of S3 object keys
+  difficulty?: string; // "easy" | "medium" | "hard", defaults to "medium"
+  duration: number; // Course duration in minutes (not days!)
+  user_id?: string; // Will be overridden by token on backend
 }
 
 export interface AgenticAssessmentOption {
@@ -45,7 +44,16 @@ export interface AgenticCourseResponse {
   course_lessons: AgenticLesson[];
 }
 
+export interface AgenticQueuedCreateResponse {
+  status?: number;
+  message?: string;
+  course_id?: string;
+  sqs_message_id?: string;
+}
+
+export type AgenticCreateCourseResponse = AgenticCourseResponse | AgenticQueuedCreateResponse;
+
 export const agenticApi = {
   createCourse: (payload: CreateAgenticCourseRequest) =>
-    apiClient.post<AgenticCourseResponse>(`/course/create`, payload),
+    apiClient.post<AgenticCreateCourseResponse>(`/course/create`, payload),
 };
