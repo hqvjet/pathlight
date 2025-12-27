@@ -38,10 +38,12 @@ export default function AdminUsersPageEnhanced() {
   }, []);
 
   useEffect(() => {
+    // Initialize subscription drafts from actual API data
     setSubscriptionDrafts((prev) => {
       const next = { ...prev };
       users.forEach((u) => {
-        if (next[u.user_id] === undefined) next[u.user_id] = u.subscription ?? 0;
+        // Always use API value, never default to 0
+        next[u.user_id] = u.subscription ?? u.subscription;
       });
       return next;
     });
@@ -158,15 +160,28 @@ export default function AdminUsersPageEnhanced() {
     setPendingActions((prev) => ({ ...prev, [userId]: true }));
     try {
       const resp = await adminApi.addUserExperience(userId, exp);
-      if (resp?.data?.status === 200) {
-        showToast.success(resp.data.message || 'Đã thêm exp');
+      // Check both status 200 and status field in response
+      if (resp?.data?.status === 200 || resp?.status === 200) {
+        showToast.success(resp.data?.message || 'Đã thêm exp thành công');
         setExpInputs((prev) => ({ ...prev, [userId]: '' }));
-        loadUsers();
+        // Reload to get updated stats
+        await loadUsers();
       } else {
         showToast.error(resp?.data?.message || 'Không thể thêm exp');
       }
-    } catch {
-      showToast.error('Lỗi khi thêm exp');
+    } catch (error: unknown) {
+      // If DB succeeded but returned error message, still reload
+      const responseStatus =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { status?: number } }).response?.status
+          : undefined;
+      if (responseStatus === 200) {
+        showToast.success('Đã thêm exp thành công');
+        setExpInputs((prev) => ({ ...prev, [userId]: '' }));
+        await loadUsers();
+      } else {
+        showToast.error('Lỗi khi thêm exp');
+      }
     } finally {
       setPendingActions((prev) => ({ ...prev, [userId]: false }));
     }
@@ -298,7 +313,7 @@ export default function AdminUsersPageEnhanced() {
                 <h3 className="font-bold text-gray-900 text-lg">
                   {user.given_name || user.family_name
                     ? `${user.given_name || ''} ${user.family_name || ''}`.trim()
-                    : 'Unknown User'}
+                    : 'Unnamed User'}
                 </h3>
                 <p className="text-sm text-gray-600 truncate">{user.email || 'No email'}</p>
               </div>

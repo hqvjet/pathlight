@@ -33,7 +33,7 @@ class CourseFullInfo(BaseModel):
     duration: int
     publish: bool = False
     finish: bool = False
-    owner_id: str
+    user_id: str
     lesson: List[LessonInfo]
     progress_finished_lessons: int = 0
     progress_total_lessons: int = 0
@@ -53,7 +53,7 @@ class CourseSummary(BaseModel):
     duration: int
     finish: bool
     publish: bool = False
-    owner_id: str
+    user_id: str
     lesson_num: int
     finish_lesson_num: int
     updated_at: str
@@ -82,6 +82,7 @@ class LessonDetail(BaseModel):
     content: str
     duration: int
     finish: bool
+    locked: bool = False  # True if lesson is locked (previous lessons not completed)
 
 
 class LessonListResponse(BaseModel):
@@ -95,6 +96,7 @@ class AssessmentItem(BaseModel):
     lesson_id: str
     question: str
     hint: str | None = None
+    has_hint: bool = False  # Flag to show hint button in UI
     explanation: str
     difficulty: str
     option1: str
@@ -154,6 +156,19 @@ class AssessmentSubmitResponse(BaseModel):
     result: AssessmentSubmitResult | None = None
     message: str | None = None
     experience: ExperienceSnapshot | None = None
+
+
+# ---- Hint request schemas ----
+
+class GetHintRequest(BaseModel):
+    assessment_id: str
+
+
+class GetHintResponse(BaseModel):
+    status: int
+    hint: str | None = None
+    message: str | None = None
+    exp_penalty: int = 0
 
 
 # ---- Upload presign schemas ----

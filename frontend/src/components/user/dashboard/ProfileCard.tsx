@@ -12,36 +12,36 @@ export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
   })();
   const expLabel = `${currentExp} / ${requireExp || 0} EXP`;
   return (
-    <Card className="bg-[#111827] border-none text-white shadow-md md:col-span-1">
+    <Card className="bg-cyan-50 border border-cyan-200 shadow-md md:col-span-1">
       <CardContent className="p-5 space-y-6">
         <div className="flex items-center gap-4">
-          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-violet-500/40" cacheKey={user.avatarKey} />
+          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-cyan-400/60" cacheKey={user.avatarKey} />
           <div className="min-w-0">
-            <h2 className="text-base font-semibold leading-tight truncate">{user.name}</h2>
-            <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+            <h2 className="text-base font-semibold leading-tight truncate text-gray-800">{user.name}</h2>
+            <p className="text-[11px] text-gray-600 truncate">{user.email}</p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 text-center text-[10px]">
-          <div className="bg-white/5 rounded-md py-2">
-            <div className="text-xs font-semibold text-emerald-400">{user.level}</div>
-            <div className="text-[9px] text-gray-400 mt-0.5">Level</div>
+          <div className="bg-white/80 border border-emerald-200/50 rounded-md py-2 shadow-sm">
+            <div className="text-xs font-semibold text-emerald-600">{user.level}</div>
+            <div className="text-[9px] text-gray-600 mt-0.5">Level</div>
           </div>
-          <div className="bg-white/5 rounded-md py-2">
-            <div className="text-xs font-semibold text-indigo-400">{user.completed_courses}/{user.total_courses}</div>
-            <div className="text-[9px] text-gray-400 mt-0.5">Courses</div>
+          <div className="bg-white/80 border border-indigo-200/50 rounded-md py-2 shadow-sm">
+            <div className="text-xs font-semibold text-indigo-600">{user.completed_courses}/{user.total_courses}</div>
+            <div className="text-[9px] text-gray-600 mt-0.5">Courses</div>
           </div>
-          <div className="bg-white/5 rounded-md py-2">
-            <div className="text-xs font-semibold text-amber-400">#{user.rank}</div>
-            <div className="text-[9px] text-gray-400 mt-0.5">Rank</div>
+          <div className="bg-white/80 border border-amber-200/50 rounded-md py-2 shadow-sm">
+            <div className="text-xs font-semibold text-amber-600">#{user.rank}</div>
+            <div className="text-[9px] text-gray-600 mt-0.5">Rank</div>
           </div>
         </div>
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] text-gray-400">
+          <div className="flex items-center justify-between text-[10px] text-gray-600">
             <span>Kinh nghiệm</span>
-            <span className="font-medium text-gray-200">{expPercent}%</span>
+            <span className="font-medium text-gray-800">{expPercent}%</span>
           </div>
-          <div className="h-2.5 bg-gray-700/70 rounded overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500" style={{ width: `${expPercent}%` }} />
+          <div className="h-2.5 bg-cyan-100/80 rounded overflow-hidden border border-cyan-200/30">
+            <div className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500" style={{ width: `${expPercent}%` }} />
           </div>
           <div className="flex justify-between text-[10px] text-gray-500">
             <span>{expLabel}</span>

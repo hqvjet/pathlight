@@ -20,6 +20,7 @@ interface LessonDetailApi {
   content: string;
   duration: number;
   finish: boolean;
+  locked?: boolean;
 }
 
 interface AssessmentItemApi {
@@ -27,6 +28,7 @@ interface AssessmentItemApi {
   lesson_id: string;
   question: string;
   hint?: string | null;
+  has_hint?: boolean;  // Flag from backend to show hint button
   explanation?: string | null;
   difficulty?: string | number | null;
   option1: string;
@@ -84,6 +86,7 @@ interface LessonListItemApi {
   lesson_id: string;
   title: string;
   finish: boolean;
+  locked?: boolean;
   order?: number;
 }
 
@@ -121,6 +124,7 @@ type NormalizedQuestion = {
   question: string;
   options: NormalizedOption[];
   hint?: string;
+  has_hint?: boolean;  // Flag to show hint button
   explanation?: string;
   level?: number;
   difficult_level_id?: number;
@@ -180,6 +184,12 @@ export default function LessonDetailPage({ params }: PageProps) {
         if (detailData.status && detailData.status !== 200) {
           throw new Error(detailData.message || 'Không thể tải bài học');
         }
+        
+        // Check if lesson is locked
+        if (detailData.locked) {
+          throw new Error('Bạn cần hoàn thành các bài học trước đó trước khi truy cập bài học này');
+        }
+        
         if (assessData?.status !== 200 || !assessData.assessments || assessData.assessments.length === 0) {
           throw new Error(assessData?.message || 'Không thể tải bài kiểm tra');
         }
@@ -232,6 +242,7 @@ export default function LessonDetailPage({ params }: PageProps) {
       id: a.assessment_id || `assessment-${idx}`,
       question: a.question,
       hint: a.hint || undefined,
+      has_hint: a.has_hint || false,  // Flag from backend
       explanation: a.explanation || undefined,
       level: typeof a.difficulty === 'number' ? a.difficulty : undefined,
       difficult_level_id: typeof a.difficulty === 'number' ? a.difficulty : undefined,
@@ -375,46 +386,61 @@ export default function LessonDetailPage({ params }: PageProps) {
     setCurrentQuestion(0);
   };
 
-  const handleShowHint = (questionId: string) => {
+  const handleShowHint = async (questionId: string) => {
     if (visibleHints[questionId]) return;
+    
     const target = assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
-    const ensureHint = async () => {
-      if (target?.hint) return true;
-      try {
-        const resp = await courseApi.listAssessments(courseId, lessonId, { include_hints: true, include_explanations: false });
-        const data = resp.data as AssessmentListResponseApi;
-        if (data?.assessments?.length) {
-          setAssessments((prev) => {
-            const map = new Map<string, AssessmentItemApi>();
-            prev.forEach((a) => map.set(a.assessment_id || a.question, a));
-            data.assessments?.forEach((a) => {
-              const key = a.assessment_id || a.question;
-              map.set(key, { ...(map.get(key) || {}), ...a });
-            });
-            return Array.from(map.values());
-          });
-          const updated = data.assessments.find((a) => (a.assessment_id || a.question) === questionId || a.assessment_id === questionId);
-          return Boolean(updated?.hint);
-        }
-      } catch {
-        /* ignore */
-      }
-      return false;
-    };
-
-    ensureHint().then((hasHint) => {
-      if (!hasHint) {
-        showToast.info('Câu hỏi này không có gợi ý.');
-        return;
-      }
-    if (availableExp < HINT_COST) {
-      showToast.warning('Không đủ EXP để mở gợi ý (-50 EXP)');
+    if (!target || !target.has_hint) {
+      showToast.info('Câu hỏi này không có gợi ý.');
       return;
     }
-    // Consume EXP budget locally when hint is revealed
-    setPlayerExp((prev) => Math.max(0, prev - HINT_COST));
-    setVisibleHints((prev) => (prev[questionId] ? prev : { ...prev, [questionId]: true }));
-    });
+
+    try {
+      // Call hint API - this will deduct exp on server side
+      const resp = await courseApi.getHint(courseId, lessonId, target.assessment_id);
+      const data = resp.data;
+      
+      if (data.status !== 200 || !data.hint) {
+        showToast.error(data.message || 'Không thể lấy gợi ý');
+        return;
+      }
+
+      // Update assessment with hint text
+      setAssessments((prev) => 
+        prev.map((a) => 
+          a.assessment_id === target.assessment_id 
+            ? { ...a, hint: data.hint } 
+            : a
+        )
+      );
+      
+      // Show hint in UI
+      setVisibleHints((prev) => ({ ...prev, [questionId]: true }));
+      
+      // Show penalty notification
+      if (data.exp_penalty && data.exp_penalty > 0) {
+        showToast.info(`Đã trừ ${data.exp_penalty} EXP để xem gợi ý`);
+      }
+      
+      // Refresh user info to get updated exp
+      try {
+        const userResp = await userApi.getInfo();
+        const userData = userResp.data as UserInfoApi;
+        if (userData?.Info?.current_exp !== undefined) {
+          setPlayerExp(userData.Info.current_exp);
+        }
+        if (userData?.Info?.level !== undefined) {
+          setPlayerLevel(userData.Info.level);
+        }
+        if (userData?.Info?.require_exp !== undefined) {
+          setRequireExp(userData.Info.require_exp);
+        }
+      } catch {
+        // Ignore if can't refresh user info
+      }
+    } catch (e: unknown) {
+      showToast.error(e instanceof Error ? e.message : 'Không thể lấy gợi ý');
+    }
   };
 
   const handleShowExplanation = (questionId: string) => {
@@ -800,7 +826,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {questions[currentQuestion].hint && (
+                          {questions[currentQuestion].has_hint && (
                             <button
                               type="button"
                               onClick={() => handleShowHint(questions[currentQuestion].id)}
@@ -813,7 +839,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                               )}
                             >
                               <Lightbulb className="w-4 h-4" />
-                              {visibleHints[questions[currentQuestion].id] ? 'Đã hiện gợi ý (-50 EXP)' : 'Hiện gợi ý (-50 EXP)'}
+                              {visibleHints[questions[currentQuestion].id] ? 'Đã xem gợi ý' : 'Gợi ý'}
                             </button>
                           )}
                           {submissionResult && (

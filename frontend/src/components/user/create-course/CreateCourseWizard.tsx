@@ -10,7 +10,13 @@ import { SuccessStep } from './SuccessStep';
 import { v4 as uuid } from 'uuid';
 import { showToast } from '@/utils/toast';
 import { courseApi, PresignUploadResponseItem } from '@/lib/api/course';
-import { agenticApi, AgenticCourseResponse, CreateAgenticCourseRequest } from '@/lib/api/agentic';
+import {
+  agenticApi,
+  AgenticCourseResponse,
+  AgenticCreateCourseResponse,
+  AgenticQueuedCreateResponse,
+  CreateAgenticCourseRequest,
+} from '@/lib/api/agentic';
 import { ApiErrorClass } from '@/lib/api/http';
 import { API_CONFIG } from '@/config/env';
 import { useAuthContext } from '@/context/AuthContext';
@@ -19,8 +25,16 @@ export function CreateCourseWizard() {
   const router = useRouter();
   const { user } = useAuthContext();
   const [draft, setDraft] = useState<CourseDraftState>(createEmptyDraft());
-  const [result, setResult] = useState<AgenticCourseResponse | null>(null);
+  const [result, setResult] = useState<AgenticCreateCourseResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isQueuedCreateResponse = (data: unknown): data is AgenticQueuedCreateResponse => {
+    return Boolean(data && typeof data === 'object' && ('course_id' in data || 'sqs_message_id' in data || 'status' in data || 'message' in data));
+  };
+
+  const isCourseResponse = (data: unknown): data is AgenticCourseResponse => {
+    return Boolean(data && typeof data === 'object' && 'course_title' in data && 'course_overview' in data);
+  };
 
   // Direct-to-S3 via presigned PUT (single-part) to avoid API Gateway 10MB limit
   const uploadWithPresigned = (url: string, file: File, headers?: Record<string, string>, onProgress?: (p: number) => void) => {
@@ -151,9 +165,21 @@ export function CreateCourseWizard() {
     return true;
   };
 
+  const validateFiles = () => {
+    if (draft.documents.length === 0) {
+      showToast.error('Vui lòng tải lên ít nhất 1 tài liệu');
+      return false;
+    }
+    return true;
+  };
+
   const next = () => setDraft(d => ({ ...d, step: Math.min(d.step + 1, 3) }));
   const back = () => setDraft(d => ({ ...d, step: Math.max(d.step - 1, 1) }));
   const setStep = (step: number) => setDraft(d => ({ ...d, step }));
+
+  const nextFromUpload = () => {
+    if (validateFiles()) next();
+  };
 
   const nextFromMeta = () => {
     if (validateMeta(draft.meta)) next();
@@ -164,31 +190,47 @@ export function CreateCourseWizard() {
     setResult(null);
     setIsSubmitting(true);
     try {
+      if (!validateFiles()) {
+        setIsSubmitting(false);
+        return;
+      }
+
       if (!validateMeta(draft.meta)) {
         setIsSubmitting(false);
         return;
       }
 
       const payload: CreateAgenticCourseRequest = {
-        type: 'generate_course',
-        user_role: draft.meta.userPosition.trim(),
-        short_prompt: draft.meta.shortPrompt.trim(),
-        course_duration: Math.max(1, draft.meta.durationDays || 1),
-        documents:
-          draft.documents.length > 0
-            ? draft.documents.map((d) => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name))
-            : undefined,
-        course_level: draft.meta.courseLevel,
-        course_constraint: draft.meta.courseConstraint,
+        type: 'GENERATE_COURSE_WITH_VECTORIZE',
+        id: `course-${uuid()}`,
+        s3_keys: draft.documents.map((d) => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name)),
+        difficulty: draft.meta.courseLevel === 'overview' ? 'easy' : draft.meta.courseLevel === 'intermediate' ? 'medium' : 'hard',
+        duration: Math.max(1, draft.meta.durationDays || 1) * 24 * 60,
+        user_id: user?.id,
       };
 
       const resp = await agenticApi.createCourse(payload);
-      if (resp?.data) {
-        setResult(resp.data);
+      const data = resp?.data;
+
+      if (resp?.status === 202 && isQueuedCreateResponse(data)) {
+        const courseId = data.course_id || payload.id;
+        const messageId = data.sqs_message_id;
+
+        showToast.success('Đã gửi yêu cầu tạo khóa học thành công!');
+        setDraft((d) => ({ ...d, step: 4, courseId }));
+        if (courseId) {
+          console.log('Course submitted:', { courseId, messageId });
+        }
+      } else if (data && isCourseResponse(data)) {
+        setResult(data);
         setDraft((d) => ({ ...d, step: 4 }));
-        showToast.success('Đã tạo khóa học bằng multi-agent.');
+        showToast.success('Đã tạo khóa học thành công!');
+      } else if (data && isQueuedCreateResponse(data)) {
+        setResult(data);
+        setDraft((d) => ({ ...d, step: 4, courseId: data.course_id || payload.id }));
+        showToast.success(data.message || 'Đã tạo khóa học thành công!');
       } else {
-        showToast.info('Đã gửi yêu cầu, vui lòng chờ phản hồi.');
+        showToast.warning('Đã gửi yêu cầu nhưng không nhận được xác nhận.');
         setDraft((d) => ({ ...d, step: 4 }));
       }
     } catch (e: unknown) {
@@ -215,7 +257,7 @@ export function CreateCourseWizard() {
                 onRetry={retryUpload}
                 onRemoveUploading={removeUploading}
                 onRemove={removeDoc}
-                onNext={next}
+                onNext={nextFromUpload}
                 onCancel={() => {
                   // Navigate to My Courses when cancelling upload step
                   router.push('/user/my-courses');

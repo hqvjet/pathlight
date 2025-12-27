@@ -18,6 +18,7 @@ interface LessonDetailApi {
   content?: string;
   duration?: number;
   finish: boolean;
+  locked?: boolean;  // Add locked field from backend
   order?: number;
 }
 
@@ -143,20 +144,20 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   }, [lessons]);
 
   const modules = useMemo<CourseModule[]>(() => {
-    let locked = false;
     return [
       {
         id: 'main',
         title: 'Lộ trình khóa học',
         lessons: lessons.map((lesson, idx) => {
+          // Use backend-provided locked status
           let status: 'completed' | 'in-progress' | 'locked';
-          if (!locked && !lesson.finish) {
-            status = 'in-progress';
-            locked = true;
-          } else if (locked || !lesson.finish) {
-            status = lesson.finish ? 'completed' : 'locked';
-          } else {
+          if (lesson.finish) {
             status = 'completed';
+          } else if (lesson.locked) {
+            status = 'locked';
+          } else {
+            // Not finished and not locked = in progress
+            status = 'in-progress';
           }
 
           return {
@@ -173,8 +174,13 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   }, [lessons]);
 
   const continueLessonId = useMemo(() => {
-    const firstUnlocked = modules[0]?.lessons.find((lesson) => lesson.status !== 'locked');
-    return firstUnlocked?.id || null;
+    // Find the first in-progress lesson (next unfinished lesson)
+    const inProgressLesson = modules[0]?.lessons.find((lesson) => lesson.status === 'in-progress');
+    if (inProgressLesson) return inProgressLesson.id;
+    
+    // If no in-progress, find first not completed (shouldn't happen with proper logic)
+    const firstIncomplete = modules[0]?.lessons.find((lesson) => lesson.status !== 'completed');
+    return firstIncomplete?.id || null;
   }, [modules]);
 
   const handleSelectLesson = (lessonId: string) => {

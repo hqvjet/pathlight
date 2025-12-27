@@ -171,8 +171,9 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 	"""Call user-service to add experience for the current user.
 
 	Returns a dict with status_code and body when the call was attempted, otherwise None.
+	exp_amount can be negative for penalties (hint usage, etc.)
 	"""
-	if exp_amount <= 0:
+	if exp_amount == 0:
 		return None
 	base_url = _user_service_base_url()
 	auth_header = request.headers.get("Authorization")
@@ -242,6 +243,7 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 
 def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int]:
 	"""Increment learning progress for a user on a course based on lesson order.
+	Only allows completing the NEXT lesson in sequence (no skipping).
 
 	Returns (finished_count, total_lessons).
 	"""
@@ -258,6 +260,8 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 		return 0, 0
 	order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 	target_idx = order_map.get(lesson_id)
+	
+	# Get or create progress record
 	progress = session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
 		LearningProgress.user_id == user_id,
@@ -270,26 +274,43 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 			num_total_lesson=total,
 		)
 		session.add(progress)
-	# Read typed integer values to avoid SQLAlchemy ColumnElement boolean/int issues in static checks
+		session.flush()
+	
+	# Update total if changed
 	num_total_val = cast(int, getattr(progress, "num_total_lesson") or 0)
 	if num_total_val != total:
-		# Use an update to avoid assigning a raw int to a Column-typed attribute (silences static type checkers)
 		session.query(LearningProgress).filter(
 			LearningProgress.course_id == course_id,
 			LearningProgress.user_id == user_id,
 		).update({"num_total_lesson": total}, synchronize_session=False)
 		session.flush()
+	
 	current_finished = min(cast(int, getattr(progress, "num_finished_lesson") or 0), total)
+	
+	# Validate target lesson exists
 	if target_idx is None:
+		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
 		return current_finished, total
-	if target_idx < current_finished:
+	
+	# Only allow completing the NEXT lesson in sequence
+	# current_finished = number of lessons already completed (0-indexed in progress)
+	# target_idx = index of lesson trying to complete (0-indexed)
+	if target_idx != current_finished:
+		# Not the next lesson - either already completed or trying to skip
+		if target_idx < current_finished:
+			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished})")
+		else:
+			logger.warning(f"Cannot skip to lesson {lesson_id} (target={target_idx}, finished={current_finished}). Complete previous lessons first.")
 		return current_finished, total
-	new_finished = max(current_finished, target_idx + 1)
+	
+	# This is the next lesson - increment by 1
+	new_finished = current_finished + 1
 	session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
 		LearningProgress.user_id == user_id,
 	).update({"num_finished_lesson": new_finished}, synchronize_session=False)
 	session.flush()
+	logger.info(f"Progress updated for user {user_id} course {course_id}: {new_finished}/{total} lessons completed")
 	return new_finished, total
 
 
@@ -603,7 +624,7 @@ def update_course_visibility_controller(request: Request, body: CourseVisibility
 		session.close()
 
 
-def list_public_courses_controller(search: str | None = None, owner_id: str | None = None) -> CourseListResponse:
+def list_public_courses_controller(search: str | None = None, user_id: str | None = None) -> CourseListResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson
 
@@ -620,8 +641,8 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 			Course.user_id,
 		)
 		query = query.filter(Course.publish.is_(True))
-		if owner_id:
-			query = query.filter(Course.user_id == owner_id)
+		if user_id:
+			query = query.filter(Course.user_id == user_id)
 		if search:
 			pattern = f"%{search}%"
 			query = query.filter(Course.title.ilike(pattern))
@@ -641,6 +662,7 @@ def list_public_courses_controller(search: str | None = None, owner_id: str | No
 				duration=r.duration or 0,
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
+				user_id=r.user_id or "",
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -767,6 +789,7 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 			duration=getattr(course, "duration", 0) or 0,
 			publish=bool(getattr(course, "publish", False)),
 			finish=bool(getattr(course, "finish", False)),
+			user_id=getattr(course, "user_id", ""),
 			lesson=lesson_models,
 			progress_finished_lessons=finished_lessons,
 			progress_total_lessons=len(lessons),
@@ -827,6 +850,7 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
+				user_id=user_id,
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				updated_at=r.created_at.isoformat() if r.created_at else "",
@@ -871,6 +895,8 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 			if progress:
 				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
 
+		# Build lesson list with locked/unlocked status
+		# Rule: Only the next unfinished lesson is unlocked, all others after it are locked
 		lesson_models = [
 			LessonDetail(
 				lesson_id=getattr(l, "lesson_id"),
@@ -880,6 +906,7 @@ def list_course_lessons_controller(request: Request, course_id: str) -> LessonLi
 				content=getattr(l, "content"),
 				duration=getattr(l, "duration", 0) or 0,
 				finish=idx < finished_lessons,
+				locked=idx > finished_lessons,  # locked if index is beyond the next lesson
 			)
 			for idx, l in enumerate(lessons)
 		]
@@ -908,25 +935,33 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course_id).first()
 		if not lesson:
 			raise HTTPException(status_code=404, detail="Lesson not found")
-		completed = False
+		
+		# Check lesson order and lock status
+		lessons = (
+			session.query(Lesson)
+			.filter(Lesson.course_id == course.course_id)
+			.order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc())
+			.all()
+		)
+		order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
+		target_idx = order_map.get(lesson.lesson_id)
+		if target_idx is None:
+			raise HTTPException(status_code=404, detail="Lesson not found")
+		
+		finished_lessons = 0
 		if user_id:
 			progress = session.query(LearningProgress).filter(
 				LearningProgress.course_id == course.course_id,
 				LearningProgress.user_id == user_id,
 			).first()
 			if progress:
-				lessons = (
-					session.query(Lesson)
-					.filter(Lesson.course_id == course.course_id)
-					.order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc())
-					.all()
-				)
-				order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
-				target_idx = order_map.get(lesson.lesson_id)
-				completed = target_idx is not None and (target_idx < (progress.num_finished_lesson or 0))
-		# Ensure `finish` is a plain bool (SQLAlchemy ColumnElement[bool] may be returned by getattr)
-		_finish_attr = getattr(lesson, "finish", False)
-		_finish_bool = _finish_attr if isinstance(_finish_attr, bool) else False
+				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
+		
+		# Check if lesson is locked (user hasn't completed previous lessons)
+		is_locked = target_idx > finished_lessons
+		if is_locked and not is_owner:  # Owners can view any lesson
+			raise HTTPException(status_code=403, detail="Bạn cần hoàn thành các bài học trước đó trước khi truy cập bài học này")
+		
 		return LessonDetail(
 			lesson_id=getattr(lesson, "lesson_id"),
 			course_id=getattr(lesson, "course_id"),
@@ -934,7 +969,8 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			overview=getattr(lesson, "overview", ""),
 			content=getattr(lesson, "content"),
 			duration=getattr(lesson, "duration", 0) or 0,
-			finish=bool(_finish_bool or completed),
+			finish=bool(target_idx < finished_lessons),
+			locked=is_locked,
 		)
 	finally:
 		session.close()
@@ -949,7 +985,7 @@ def get_assessment_list_controller(
 	include_explanations: bool = True,
 ) -> AssessmentListResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Assessment
+	from src.models import Course, Lesson, Assessment, LearningProgress
 
 	user_id = _verify_token(request)
 	if not user_id:
@@ -969,6 +1005,33 @@ def get_assessment_list_controller(
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
 		if not lesson:
 			raise HTTPException(status_code=404, detail="Lesson not found")
+		
+		# Check if lesson is locked
+		lessons = (
+			session.query(Lesson)
+			.filter(Lesson.course_id == course.course_id)
+			.order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc())
+			.all()
+		)
+		order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
+		target_idx = order_map.get(lesson.lesson_id)
+		if target_idx is None:
+			raise HTTPException(status_code=404, detail="Lesson not found")
+		
+		finished_lessons = 0
+		if user_id:
+			progress = session.query(LearningProgress).filter(
+				LearningProgress.course_id == course.course_id,
+				LearningProgress.user_id == user_id,
+			).first()
+			if progress:
+				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
+		
+		# Prevent accessing locked lessons
+		is_locked = target_idx > finished_lessons
+		if is_locked and not is_owner:
+			raise HTTPException(status_code=403, detail="Bạn cần hoàn thành các bài học trước đó trước khi làm bài kiểm tra này")
+		
 		assessments = (
 			session.query(Assessment)
 			.filter(Assessment.lesson_id == lesson.lesson_id)
@@ -980,14 +1043,15 @@ def get_assessment_list_controller(
 				assessment_id=cast(str, getattr(a, "assessment_id")),
 				lesson_id=cast(str, getattr(a, "lesson_id")),
 				question=cast(str, getattr(a, "question")),
-				hint=cast(str | None, getattr(a, "hint")) if include_hints else None,
+				hint=None,  # Never send hint text upfront - must request via hint API
+				has_hint=bool(getattr(a, "hint")),  # Flag to show hint button
 				explanation=cast(str, getattr(a, "explanation") or "") if include_explanations else "",
 				difficulty=cast(str, getattr(a, "difficulty") or ""),
 				option1=cast(str, getattr(a, "option1") or ""),
 				option2=cast(str, getattr(a, "option2") or ""),
 				option3=cast(str, getattr(a, "option3") or ""),
 				option4=cast(str, getattr(a, "option4") or ""),
-				answer=cast(int, getattr(a, "answer")),
+				answer=0,  # NEVER send correct answer to client for security
 			)
 			for a in assessments
 		]
@@ -996,9 +1060,96 @@ def get_assessment_list_controller(
 		session.close()
 
 
+def get_assessment_hint_controller(
+	request: Request,
+	course_id: str,
+	lesson_id: str,
+	assessment_id: str,
+) -> dict:
+	"""Get hint for a specific assessment with exp penalty."""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, Assessment, LearningProgress
+	
+	user_id = _verify_token(request)
+	if not user_id:
+		return {"status": 401, "message": "Bạn không có quyền truy cập"}
+	
+	session = SessionLocal()
+	try:
+		# Verify course and lesson access
+		course = session.query(Course).filter(Course.course_id == course_id).first()
+		if not course:
+			return {"status": 404, "message": "Không tìm thấy khóa học"}
+		
+		lesson = session.query(Lesson).filter(
+			Lesson.lesson_id == lesson_id,
+			Lesson.course_id == course_id
+		).first()
+		if not lesson:
+			return {"status": 404, "message": "Không tìm thấy bài học"}
+		
+		lessons = session.query(Lesson).filter(
+			Lesson.course_id == course_id
+		).order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc()).all()
+		
+		order_map = {cast(str, getattr(l, "lesson_id")): idx for idx, l in enumerate(lessons)}
+		target_idx = order_map.get(cast(str, lesson_id))
+		
+		finished_lessons = 0
+		progress = session.query(LearningProgress).filter(
+			LearningProgress.course_id == course_id,
+			LearningProgress.user_id == user_id,
+		).first()
+		if progress:
+			finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
+		
+		is_locked = target_idx is not None and target_idx > finished_lessons
+		is_owner = course.user_id == user_id
+		if is_locked and not is_owner:
+			return {"status": 403, "message": "Bạn cần hoàn thành các bài học trước đó"}
+		
+		# Get assessment
+		assessment = session.query(Assessment).filter(
+			Assessment.assessment_id == assessment_id,
+			Assessment.lesson_id == lesson_id
+		).first()
+		if not assessment:
+			return {"status": 404, "message": "Không tìm thấy câu hỏi"}
+		
+		hint = cast(str | None, getattr(assessment, "hint"))
+		if not hint:
+			return {"status": 404, "message": "Câu hỏi này không có gợi ý"}
+		
+		# Calculate penalty based on difficulty
+		try:
+			difficulty = int(str(getattr(assessment, "difficulty", None) or 1))
+		except Exception:
+			difficulty = 1
+		
+		exp_penalty = DIFFICULTY_EXP.get(difficulty, DIFFICULTY_EXP[1]) // 2  # 50% of question exp
+		
+		# Deduct exp (negative exp)
+		if exp_penalty > 0:
+			logger.info(f"Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
+			penalty_result = _award_experience(request, user_id, -exp_penalty)
+			if penalty_result:
+				logger.info(f"Hint penalty response: status={penalty_result.get('status_code')}")
+		
+		return {
+			"status": 200,
+			"hint": hint,
+			"exp_penalty": exp_penalty
+		}
+	except Exception as e:
+		logger.error(f"get_assessment_hint error: {e}")
+		return {"status": 500, "message": "Có lỗi xảy ra"}
+	finally:
+		session.close()
+
+
 def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson, Assessment
+	from src.models import Course, Lesson, Assessment, LearningProgress
 	import math
 
 	user_id = _verify_token(request)
@@ -1020,6 +1171,32 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		lesson = session.query(Lesson).filter(Lesson.lesson_id == lesson_id, Lesson.course_id == course.course_id).first()
 		if not lesson:
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy bài học")
+		
+		# Check if lesson is locked
+		lessons = (
+			session.query(Lesson)
+			.filter(Lesson.course_id == course.course_id)
+			.order_by(Lesson.created_at.asc(), Lesson.lesson_id.asc())
+			.all()
+		)
+		order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
+		target_idx = order_map.get(lesson.lesson_id)
+		if target_idx is None:
+			return AssessmentSubmitResponse(status=404, message="Không tìm thấy bài học")
+		
+		finished_lessons = 0
+		progress = session.query(LearningProgress).filter(
+			LearningProgress.course_id == course.course_id,
+			LearningProgress.user_id == user_id,
+		).first()
+		if progress:
+			finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
+		
+		# Prevent submitting locked lessons
+		is_locked = target_idx > finished_lessons
+		if is_locked and not is_owner:
+			return AssessmentSubmitResponse(status=403, message="Bạn cần hoàn thành các bài học trước đó trước khi làm bài kiểm tra này")
+		
 		qas = session.query(Assessment).filter(Assessment.lesson_id == lesson.lesson_id).all()
 		if not qas:
 			return AssessmentSubmitResponse(status=404, message="Bài kiểm tra chưa có câu hỏi")
@@ -1095,8 +1272,16 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		)
 		experience = None
 		if passed and applied_exp > 0:
-			experience = _experience_payload(applied_exp, _award_experience(request, user_id, applied_exp))
-		_log_activity(request, user_id, "assessment_move")
+			logger.info(f"Awarding {applied_exp} exp to user {user_id} for passing lesson {lesson_id}")
+			award_result = _award_experience(request, user_id, applied_exp)
+			if award_result:
+				logger.info(f"Experience award response: status={award_result.get('status_code')}, body={award_result.get('body')}")
+			else:
+				logger.warning(f"Failed to award experience to user {user_id} - no response from user-service")
+			experience = _experience_payload(applied_exp, award_result)
+		else:
+			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}")
+		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
 		logger.error("submit_assessment_controller error user=%s course=%s lesson=%s err=%s", user_id, course_id, lesson_id, e)

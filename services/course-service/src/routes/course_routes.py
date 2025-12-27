@@ -10,6 +10,7 @@ from src.controllers.course_controller import (
     list_course_lessons_controller,
     get_lesson_detail_controller,
     get_assessment_list_controller,
+    get_assessment_hint_controller,
     submit_assessment_controller,
     finish_course_controller,
     finish_lesson_controller,
@@ -85,7 +86,7 @@ async def request_create_course(
     request: Request,
     _auth=Depends(require_bearer),
 ):
-    return await create_course_controller(request, body)
+    return create_course_controller(request, body)
 
 
 @router.get("/all", response_model=CourseListResponse)
@@ -94,8 +95,8 @@ async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
 
 
 @router.get("/public", response_model=CourseListResponse)
-async def list_public_courses(search: Optional[str] = Query(default=None), owner_id: Optional[str] = Query(default=None)):
-    return list_public_courses_controller(search, owner_id)
+async def list_public_courses(search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
+    return list_public_courses_controller(search, user_id)
 
 
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)
@@ -123,6 +124,18 @@ async def list_assessments(
     _auth=Depends(require_bearer),
 ):
     return get_assessment_list_controller(request, course_id, lesson_id, include_hints=include_hints, include_explanations=include_explanations)
+
+
+@router.get("/{course_id}/lessons/{lesson_id}/assessments/{assessment_id}/hint")
+async def get_assessment_hint(
+    course_id: str,
+    lesson_id: str,
+    assessment_id: str,
+    request: Request,
+    _auth=Depends(require_bearer),
+):
+    """Get hint for an assessment with exp penalty."""
+    return get_assessment_hint_controller(request, course_id, lesson_id, assessment_id)
 
 
 @router.post("/{course_id}/lessons/{lesson_id}/assessments/submit", response_model=AssessmentSubmitResponse)
