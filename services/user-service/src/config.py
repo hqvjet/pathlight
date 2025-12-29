@@ -23,8 +23,16 @@ class Config:
     BASE_URL: str = os.getenv("BASE_URL", os.getenv("USER_SERVICE_URL", f"http://localhost:{os.getenv('USER_SERVICE_PORT', 8004)}"))
 
     # External service URLs
-    COURSE_SERVICE_URL: str = os.getenv("COURSE_SERVICE_URL", "http://localhost:8005")
-    QUIZ_SERVICE_URL: str = os.getenv("QUIZ_SERVICE_URL", "http://localhost:8006")
+    COURSE_SERVICE_URL: str = (
+        os.getenv("COURSE_SERVICE_URL")
+        or os.getenv("COURSE_SERVICE_ENDPOINT")
+        or f"http://localhost:{os.getenv('COURSE_SERVICE_PORT', 8002)}"
+    )
+    QUIZ_SERVICE_URL: str = (
+        os.getenv("QUIZ_SERVICE_URL")
+        or os.getenv("QUIZ_SERVICE_ENDPOINT")
+        or f"http://localhost:{os.getenv('QUIZ_SERVICE_PORT', 8004)}"
+    )
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
     
     # Database configuration
