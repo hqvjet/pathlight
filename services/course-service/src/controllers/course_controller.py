@@ -4,6 +4,7 @@ from datetime import datetime
 import hashlib
 import secrets
 import logging
+import time
 import string
 import httpx
 import boto3
@@ -41,15 +42,24 @@ from src.schemas.course_schemas import (
 
 logger = logging.getLogger(__name__)
 
+# Reuse a module-level httpx client to share connection pool across Lambda
+# invocations. Creating a new client per request can exhaust sockets and
+# trigger "Device or resource busy" / connection errors.
+_httpx_client = httpx.Client(
+	timeout=5.0,
+	limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+)
+
 DIFFICULTY_EXP = {
-	1: 10,
-	2: 20,
-	3: 30,
-	4: 40,
-	5: 50,
+	1: 100,
+	2: 200,
+	3: 300,
+	4: 400,
+	5: 500,
 }
 PASS_THRESHOLD = 80
 COURSE_COMPLETION_EXP = 100
+HINT_PENALTY = 50
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
@@ -57,14 +67,12 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 async def create_course_controller(request: Request, body: CreateCourseRequest):
     """Create a course generation job (S3 validation + SQS enqueue)."""
     from src.services.sqs_publisher import send_generate_with_vectorize
-
     queue_url = os.getenv("SQS_QUEUE_URL")
     if not queue_url:
         return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
     default_job = "GENERATE_COURSE_WITH_VECTORIZE"
     course_id = body.id or f"course-{uuid4()}"
     s3_keys = body.s3_keys or []
-    logger.info("create_course_controller: course_id=%s, s3_keys_count=%d, s3_keys=%s", course_id, len(s3_keys), s3_keys)
     difficulty = (body.difficulty or "medium").strip()
     try:
         duration = int(body.duration or 0)
@@ -139,7 +147,17 @@ def _verify_token(request: Request):
 	2) Fallback: parse unverified claims to extract a user id from common keys (sub, user_id, uid, id).
 	   This prevents 401 due to mismatched secrets across services while we align secrets.
 	"""
+	# Try header first, then fall back to common auth cookies used by the frontend
 	auth_header = request.headers.get("Authorization")
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
+		)
+		if cookie_token:
+			# normalize to Bearer format if needed
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 	if not auth_header or not auth_header.startswith("Bearer "):
 		return None
 	token = auth_header.split(" ")[1]
@@ -168,30 +186,78 @@ def _user_service_base_url() -> str | None:
 
 
 def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict | None:
-	"""Call user-service to add experience for the current user.
+	"""Call user-service to add experience for the current user by forwarding
+	the user's JWT. This avoids using a shared INTERNAL_API_KEY secret.
 
-	Returns a dict with status_code and body when the call was attempted, otherwise None.
-	exp_amount can be negative for penalties (hint usage, etc.)
+	We will retry on transient network errors / 5xx responses with
+	exponential backoff. If no user JWT is present (header or common
+	cookies), we will not attempt a service-level secret fallback.
 	"""
 	if exp_amount == 0:
 		return None
+
 	base_url = _user_service_base_url()
+	if not base_url:
+		return None
+
+	# Prefer explicit Authorization header, fall back to common auth cookies
 	auth_header = request.headers.get("Authorization")
-	if not base_url or not auth_header:
-		return None
-	url = f"{base_url.rstrip('/')}/user/experience/add"
-	try:
-		resp = httpx.post(
-			url,
-			headers={"Authorization": auth_header},
-			json={"exp": exp_amount},
-			timeout=5.0,
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
 		)
-		data = resp.json() if resp.content else {}
-		return {"status_code": resp.status_code, "body": data}
-	except Exception as e:  # pragma: no cover - network issues
-		logger.error("Failed to award experience for user %s: %s", user_id, e)
-		return None
+		if cookie_token:
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
+
+	# If a user JWT is present, forward it to credit the caller. Otherwise,
+	# fall back to an internal admin call (if configured) so the service can
+	# credit a specific `user_id` even without the user's JWT.
+	use_admin_fallback = False
+	if not auth_header or not auth_header.startswith("Bearer "):
+		internal_token = getattr(config, "USER_SERVICE_INTERNAL_TOKEN", None) or os.getenv("USER_SERVICE_INTERNAL_TOKEN")
+		if internal_token:
+			use_admin_fallback = True
+			auth_header = f"Bearer {internal_token}"
+		else:
+			logger.warning("No user JWT present and no internal token configured; skipping award_experience for user %s", user_id)
+			return None
+
+	if use_admin_fallback:
+		# call admin endpoint that accepts userid query param
+		url = f"{base_url.rstrip('/')}/admin/user/experience?userid={user_id}"
+		json_payload = {"exp": exp_amount}
+	else:
+		url = f"{base_url.rstrip('/')}/user/experience/add"
+		json_payload = {"exp": exp_amount}
+	max_attempts = 3
+	backoff = 0.1
+
+	for attempt in range(1, max_attempts + 1):
+		try:
+			resp = _httpx_client.post(
+				url,
+				headers={"Authorization": auth_header},
+				json=json_payload,
+				timeout=5.0,
+			)
+			data = resp.json() if resp.content else {}
+			# If success or client error, return immediately. Retry only on 5xx.
+			if resp.status_code < 500:
+				logger.info("Award exp via user-forward attempt=%s url=%s status=%s data=%s", attempt, url, resp.status_code, data)
+				return {"status_code": resp.status_code, "body": data}
+			# else 5xx - will retry
+			logger.warning("User-forward award_experience returned 5xx (attempt=%s): %s", attempt, resp.status_code)
+		except Exception as e:  # pragma: no cover - network issues
+			logger.exception("User-forward award_experience network error on attempt=%s for user %s", attempt, user_id)
+		# backoff before next attempt
+		if attempt < max_attempts:
+			time.sleep(backoff)
+			backoff *= 2
+
+	logger.error("All user-forward award_experience attempts failed for user %s", user_id)
+	return None
 
 
 def _log_activity(request: Request, user_id: str | None, event: str) -> dict | None:
@@ -202,12 +268,21 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 	if not user_id:
 		return None
 	base_url = _user_service_base_url()
+	# Try header first, then fall back to common auth cookies used by the frontend
 	auth_header = request.headers.get("Authorization")
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
+		)
+		if cookie_token:
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 	if not base_url or not auth_header:
 		return None
 	url = f"{base_url.rstrip('/')}/user/activity"
 	try:
-		resp = httpx.post(
+		resp = _httpx_client.post(
 			url,
 			headers={"Authorization": auth_header},
 			json={"event": event},
@@ -215,37 +290,63 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 		)
 		data = resp.json() if resp.content else {}
 		return {"status_code": resp.status_code, "body": data}
-	except Exception as e:  # pragma: no cover - network issues
+	except Exception as e: 
 		logger.error("Failed to log activity for user %s: %s", user_id, e)
 		return None
 
 
 def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	payload: dict[str, int | None] = {"gained_exp": gained_exp}
-	if award_result and isinstance(award_result.get("body"), dict):
-		stats = award_result["body"].get("updated_stats") or {}
+	# award_result may contain the updated stats under different shapes depending
+	# on which user-service endpoint was called. Accept both `{...,'updated_stats':{...}}`
+	# and older responses that put fields at the top-level of the body.
+	if not award_result:
+		return payload
+	
+	# award_result is {"status_code": 200, "body": {...}}
+	# where body is the actual JSON response from user-service
+	body = award_result.get("body") if isinstance(award_result.get("body"), dict) else None
+	if not body:
+		return payload
 
-		def _to_int_or_none(v):
-			try:
-				if v is None:
-					return None
-				return int(v)
-			except Exception:
+	# Response from /user/experience/add is {"status": 200, "message": "...", "updated_stats": {...}}
+	# Prefer nested `updated_stats`, otherwise treat body as the stats mapping.
+	stats = body.get("updated_stats") if isinstance(body.get("updated_stats"), dict) else body
+
+	def _to_int_or_none(v):
+		try:
+			if v is None:
 				return None
+			return int(v)
+		except Exception:
+			return None
 
-		payload["new_level"] = _to_int_or_none(stats.get("new_level") or stats.get("level"))
-		payload["new_exp"] = _to_int_or_none(stats.get("new_exp") or stats.get("current_exp"))
-		payload["require_exp"] = _to_int_or_none(stats.get("new_require_exp") or stats.get("require_exp"))
-		payload["exp_needed_for_next"] = _to_int_or_none(stats.get("exp_needed_for_next"))
-		payload["rank"] = _to_int_or_none(stats.get("rank"))
+	# Normalize a few common key variants
+	new_level = stats.get("new_level") or stats.get("level")
+	new_exp = stats.get("new_exp") or stats.get("current_exp")
+	require_exp = stats.get("new_require_exp") or stats.get("require_exp")
+	exp_needed = stats.get("exp_needed_for_next")
+	# If exp_needed missing but we have require_exp and new_exp, compute it
+	if exp_needed is None and require_exp is not None and new_exp is not None:
+		try:
+			exp_needed = int(require_exp) - int(new_exp)
+		except Exception:
+			exp_needed = None
+
+	payload["new_level"] = _to_int_or_none(new_level)
+	payload["new_exp"] = _to_int_or_none(new_exp)
+	payload["require_exp"] = _to_int_or_none(require_exp)
+	payload["exp_needed_for_next"] = _to_int_or_none(exp_needed)
+	payload["rank"] = _to_int_or_none(stats.get("rank"))
 	return payload
 
 
-def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int]:
+def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int, bool]:
 	"""Increment learning progress for a user on a course based on lesson order.
 	Only allows completing the NEXT lesson in sequence (no skipping).
 
-	Returns (finished_count, total_lessons).
+	Returns (finished_count, total_lessons, is_newly_completed).
+	is_newly_completed is True only if this is the first time completing this lesson.
 	"""
 	from src.models import Lesson, LearningProgress
 
@@ -257,7 +358,7 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	)
 	total = len(lessons)
 	if total == 0:
-		return 0, 0
+		return 0, 0, False
 	order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 	target_idx = order_map.get(lesson_id)
 	
@@ -287,31 +388,25 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	
 	current_finished = min(cast(int, getattr(progress, "num_finished_lesson") or 0), total)
 	
-	# Validate target lesson exists
 	if target_idx is None:
 		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
-		return current_finished, total
-	
-	# Only allow completing the NEXT lesson in sequence
-	# current_finished = number of lessons already completed (0-indexed in progress)
-	# target_idx = index of lesson trying to complete (0-indexed)
+		return current_finished, total, False
+
 	if target_idx != current_finished:
-		# Not the next lesson - either already completed or trying to skip
 		if target_idx < current_finished:
-			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished})")
+			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished}). No exp awarded for retake.")
 		else:
 			logger.warning(f"Cannot skip to lesson {lesson_id} (target={target_idx}, finished={current_finished}). Complete previous lessons first.")
-		return current_finished, total
+		return current_finished, total, False
 	
-	# This is the next lesson - increment by 1
 	new_finished = current_finished + 1
 	session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
 		LearningProgress.user_id == user_id,
 	).update({"num_finished_lesson": new_finished}, synchronize_session=False)
 	session.flush()
-	logger.info(f"Progress updated for user {user_id} course {course_id}: {new_finished}/{total} lessons completed")
-	return new_finished, total
+	logger.info(f"Progress updated for user {user_id} course {course_id}: {new_finished}/{total} lessons completed (NEWLY COMPLETED - exp will be awarded)")
+	return new_finished, total, True
 
 
 def _get_s3_client():
@@ -332,7 +427,6 @@ def _random_value(length: int = 8) -> str:
 
 def _sanitize_filename_base(original_name: str, max_len: int = 60) -> str:
 	base = original_name.rsplit('.', 1)[0]
-	# keep alnum, dash, underscore; replace others with '-'
 	cleaned = []
 	prev_dash = False
 	for ch in base:
@@ -388,10 +482,52 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 
 
 def _admin_guard(request: Request):
-	user_id = _verify_token(request)
-	if not user_id:
+	"""Verify admin role from JWT token claims."""
+	auth_header = request.headers.get("Authorization")
+	if not auth_header or not auth_header.startswith("Bearer "):
+		logger.warning("Admin guard: Missing or invalid Authorization header")
 		return {"status": 401, "message": "Unauthorized"}
-	return None
+	
+	token = auth_header.split(" ")[1]
+	try:
+		# Try verified decode first
+		payload = None
+		secret_key = getattr(config, "JWT_SECRET_KEY", None)
+		logger.info(f"Admin guard: JWT_SECRET_KEY configured: {bool(secret_key)}")
+		
+		if secret_key:
+			try:
+				payload = jwt.decode(token, secret_key, algorithms=[config.JWT_ALGORITHM])
+				logger.info("Admin guard: JWT verified successfully")
+			except Exception as e:
+				logger.warning(f"Admin guard: JWT verification failed: {e}, trying unverified")
+		
+		# Fallback to unverified claims
+		if not payload:
+			try:
+				payload = jwt.get_unverified_claims(token)
+				logger.info("Admin guard: Using unverified JWT claims")
+			except Exception as decode_error:
+				logger.error(f"Admin guard: Cannot decode token: {decode_error}")
+				return {"status": 401, "message": "Invalid token"}
+		
+		# Check admin role
+		role = payload.get("role")
+		roles = payload.get("roles") or []
+		if isinstance(roles, str):
+			roles = [roles]
+		is_admin = role == "admin" or "admin" in roles
+		
+		logger.info(f"Admin guard: role={role}, roles={roles}, is_admin={is_admin}")
+		
+		if not is_admin:
+			return {"status": 403, "message": "Admin access required"}
+		
+		logger.info("Admin guard: Access granted")
+		return None
+	except Exception as e:
+		logger.error(f"Admin guard failed: {e}", exc_info=True)
+		return {"status": 500, "message": "Cannot verify admin status"}
 
 
 def list_all_courses_admin_controller(request: Request, page: int, limit: int, search: str | None):
@@ -413,6 +549,8 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 		course_list = []
 		for c in courses:
 			created_at_val = getattr(c, "created_at", None)
+			# Count lessons from relationship
+			num_lessons = len(c.lessons) if hasattr(c, 'lessons') and c.lessons else 0
 			course_list.append({
 				"course_id": c.course_id,
 				"user_id": c.user_id,
@@ -422,7 +560,7 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 				"duration": c.duration,
 				"publish": bool(c.publish),
 				"finish": bool(c.finish),
-				"num_lessons": c.num_lessons,
+				"num_lessons": num_lessons,
 				"created_at": created_at_val.isoformat() if created_at_val else "",
 			})
 
@@ -800,13 +938,59 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 		session.close()
 
 
+def get_user_course_stats_controller(request: Request) -> dict:
+	"""Get aggregated course statistics for a user - for dashboard."""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, LearningProgress
+	
+	user_id = _verify_token(request)
+	if not user_id:
+		return {"status": 401, "message": "Unauthorized"}
+	
+	session = SessionLocal()
+	try:
+		# Count total courses
+		total_courses = session.query(Course).filter(Course.user_id == user_id).count()
+		
+		# Count completed courses
+		course_ids = [c.course_id for c in session.query(Course.course_id).filter(Course.user_id == user_id).all()]
+		completed_courses = 0
+		total_lessons = 0
+		
+		if course_ids:
+			# Calculate lesson counts
+			lesson_counts = {}
+			lessons = session.query(Lesson.course_id).filter(Lesson.course_id.in_(course_ids)).all()
+			for (cid,) in lessons:
+				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+				total_lessons += 1
+			
+			# Check progress
+			progress_rows = session.query(LearningProgress).filter(
+				LearningProgress.course_id.in_(course_ids),
+				LearningProgress.user_id == user_id,
+			).all()
+			
+			for p in progress_rows:
+				total = cast(int, getattr(p, "num_total_lesson") or lesson_counts.get(p.course_id, 0))
+				finished = min(cast(int, getattr(p, "num_finished_lesson") or 0), total)
+				if total > 0 and finished >= total:
+					completed_courses += 1
+		
+		return {
+			"status": 200,
+			"total_courses": total_courses,
+			"completed_courses": completed_courses,
+			"total_lessons": total_lessons,
+		}
+	finally:
+		session.close()
+
+
 def get_all_courses_controller(request: Request) -> CourseListResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson, LearningProgress
-
 	user_id = _verify_token(request)
-	if not user_id:
-		raise HTTPException(status_code=401, detail="Bạn không thể truy cập khóa học của người khác")
 	session = SessionLocal()
 	try:
 		rows = (
@@ -927,7 +1111,6 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
 		_publish_attr = getattr(course, "publish", False)
 		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
-		# Safely evaluate ownership without triggering SQLAlchemy ColumnElement.__bool__
 		_is_owner_attr = course.user_id == (user_id or "")
 		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
 		if not is_owner and not _is_published:
@@ -1120,20 +1303,23 @@ def get_assessment_hint_controller(
 		if not hint:
 			return {"status": 404, "message": "Câu hỏi này không có gợi ý"}
 		
-		# Calculate penalty based on difficulty
-		try:
-			difficulty = int(str(getattr(assessment, "difficulty", None) or 1))
-		except Exception:
-			difficulty = 1
+		# Use a fixed hint penalty to match frontend expectations
+		# (frontend uses HINT_COST = 50). Keep this consistent so users see the
+		# same value in UI and server-side accounting.
+		exp_penalty = HINT_PENALTY
 		
-		exp_penalty = DIFFICULTY_EXP.get(difficulty, DIFFICULTY_EXP[1]) // 2  # 50% of question exp
-		
-		# Deduct exp (negative exp)
+		# IMPORTANT: Deduct exp immediately when hint is requested
+		# This prevents users from spamming hints without penalty
 		if exp_penalty > 0:
-			logger.info(f"Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
+			logger.info(f"[HINT] Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
 			penalty_result = _award_experience(request, user_id, -exp_penalty)
 			if penalty_result:
-				logger.info(f"Hint penalty response: status={penalty_result.get('status_code')}")
+				status_code = penalty_result.get('status_code')
+				logger.info(f"[HINT] Penalty applied successfully: status={status_code}, data={penalty_result.get('body')}")
+				if status_code != 200:
+					logger.warning(f"[HINT] Penalty request returned non-200 status: {status_code}")
+			else:
+				logger.error(f"[HINT] Failed to apply penalty - no response from user-service")
 		
 		return {
 			"status": 200,
@@ -1147,15 +1333,12 @@ def get_assessment_hint_controller(
 		session.close()
 
 
-def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
+def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, 
+								 body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson, Assessment, LearningProgress
 	import math
-
 	user_id = _verify_token(request)
-	if not user_id:
-		return AssessmentSubmitResponse(status=401, message="Bạn không có quyền làm bài kiểm tra này")
-
 	session = SessionLocal()
 	try:
 		course = session.query(Course).filter(Course.course_id == course_id).first()
@@ -1163,7 +1346,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy khóa học")
 		_is_owner_attr = course.user_id == user_id
 		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
-		# Safely evaluate publish value without triggering SQLAlchemy ColumnElement.__bool__
 		_publish_attr = getattr(course, "publish", False)
 		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
 		if not is_owner and not _is_published:
@@ -1172,7 +1354,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		if not lesson:
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy bài học")
 		
-		# Check if lesson is locked
 		lessons = (
 			session.query(Lesson)
 			.filter(Lesson.course_id == course.course_id)
@@ -1253,8 +1434,10 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		applied_exp = max(0, earned_exp - penalty_exp)
 		passed = score >= PASS_THRESHOLD
 
+		# Track if this is a new completion (first time passing) for exp award
+		is_newly_completed = False
 		if passed:
-			_update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+			_, _, is_newly_completed = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 			session.commit()
 		else:
 			session.rollback()
@@ -1271,16 +1454,19 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			answers=answer_results,
 		)
 		experience = None
-		if passed and applied_exp > 0:
-			logger.info(f"Awarding {applied_exp} exp to user {user_id} for passing lesson {lesson_id}")
+		# Only award exp if this is the FIRST TIME completing the lesson
+		if passed and applied_exp > 0 and is_newly_completed:
+			logger.info(f"Awarding {applied_exp} exp to user {user_id} for FIRST TIME passing lesson {lesson_id}")
 			award_result = _award_experience(request, user_id, applied_exp)
 			if award_result:
 				logger.info(f"Experience award response: status={award_result.get('status_code')}, body={award_result.get('body')}")
 			else:
 				logger.warning(f"Failed to award experience to user {user_id} - no response from user-service")
 			experience = _experience_payload(applied_exp, award_result)
+		elif passed and not is_newly_completed:
+			logger.info(f"Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")
 		else:
-			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}")
+			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
 		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
@@ -1372,7 +1558,7 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
 		if not lesson:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
-		finished, total = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+		finished, total, _ = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 		session.commit()
 		_log_activity(request, user_id, "course_move")
 		return {

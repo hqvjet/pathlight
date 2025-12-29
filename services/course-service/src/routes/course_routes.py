@@ -86,7 +86,14 @@ async def request_create_course(
     request: Request,
     _auth=Depends(require_bearer),
 ):
-    return create_course_controller(request, body)
+    return await create_course_controller(request, body)
+
+
+@router.get("/stats")
+async def get_user_course_stats(request: Request, _auth=Depends(require_bearer)):
+    """Get aggregated course statistics for current user."""
+    from src.controllers.course_controller import get_user_course_stats_controller
+    return get_user_course_stats_controller(request)
 
 
 @router.get("/all", response_model=CourseListResponse)
@@ -168,7 +175,13 @@ async def list_all_courses_admin(
     search: Optional[str] = Query(default=None),
     _auth=Depends(require_bearer)
 ):
-    return list_all_courses_admin_controller(request, page, limit, search)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Admin courses endpoint called: page={page}, limit={limit}, search={search}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    result = list_all_courses_admin_controller(request, page, limit, search)
+    logger.info(f"Admin courses result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
+    return result
 
 
 @router.delete("/admin/courses/{course_id}")

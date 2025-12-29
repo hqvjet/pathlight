@@ -19,6 +19,13 @@ def mock_env_vars():
         "S3_USER_BUCKET_NAME": "test-bucket",
         "FRONTEND_URL": "http://localhost:3000"
     })
+    # Ensure test database schema matches current models by resetting DB
+    try:
+        from src import database as _database
+        _database.reset_database()
+    except Exception:
+        # Best-effort; tests may still run in environments where DB reset isn't permitted
+        pass
 
 @pytest.fixture
 def mock_user():

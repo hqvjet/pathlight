@@ -8,7 +8,7 @@ import { storage } from '@/utils/api';
 function isJwtValid(token: string | null) {
   if (!token) return false;
   const parts = token.split('.');
-  if (parts.length !== 3) return true; // non-JWT opaque token treat as valid
+  if (parts.length !== 3) return true;
   try {
     const payload = JSON.parse(
       atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
@@ -27,7 +27,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const token = storage.getToken();
     if (!isJwtValid(token)) {
-      // Clear possibly expired tokens
       storage.removeToken();
       const redirectParam = encodeURIComponent('/user/dashboard');
       router.replace(`/auth/signin?redirect=${redirectParam}`);

@@ -206,10 +206,31 @@ class TestStatsRequest(BaseModel):
             raise ValueError('Average score must be between 0 and 1')
         return v
 
+class UpdatedStats(BaseModel):
+    level: Optional[int] = None
+    current_exp: Optional[int] = None
+    require_exp: Optional[int] = None
+    gained_exp: Optional[int] = None
+    exp_gained: Optional[int] = None
+    calculated_exp_from_activities: Optional[int] = None
+    original_stats: Optional[dict] = None
+    level_changed: Optional[bool] = None
+    original_level: Optional[int] = None
+    original_exp: Optional[int] = None
+    original_require_exp: Optional[int] = None
+    new_level: Optional[int] = None
+    new_exp: Optional[int] = None
+    new_require_exp: Optional[int] = None
+    exp_progress_to_next: Optional[int] = None
+    exp_needed_for_next: Optional[int] = None
+    rank: Optional[int] = None
+    total_users: Optional[int] = None
+
+
 class TestStatsResponse(BaseModel):
     status: int
     message: Optional[str] = None
-    updated_stats: Optional[dict] = None
+    updated_stats: Optional[UpdatedStats] = None
 
 
 class ExperienceAddRequest(BaseModel):

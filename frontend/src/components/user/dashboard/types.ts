@@ -19,25 +19,20 @@ export interface UserProfile {
   avatar_url?: string;
   google_avatar_url?: string;
   avatar_id?: string;
-  avatarKey?: number; // cache busting key
+  avatarKey?: number;
   remind_time?: string;
   level?: number;
   current_exp?: number;
   require_exp?: number;
-  course_num?: number;
+  // Course stats - from course-service
   total_courses?: number;
   completed_courses?: number;
-  finish_course_num?: number;
-  quiz_num?: number;
-  total_quizzes?: number;
-  lesson_num?: number;
   total_lessons?: number;
-  average_score?: number;
-  average_quiz_score?: number;
-  study_streak?: number;
-  total_study_time?: number;
+  // Quiz stats - from quiz-service
+  total_quizzes?: number;
+  completed_quizzes?: number;
+  // User stats - from user-service
   rank?: number;
-  user_num?: number;
   total_users?: number;
   user_top_rank?: LeaderboardUser[];
 }

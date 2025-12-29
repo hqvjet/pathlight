@@ -6,6 +6,7 @@ import { StatsGrid } from './dashboard/StatsGrid';
 import { ProfileCard } from './dashboard/ProfileCard';
 import { ActivityHeatmap } from './dashboard/ActivityHeatmap';
 import { Leaderboard, LeaderboardTable } from './dashboard/Leaderboard';
+import { userApi } from '@/lib/api/user';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -14,14 +15,30 @@ interface DashboardProps {
 export default function Dashboard({ onLogout }: DashboardProps) {
   const { user, dashboardData, loading } = useDashboard(onLogout);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const { generateYearActivityData, recordActivityEvent } = useActivity();
+  const { generateYearActivityData } = useActivity();
 
-  // Record login activity once dashboard is ready
+  // Track login activity once per day
   useEffect(() => {
-    if (user) {
-      recordActivityEvent('login');
+    const trackLoginActivity = async () => {
+      const today = new Date().toDateString();
+      const lastLoginDate = localStorage.getItem('lastLoginActivityDate');
+      
+      // Only track if it's a different day
+      if (lastLoginDate !== today) {
+        try {
+          await userApi.logActivity('login');
+          localStorage.setItem('lastLoginActivityDate', today);
+        } catch (error) {
+          // Silently fail if activity logging fails
+          console.debug('Failed to log login activity:', error);
+        }
+      }
+    };
+
+    if (user?.id) {
+      trackLoginActivity();
     }
-  }, [recordActivityEvent, user]);
+  }, [user?.id]);
 
   // Ensure current user is in leaderboard
   const enhancedLeaderboard = () => {
