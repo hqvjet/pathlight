@@ -455,6 +455,8 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 		course_list = []
 		for c in courses:
 			created_at_val = getattr(c, "created_at", None)
+			# Count lessons from relationship
+			num_lessons = len(c.lessons) if hasattr(c, 'lessons') and c.lessons else 0
 			course_list.append({
 				"course_id": c.course_id,
 				"user_id": c.user_id,
@@ -464,7 +466,7 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 				"duration": c.duration,
 				"publish": bool(c.publish),
 				"finish": bool(c.finish),
-				"num_lessons": c.num_lessons,
+				"num_lessons": num_lessons,
 				"created_at": created_at_val.isoformat() if created_at_val else "",
 			})
 

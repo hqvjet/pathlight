@@ -34,7 +34,7 @@ export function useDashboard(onLogout: () => void) {
   }, [normalizeAvatarUrl]);
 
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
-  const CACHE_EXPIRY_MS = 5 * 60 * 1000;
+  const CACHE_EXPIRY_MS = 2 * 60 * 1000; // Reduce to 2 minutes for testing
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -76,16 +76,42 @@ export function useDashboard(onLogout: () => void) {
         }
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
         const response = await Promise.race([api.user.getDashboard(), timeoutPromise]);
+        
+        console.log('🔍 Raw API response:', JSON.stringify(response, null, 2));
+        
         if (!response || typeof response !== 'object' || typeof (response as { status?: number }).status !== 'number') {
           throw new Error('Invalid API response');
         }
         const { status, data } = response as { status: number; data?: unknown };
         if (status === 401) { setLoading(false); onLogout(); return; }
         if (status !== 200) throw new Error(`API returned status ${status}`);
-        const raw = data as DashboardData | { info?: UserProfile } | UserProfile | undefined;
-        const userInfo: UserProfile = (raw && typeof raw === 'object' && 'info' in raw)
-          ? (raw as { info?: UserProfile }).info || { email: '', name: '', id: '' }
-          : (raw as UserProfile);
+        
+        // Parse response - backend returns { status, info: {...} }
+        let userInfo: UserProfile;
+        if (data && typeof data === 'object') {
+          // Check if data has 'info' field (backend structure)
+          if ('info' in data && data.info && typeof data.info === 'object') {
+            userInfo = data.info as UserProfile;
+          } else {
+            // Direct user profile data
+            userInfo = data as UserProfile;
+          }
+        } else {
+          throw new Error('Invalid data structure');
+        }
+        
+        // Log for debugging
+        console.log('📊 Parsed userInfo:', {
+          total_courses: userInfo.total_courses,
+          course_num: userInfo.course_num,
+          total_lessons: userInfo.total_lessons,
+          lesson_num: userInfo.lesson_num,
+          total_quizzes: userInfo.total_quizzes,
+          quiz_num: userInfo.quiz_num,
+          completed_courses: userInfo.completed_courses,
+          finish_course_num: userInfo.finish_course_num,
+        });
+        
         const leaderboard = normalizeLeaderboard(userInfo.user_top_rank);
         const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
         const profileData: UserProfile = {
@@ -100,15 +126,15 @@ export function useDashboard(onLogout: () => void) {
           level: userInfo.level || 1,
           current_exp: userInfo.current_exp || 0,
           require_exp: userInfo.require_exp || 100,
-          total_courses: userInfo.total_courses || userInfo.course_num || 0,
-          completed_courses: userInfo.completed_courses || userInfo.finish_course_num || 0,
-          total_quizzes: userInfo.total_quizzes || userInfo.quiz_num || 0,
-          lesson_num: userInfo.lesson_num || 0,
-          total_lessons: (userInfo as { total_lessons?: number }).total_lessons || userInfo.lesson_num || 0,
-          average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
-          rank: userInfo.rank || 1,
-          user_num: userInfo.user_num || 1,
-          total_users: (userInfo as { total_users?: number }).total_users || userInfo.user_num || 1,
+          total_courses: userInfo.total_courses ?? userInfo.course_num ?? 0,
+          completed_courses: userInfo.completed_courses ?? userInfo.finish_course_num ?? 0,
+          total_quizzes: userInfo.total_quizzes ?? userInfo.quiz_num ?? 0,
+          lesson_num: userInfo.lesson_num ?? userInfo.total_lessons ?? 0,
+          total_lessons: userInfo.total_lessons ?? userInfo.lesson_num ?? 0,
+          average_score: userInfo.average_quiz_score ?? userInfo.average_score ?? 0,
+          rank: userInfo.rank ?? 1,
+          user_num: userInfo.user_num ?? userInfo.total_users ?? 1,
+          total_users: userInfo.total_users ?? userInfo.user_num ?? 1,
           user_top_rank: leaderboard,
         };
         const dashboardInfo: DashboardData = { info: { ...(profileData as UserProfile), user_top_rank: leaderboard } as UserProfile & { user_top_rank?: LeaderboardUser[] } };
@@ -121,11 +147,17 @@ export function useDashboard(onLogout: () => void) {
         const skipped = storage.get('study_time_setup_completed') === 'true';
         if (!userInfo.remind_time && !skipped) setTimeout(() => router.replace('/user/study-time-setup'), 100);
       } catch (error) {
+        console.error('Dashboard fetch error:', error);
         setLoading(false);
+        // Clear cache on error
+        if (typeof window !== 'undefined') {
+          try { window.localStorage.removeItem(DASHBOARD_CACHE_KEY); } catch {}
+        }
         if (error instanceof Error && error.message === 'Request timeout') {
           showToast.warning('⏱️ Trang web tải chậm. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
         } else {
-          onLogout();
+          showToast.error('❌ Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
+          console.error('Dashboard error details:', error);
         }
       }
     };

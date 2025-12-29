@@ -22,8 +22,9 @@ export default function Avatar({
   alt,
   showInitialsFallback = false,
   displayName,
-  cacheKey
-}: AvatarProps) {
+  cacheKey,
+  priority = false
+}: AvatarProps & { priority?: boolean }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
   const loadedRef = useRef(false);
@@ -120,7 +121,7 @@ export default function Avatar({
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
       onLoad={handleLoad}
-      priority={size > 64}
+      priority={size >= 64} // Priority for larger images (above fold)
       unoptimized
       loading={size > 64 ? undefined : 'lazy'}
     />
