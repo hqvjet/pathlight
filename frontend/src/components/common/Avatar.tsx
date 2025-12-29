@@ -13,6 +13,7 @@ interface AvatarProps {
   displayName?: string;
   // Optional cache busting key (method 2)
   cacheKey?: number | string;
+  priority?: boolean;
 }
 
 export default function Avatar({ 
@@ -22,7 +23,8 @@ export default function Avatar({
   alt,
   showInitialsFallback = false,
   displayName,
-  cacheKey
+  cacheKey,
+  priority
 }: AvatarProps) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
@@ -120,7 +122,7 @@ export default function Avatar({
       className={`rounded-full object-cover ${className}`}
       onError={handleImageError}
       onLoad={handleLoad}
-      priority={size >= 64} // Priority for larger images (above fold)
+      priority={priority ?? size >= 64} // Priority for larger images (above fold)
       unoptimized
       loading={size >= 64 ? undefined : 'lazy'}
     />
