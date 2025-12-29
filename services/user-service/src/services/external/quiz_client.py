@@ -17,18 +17,20 @@ def _headers(email: str) -> Dict[str, str]:
 
 def get_quiz_stats(user_email: str) -> dict:
     try:
-        base = f"{config.QUIZ_SERVICE_URL}/quiz"
+        base = f"{config.QUIZ_SERVICE_URL}/api/quiz"
         quizzes_resp = requests.get(f"{base}/all", headers=_headers(user_email), timeout=DEFAULT_TIMEOUT)
         quizzes_data = quizzes_resp.json() if quizzes_resp.status_code == 200 else {"quizzes": []}
         total_quizzes = len(quizzes_data.get("quizzes", []))
-        # Count completed quizzes from finish flag
-        completed = sum(1 for q in quizzes_data.get("quizzes", []) if q.get("finish"))
-        # TODO: Fetch actual quiz attempts/scores when endpoint is available
-        average_score = 0
+        attempts_resp = requests.get(f"{base}/user/quiz-attempts", headers=_headers(user_email), timeout=DEFAULT_TIMEOUT)
+        attempts_data = attempts_resp.json() if attempts_resp.status_code == 200 else {"attempts": []}
+        attempts = attempts_data.get("attempts", [])
+        completed = len(attempts)
+        total_score = sum(a.get("score", 0) for a in attempts)
+        average_score = total_score / len(attempts) if attempts else 0
         return {
             "total_quizzes": total_quizzes,
             "completed_quizzes": completed,
-            "average_score": average_score
+            "average_score": average_score / 100 if average_score > 1 else average_score
         }
     except Exception as e:  # pragma: no cover
         logger.error(f"Quiz stats error: {e}")

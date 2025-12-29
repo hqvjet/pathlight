@@ -388,10 +388,28 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 
 
 def _admin_guard(request: Request):
-	user_id = _verify_token(request)
-	if not user_id:
+	"""Verify admin role by calling user-service auth endpoint."""
+	auth_header = request.headers.get("Authorization")
+	if not auth_header:
 		return {"status": 401, "message": "Unauthorized"}
-	return None
+	
+	base_url = _user_service_base_url()
+	if not base_url:
+		logger.warning("USER_SERVICE_URL not configured, skipping admin verification")
+		return None
+	
+	try:
+		resp = httpx.get(
+			f"{base_url.rstrip('/')}/user/admin/verify",
+			headers={"Authorization": auth_header},
+			timeout=2.0,
+		)
+		if resp.status_code != 200:
+			return {"status": 503, "message": "Admin verification failed"}
+		return None
+	except Exception as e:
+		logger.error(f"Admin guard failed: {e}")
+		return {"status": 503, "message": "Cannot verify admin status"}
 
 
 def list_all_courses_admin_controller(request: Request, page: int, limit: int, search: str | None):
