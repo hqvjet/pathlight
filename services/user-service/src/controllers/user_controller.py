@@ -461,6 +461,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "finish_course_num": course_stats["completed_courses"],
             "completed_courses": course_stats["completed_courses"],
             "lesson_num": course_stats["total_lessons"],
+            "total_lessons": course_stats["total_lessons"],
             # Quiz
             "quiz_num": quiz_stats["total_quizzes"],
             "total_quizzes": quiz_stats["total_quizzes"],
@@ -470,6 +471,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             # Rank
             "rank": rank_data["rank"],
             "user_num": rank_data["total_users"],
+            "total_users": rank_data["total_users"],
             "subscription": getattr(current_user, 'subscription', 0),
             "created_at": getattr(current_user, 'created_at', None),
             # Leaderboard

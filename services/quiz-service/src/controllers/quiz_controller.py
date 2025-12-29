@@ -161,23 +161,30 @@ def _admin_guard(request: Request):
     """Verify admin role from JWT token claims."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
+        logger.warning("Admin guard: Missing or invalid Authorization header")
         return {"status": 401, "message": "Unauthorized"}
     
     token = auth_header.split(" ")[1]
     try:
         # Try verified decode first
         payload = None
-        if getattr(config, "JWT_SECRET_KEY", None):
+        secret_key = getattr(config, "JWT_SECRET_KEY", None)
+        logger.info(f"Admin guard: JWT_SECRET_KEY configured: {bool(secret_key)}")
+        
+        if secret_key:
             try:
-                payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+                payload = jwt.decode(token, secret_key, algorithms=[config.JWT_ALGORITHM])
+                logger.info("Admin guard: JWT verified successfully")
             except Exception as e:
-                logger.warning(f"JWT verification failed, trying unverified: {e}")
+                logger.warning(f"Admin guard: JWT verification failed: {e}, trying unverified")
         
         # Fallback to unverified claims
         if not payload:
             try:
                 payload = jwt.get_unverified_claims(token)
-            except Exception:
+                logger.info("Admin guard: Using unverified JWT claims")
+            except Exception as decode_error:
+                logger.error(f"Admin guard: Cannot decode token: {decode_error}")
                 return {"status": 401, "message": "Invalid token"}
         
         # Check admin role
@@ -187,12 +194,15 @@ def _admin_guard(request: Request):
             roles = [roles]
         is_admin = role == "admin" or "admin" in roles
         
+        logger.info(f"Admin guard: role={role}, roles={roles}, is_admin={is_admin}")
+        
         if not is_admin:
             return {"status": 403, "message": "Admin access required"}
         
+        logger.info("Admin guard: Access granted")
         return None
     except Exception as e:
-        logger.error(f"Admin guard failed: {e}")
+        logger.error(f"Admin guard failed: {e}", exc_info=True)
         return {"status": 500, "message": "Cannot verify admin status"}
 
 
