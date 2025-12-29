@@ -123,7 +123,7 @@ export default function Avatar({
       onLoad={handleLoad}
       priority={size >= 64} // Priority for larger images (above fold)
       unoptimized
-      loading={size > 64 ? undefined : 'lazy'}
+      loading={size >= 64 ? undefined : 'lazy'}
     />
   );
 }
