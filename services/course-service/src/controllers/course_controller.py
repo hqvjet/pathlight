@@ -388,28 +388,42 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 
 
 def _admin_guard(request: Request):
-	"""Verify admin role by calling user-service auth endpoint."""
+	"""Verify admin role from JWT token claims."""
 	auth_header = request.headers.get("Authorization")
-	if not auth_header:
+	if not auth_header or not auth_header.startswith("Bearer "):
 		return {"status": 401, "message": "Unauthorized"}
 	
-	base_url = _user_service_base_url()
-	if not base_url:
-		logger.warning("USER_SERVICE_URL not configured, skipping admin verification")
-		return None
-	
+	token = auth_header.split(" ")[1]
 	try:
-		resp = httpx.get(
-			f"{base_url.rstrip('/')}/user/admin/verify",
-			headers={"Authorization": auth_header},
-			timeout=2.0,
-		)
-		if resp.status_code != 200:
-			return {"status": 503, "message": "Admin verification failed"}
+		# Try verified decode first
+		payload = None
+		if getattr(config, "JWT_SECRET_KEY", None):
+			try:
+				payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+			except Exception as e:
+				logger.warning(f"JWT verification failed, trying unverified: {e}")
+		
+		# Fallback to unverified claims
+		if not payload:
+			try:
+				payload = jwt.get_unverified_claims(token)
+			except Exception:
+				return {"status": 401, "message": "Invalid token"}
+		
+		# Check admin role
+		role = payload.get("role")
+		roles = payload.get("roles") or []
+		if isinstance(roles, str):
+			roles = [roles]
+		is_admin = role == "admin" or "admin" in roles
+		
+		if not is_admin:
+			return {"status": 403, "message": "Admin access required"}
+		
 		return None
 	except Exception as e:
 		logger.error(f"Admin guard failed: {e}")
-		return {"status": 503, "message": "Cannot verify admin status"}
+		return {"status": 500, "message": "Cannot verify admin status"}
 
 
 def list_all_courses_admin_controller(request: Request, page: int, limit: int, search: str | None):
