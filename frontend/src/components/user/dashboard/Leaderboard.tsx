@@ -70,10 +70,10 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
         );
       })}
     </div>
-    {/* Rest of users (4+) */}
+    {/* Rest of users (4+) - exclude top 3 */}
     {top.length > 3 && (
       <div className="mt-6 space-y-2">
-        {top.slice(3).map((u) => (
+        {top.filter(u => u.rank > 3).map((u) => (
           <div key={u.rank} className="flex items-center gap-3 p-3 bg-white/80 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex-shrink-0 w-12 h-12">
               <Avatar
@@ -100,7 +100,11 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
   );
 };
 
-export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users }) => (
+export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users }) => {
+  // Filter out top 3 users (only show rank 4+)
+  const tableUsers = users.filter(u => u.rank > 3);
+  
+  return (
   <div className="rounded-xl border bg-white -mx-1 sm:mx-0 overflow-hidden">
     <table className="w-full text-sm">
       <thead className="bg-gray-50 text-xs uppercase text-gray-600">
@@ -112,7 +116,7 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
-        {users.map(u => (
+        {tableUsers.map(u => (
           <tr key={u.rank} className="hover:bg-gray-50 transition-colors">
             <td className="py-2 sm:py-3 px-2 sm:px-3 font-medium text-gray-700 w-16">#{u.rank}</td>
             <td className="py-2 sm:py-3 px-2 sm:px-3"><Avatar user={u} size={32} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
@@ -120,10 +124,11 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users
             <td className="py-2 sm:py-3 px-2 sm:px-3 font-semibold text-violet-600">{u.level}</td>
           </tr>
         ))}
-        {(!users || users.length === 0) && (
-          <tr><td colSpan={4} className="py-6 text-center text-gray-400 text-sm">Không đủ dữ liệu</td></tr>
+        {tableUsers.length === 0 && (
+          <tr><td colSpan={4} className="py-6 text-center text-gray-400 text-sm">Không có xếp hạng khác</td></tr>
         )}
       </tbody>
     </table>
   </div>
-);
+  );
+};

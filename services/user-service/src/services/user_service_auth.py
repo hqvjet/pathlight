@@ -34,14 +34,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if not user:
             logger.error(f"User not found in database: {user_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-        is_email_verified = getattr(user, 'is_email_verified', False)
+        
+        # Check if user is active (but allow unverified emails for dashboard access)
         is_active = getattr(user, 'is_active', True)
-        if not is_email_verified:
-            logger.error(f"Email not verified for user: {user.email}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email not verified")
         if not is_active:
             logger.error(f"User account inactive: {user.email}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive")
+        
+        # Log email verification status but don't block access
+        is_email_verified = getattr(user, 'is_email_verified', False)
+        if not is_email_verified:
+            logger.warning(f"User accessing with unverified email: {user.email}")
+        
         return user
     except HTTPException:
         raise

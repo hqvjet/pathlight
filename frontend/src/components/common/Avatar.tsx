@@ -22,9 +22,8 @@ export default function Avatar({
   alt,
   showInitialsFallback = false,
   displayName,
-  cacheKey,
-  priority = false
-}: AvatarProps & { priority?: boolean }) {
+  cacheKey
+}: AvatarProps) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
   const loadedRef = useRef(false);

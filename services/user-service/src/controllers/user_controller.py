@@ -430,6 +430,7 @@ async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Se
 # ---------- Dashboard ----------
 async def get_user_dashboard(current_user: User, db: Session) -> DashboardResponse:
     try:
+        logger.info(f"[DASHBOARD] Starting dashboard fetch for user: {current_user.email}")
         avatar_id = getattr(current_user, 'avatar_url', None)
         # Always provide endpoint with user-id query param when user has (or may have) an avatar.
         avatar_url = (
@@ -437,8 +438,15 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         )
         dob_value = getattr(current_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
+        
+        logger.info(f"[DASHBOARD] Fetching course stats for {current_user.email}")
         course_stats = get_course_stats(str(getattr(current_user, 'email', '')))
+        logger.info(f"[DASHBOARD] Course stats result: {course_stats}")
+        
+        logger.info(f"[DASHBOARD] Fetching quiz stats for {current_user.email}")
         quiz_stats = get_quiz_stats(str(getattr(current_user, 'email', '')))
+        logger.info(f"[DASHBOARD] Quiz stats result: {quiz_stats}")
+        
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
         dashboard_info = {
@@ -479,6 +487,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             # Placeholder
             "learning_history": [],
         }
+        logger.info(f"[DASHBOARD] Dashboard response ready. Total courses: {course_stats['total_courses']}, Total lessons: {course_stats['total_lessons']}, Total quizzes: {quiz_stats['total_quizzes']}")
         return DashboardResponse(status=200, info=dashboard_info)
     except Exception as e:  # pragma: no cover
         logger.error(f"Dashboard error for {getattr(current_user, 'email', 'unknown')}: {e}")
