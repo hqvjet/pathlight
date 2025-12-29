@@ -439,12 +439,15 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         dob_value = getattr(current_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         
-        logger.info(f"[DASHBOARD] Fetching course stats for {current_user.email}")
-        course_stats = get_course_stats(str(getattr(current_user, 'email', '')))
+        user_id = str(getattr(current_user, 'id', ''))
+        user_email = getattr(current_user, 'email', None)
+
+        logger.info(f"[DASHBOARD] Fetching course stats for id={user_id} email={user_email}")
+        course_stats = get_course_stats(user_id, user_email)
         logger.info(f"[DASHBOARD] Course stats result: {course_stats}")
         
-        logger.info(f"[DASHBOARD] Fetching quiz stats for {current_user.email}")
-        quiz_stats = get_quiz_stats(str(getattr(current_user, 'email', '')))
+        logger.info(f"[DASHBOARD] Fetching quiz stats for id={user_id} email={user_email}")
+        quiz_stats = get_quiz_stats(user_id, user_email)
         logger.info(f"[DASHBOARD] Quiz stats result: {quiz_stats}")
         
         rank_data = calculate_user_rank(current_user, db)

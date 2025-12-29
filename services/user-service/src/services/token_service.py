@@ -7,11 +7,14 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["create_access_token"]
 
-def create_access_token(email: str, expires_minutes: int = 15) -> str:
+
+def create_access_token(user_id: str, email: str | None = None, expires_minutes: int = 15) -> str:
     """Generate short-lived access token for service-to-service communication."""
     try:
         expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
-        payload = {"sub": email, "exp": expire, "type": "access"}
+        payload = {"sub": user_id, "exp": expire, "type": "access"}
+        if email:
+            payload["email"] = email
         return jwt.encode(payload, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
     except Exception as e:  # pragma: no cover
         logger.error(f"Error creating access token: {e}")
