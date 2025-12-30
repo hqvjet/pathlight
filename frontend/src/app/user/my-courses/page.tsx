@@ -132,7 +132,7 @@ function MyCoursesContent() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated, selectedId]);
+  }, [authLoading, isAuthenticated]);
 
   // Load public courses once
   useEffect(() => {
@@ -156,9 +156,7 @@ function MyCoursesContent() {
     try {
       await courseApi.updateVisibility({ course_id: courseId, is_public: isPublic });
       setCourses((prev) => prev.map((c) => (c.id === courseId ? { ...c, isPublic } : c)));
-      if (selectedId === courseId) {
-        setSelectedId(courseId); // trigger re-render
-      }
+      // Don't redundantly set `selectedId` to the same value — avoids extra renders/effects
     } catch {
       setError('Không thể cập nhật quyền riêng tư của khóa học.');
     } finally {

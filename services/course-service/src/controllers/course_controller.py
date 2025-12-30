@@ -50,6 +50,7 @@ DIFFICULTY_EXP = {
 }
 PASS_THRESHOLD = 80
 COURSE_COMPLETION_EXP = 100
+HINT_PENALTY = 50
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
@@ -1207,13 +1208,10 @@ def get_assessment_hint_controller(
 		if not hint:
 			return {"status": 404, "message": "Câu hỏi này không có gợi ý"}
 		
-		# Calculate penalty based on difficulty
-		try:
-			difficulty = int(str(getattr(assessment, "difficulty", None) or 1))
-		except Exception:
-			difficulty = 1
-		
-		exp_penalty = DIFFICULTY_EXP.get(difficulty, DIFFICULTY_EXP[1]) // 2  # 50% of question exp
+		# Use a fixed hint penalty to match frontend expectations
+		# (frontend uses HINT_COST = 50). Keep this consistent so users see the
+		# same value in UI and server-side accounting.
+		exp_penalty = HINT_PENALTY
 		
 		# Deduct exp (negative exp)
 		if exp_penalty > 0:

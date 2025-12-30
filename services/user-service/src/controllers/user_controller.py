@@ -454,8 +454,9 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
 
 # ---------- Experience ----------
 async def add_experience(request: ExperienceAddRequest, current_user: User, db: Session) -> TestStatsResponse:
-    if request.exp <= 0:
-        return TestStatsResponse(status=400, message="Giá trị exp phải lớn hơn 0")
+    # Accept positive and negative experience adjustments. Internal services
+    # (course/quiz) may send negative values to apply penalties (e.g. hint usage).
+    # Zero is a no-op and will be forwarded to the service which will handle it.
     result = await svc_add_experience(request.exp, current_user, db)
     return result
 
