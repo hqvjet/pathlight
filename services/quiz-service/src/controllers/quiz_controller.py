@@ -474,6 +474,43 @@ def get_quiz_detail_controller(
         session.close()
 
 
+def get_user_quiz_stats_controller(request: Request) -> dict:
+    """Get aggregated quiz statistics for a user - for dashboard."""
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    
+    session = _get_db()
+    try:
+        # Count total quizzes
+        total_quizzes = session.query(Quiz).filter(Quiz.user_id == user_id).count()
+        
+        # Count completed quizzes (finish=True)
+        completed_quizzes = session.query(Quiz).filter(
+            Quiz.user_id == user_id,
+            Quiz.finish.is_(True)
+        ).count()
+        
+        # Calculate average score from completed quizzes
+        completed_quiz_rows = session.query(Quiz.previous_score).filter(
+            Quiz.user_id == user_id,
+            Quiz.finish.is_(True),
+            Quiz.previous_score.isnot(None)
+        ).all()
+        
+        scores = [row.previous_score for row in completed_quiz_rows if row.previous_score is not None]
+        average_score = round(sum(scores) / len(scores), 2) if scores else 0.0
+        
+        return {
+            "status": 200,
+            "total_quizzes": total_quizzes,
+            "completed_quizzes": completed_quizzes,
+            "average_score": average_score,
+        }
+    finally:
+        session.close()
+
+
 def list_user_quizzes_controller(request: Request) -> QuizListResponse:
     user_id = _verify_token(request)
     if not user_id:

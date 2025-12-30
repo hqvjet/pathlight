@@ -842,6 +842,55 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 		session.close()
 
 
+def get_user_course_stats_controller(request: Request) -> dict:
+	"""Get aggregated course statistics for a user - for dashboard."""
+	from src.database import SessionLocal
+	from src.models import Course, Lesson, LearningProgress
+	
+	user_id = _verify_token(request)
+	if not user_id:
+		return {"status": 401, "message": "Unauthorized"}
+	
+	session = SessionLocal()
+	try:
+		# Count total courses
+		total_courses = session.query(Course).filter(Course.user_id == user_id).count()
+		
+		# Count completed courses
+		course_ids = [c.course_id for c in session.query(Course.course_id).filter(Course.user_id == user_id).all()]
+		completed_courses = 0
+		total_lessons = 0
+		
+		if course_ids:
+			# Calculate lesson counts
+			lesson_counts = {}
+			lessons = session.query(Lesson.course_id).filter(Lesson.course_id.in_(course_ids)).all()
+			for (cid,) in lessons:
+				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+				total_lessons += 1
+			
+			# Check progress
+			progress_rows = session.query(LearningProgress).filter(
+				LearningProgress.course_id.in_(course_ids),
+				LearningProgress.user_id == user_id,
+			).all()
+			
+			for p in progress_rows:
+				total = cast(int, getattr(p, "num_total_lesson") or lesson_counts.get(p.course_id, 0))
+				finished = min(cast(int, getattr(p, "num_finished_lesson") or 0), total)
+				if total > 0 and finished >= total:
+					completed_courses += 1
+		
+		return {
+			"status": 200,
+			"total_courses": total_courses,
+			"completed_courses": completed_courses,
+			"total_lessons": total_lessons,
+		}
+	finally:
+		session.close()
+
+
 def get_all_courses_controller(request: Request) -> CourseListResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson, LearningProgress

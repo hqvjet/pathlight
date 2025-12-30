@@ -24,8 +24,6 @@ from services.experience_service import (
 from services.activity_service import log_activity as svc_log_activity, get_activity_series as svc_get_activity_series
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
 from services.user_services import get_user_by_id
-from services.external.course_client import get_course_stats
-from services.external.quiz_client import get_quiz_stats
 from services.log_service import (
     FilterKey,
     get_admin_logs as fetch_admin_logs,
@@ -157,7 +155,6 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
         dob_value = getattr(target_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         avatar_id = getattr(target_user, 'avatar_url', None)
-        # Unified avatar_url format with user-id query param (same as dashboard)
         avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
         user_info = {
             "id": getattr(target_user, 'id', None),
@@ -426,10 +423,6 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         )
         dob_value = getattr(current_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
-        user_id = str(getattr(current_user, 'id', ''))
-        user_email = getattr(current_user, 'email', None)
-        course_stats = get_course_stats(user_id, user_email)
-        quiz_stats = get_quiz_stats(user_id, user_email)
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
         dashboard_info = {
@@ -446,33 +439,17 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "remind_time": getattr(current_user, 'remind_time', None),
             "bio": getattr(current_user, 'bio', None),
             "sex": getattr(current_user, 'sex', None),
-            # Course
-            "course_num": course_stats["total_courses"],
-            "total_courses": course_stats["total_courses"],
-            "finish_course_num": course_stats["completed_courses"],
-            "completed_courses": course_stats["completed_courses"],
-            "lesson_num": course_stats["total_lessons"],
-            "total_lessons": course_stats["total_lessons"],
-            # Quiz
-            "quiz_num": quiz_stats["total_quizzes"],
-            "total_quizzes": quiz_stats["total_quizzes"],
-            "completed_quizzes": quiz_stats["completed_quizzes"],
-            "average_quiz_score": quiz_stats["average_score"],
-            "average_score": quiz_stats["average_score"],
-            # Rank
+            # Ranking
             "rank": rank_data["rank"],
-            "user_num": rank_data["total_users"],
             "total_users": rank_data["total_users"],
             "subscription": getattr(current_user, 'subscription', 0),
             "created_at": getattr(current_user, 'created_at', None),
             "user_top_rank": leaderboard,
-            # Placeholder
-            "learning_history": [],
         }
         return DashboardResponse(status=200, info=dashboard_info)
     except Exception as e:  # pragma: no cover
         logger.error(f"Dashboard error for {getattr(current_user, 'email', 'unknown')}: {e}")
-        return DashboardResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
+        return DashboardResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
 
 # ---------- Experience ----------

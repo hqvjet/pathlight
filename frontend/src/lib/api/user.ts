@@ -3,7 +3,6 @@ import { apiClient } from './http';
 
 export const userApi = {
   getInfo: () => apiClient.get('/user/info'),
-  // Spec: GET /user/info (optional id handled via query param externally)
   getDashboard: () => apiClient.get('/user/dashboard'),
   updateProfile: (data: unknown) => apiClient.put('/user/change-info', data),
   updateAvatar: (file: File) => apiClient.uploadFile('/user/avatar', file, { method: 'PUT' }, 'avatar_file'),
@@ -11,6 +10,17 @@ export const userApi = {
   setNotifyTime: (data: unknown) => apiClient.put('/user/notify-time', data),
   logActivity: (event: string) => apiClient.post('/user/activity', { event }),
   getActivity: (days = 365) => apiClient.get(`/user/activity?days=${days}`),
-  // Admin-only listing; backend expects admin credentials
   getAllUsers: () => apiClient.get('/user/admin/users'),
+};
+
+/** Course domain API helpers - microservice */
+export const courseApi = {
+  getStats: () => apiClient.get('/course/stats'),
+  getAll: () => apiClient.get('/course/all'),
+};
+
+/** Quiz domain API helpers - microservice */
+export const quizApi = {
+  getStats: () => apiClient.get('/quiz/stats'),
+  getAll: () => apiClient.get('/quiz/all'),
 };
