@@ -57,14 +57,12 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 async def create_course_controller(request: Request, body: CreateCourseRequest):
     """Create a course generation job (S3 validation + SQS enqueue)."""
     from src.services.sqs_publisher import send_generate_with_vectorize
-
     queue_url = os.getenv("SQS_QUEUE_URL")
     if not queue_url:
         return {"status": 500, "message": "SQS_QUEUE_URL is not configured"}
     default_job = "GENERATE_COURSE_WITH_VECTORIZE"
     course_id = body.id or f"course-{uuid4()}"
     s3_keys = body.s3_keys or []
-    logger.info("create_course_controller: course_id=%s, s3_keys_count=%d, s3_keys=%s", course_id, len(s3_keys), s3_keys)
     difficulty = (body.difficulty or "medium").strip()
     try:
         duration = int(body.duration or 0)
@@ -847,10 +845,7 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 def get_all_courses_controller(request: Request) -> CourseListResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson, LearningProgress
-
 	user_id = _verify_token(request)
-	if not user_id:
-		raise HTTPException(status_code=401, detail="Bạn không thể truy cập khóa học của người khác")
 	session = SessionLocal()
 	try:
 		rows = (
@@ -971,7 +966,6 @@ def get_lesson_detail_controller(request: Request, course_id: str, lesson_id: st
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
 		_publish_attr = getattr(course, "publish", False)
 		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
-		# Safely evaluate ownership without triggering SQLAlchemy ColumnElement.__bool__
 		_is_owner_attr = course.user_id == (user_id or "")
 		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
 		if not is_owner and not _is_published:
@@ -1191,15 +1185,12 @@ def get_assessment_hint_controller(
 		session.close()
 
 
-def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
+def submit_assessment_controller(request: Request, course_id: str, lesson_id: str, 
+								 body: AssessmentSubmitRequest) -> AssessmentSubmitResponse:
 	from src.database import SessionLocal
 	from src.models import Course, Lesson, Assessment, LearningProgress
 	import math
-
 	user_id = _verify_token(request)
-	if not user_id:
-		return AssessmentSubmitResponse(status=401, message="Bạn không có quyền làm bài kiểm tra này")
-
 	session = SessionLocal()
 	try:
 		course = session.query(Course).filter(Course.course_id == course_id).first()
@@ -1207,7 +1198,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy khóa học")
 		_is_owner_attr = course.user_id == user_id
 		is_owner = _is_owner_attr if isinstance(_is_owner_attr, bool) else False
-		# Safely evaluate publish value without triggering SQLAlchemy ColumnElement.__bool__
 		_publish_attr = getattr(course, "publish", False)
 		_is_published = _publish_attr if isinstance(_publish_attr, bool) else False
 		if not is_owner and not _is_published:
@@ -1216,7 +1206,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		if not lesson:
 			return AssessmentSubmitResponse(status=404, message="Không tìm thấy bài học")
 		
-		# Check if lesson is locked
 		lessons = (
 			session.query(Lesson)
 			.filter(Lesson.course_id == course.course_id)

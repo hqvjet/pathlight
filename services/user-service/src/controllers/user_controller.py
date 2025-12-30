@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from models import User, UserProfile
 from services.experience_service import get_exp_for_level
-from schemas.user_schemas import *  # noqa
+from schemas.user_schemas import *
 from config import config
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
@@ -253,7 +253,6 @@ async def create_admin_account(request: AdminCreateRequest, credentials: HTTPAut
         try:
             create_admin(db, username, request.password)
         except Exception as exc:
-            logger.error(f"Failed to create admin '{username}': {exc}")
             return _send_result(MessageResponse(status=500, message="Không thể tạo admin mới"))
         return _send_result(MessageResponse(status=200, message="Admin đã được tạo thành công"))
     except Exception as e:  # pragma: no cover
@@ -285,22 +284,17 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
         setattr(target_user, 'subscription', request.subscription)
-        db.flush()  # Force write to DB
+        db.flush()
         db.commit()
         
-        # Verify by re-querying
         db.expire_all()
         verified_user = get_user_by_id(db, user_id)
         verified_sub = getattr(verified_user, 'subscription', None)
-        
-        logger.info(f"Admin updated subscription for user {getattr(target_user, 'email', 'unknown')}: requested={request.subscription}, verified={verified_sub}")
-        
         if verified_sub != request.subscription:
             logger.error(f"Subscription update failed: expected {request.subscription}, got {verified_sub}")
             return MessageResponse(status=500, message=f"Lỗi: Gói không được lưu (hiện tại: {verified_sub})")
-        
         return MessageResponse(status=200, message=f"Đã cập nhật gói thuê bao thành {verified_sub}")
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.error(f"Failed to update subscription for user {user_id}: {e}")
         db.rollback()
         return MessageResponse(status=500, message="Không thể cập nhật gói thuê bao")
@@ -332,7 +326,7 @@ async def admin_add_experience_for_user(user_id: str, request: AdminExperienceRe
             db.commit()
 
         return await svc_add_experience(request.exp, target_user, db)
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.error(f"Failed to add exp for user {user_id}: {e}", exc_info=True)
         db.rollback()
         return TestStatsResponse(status=500, message="Không thể thêm exp cho người dùng")
@@ -362,10 +356,7 @@ async def admin_adjust_experience_step(user_id: str, request: AdminExperienceDel
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
             db.commit()
-
         result = await svc_add_experience(request.delta, target_user, db)
-        # Always return the result status without wrapping in _send_result
-        # to avoid double wrapping
         return result
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to adjust exp for user {user_id}: {e}", exc_info=True)
@@ -398,7 +389,6 @@ async def list_admin_accounts(credentials: HTTPAuthorizationCredentials, db: Ses
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
     try:
-        # Convert HH:MM to timezone-aware datetime (today, UTC) to satisfy DB DateTime column
         parsed_time = datetime.strptime(request.remind_time, "%H:%M").time()
         now = datetime.now(timezone.utc)
         remind_dt = datetime.combine(now.date(), parsed_time, tzinfo=timezone.utc)
@@ -430,26 +420,16 @@ async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Se
 # ---------- Dashboard ----------
 async def get_user_dashboard(current_user: User, db: Session) -> DashboardResponse:
     try:
-        logger.info(f"[DASHBOARD] Starting dashboard fetch for user: {current_user.email}")
         avatar_id = getattr(current_user, 'avatar_url', None)
-        # Always provide endpoint with user-id query param when user has (or may have) an avatar.
         avatar_url = (
             f"{config.BASE_URL}/user/avatar?user-id={current_user.id}" if avatar_id else None
         )
         dob_value = getattr(current_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
-        
         user_id = str(getattr(current_user, 'id', ''))
         user_email = getattr(current_user, 'email', None)
-
-        logger.info(f"[DASHBOARD] Fetching course stats for id={user_id} email={user_email}")
         course_stats = get_course_stats(user_id, user_email)
-        logger.info(f"[DASHBOARD] Course stats result: {course_stats}")
-        
-        logger.info(f"[DASHBOARD] Fetching quiz stats for id={user_id} email={user_email}")
         quiz_stats = get_quiz_stats(user_id, user_email)
-        logger.info(f"[DASHBOARD] Quiz stats result: {quiz_stats}")
-        
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
         dashboard_info = {
@@ -485,12 +465,10 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "total_users": rank_data["total_users"],
             "subscription": getattr(current_user, 'subscription', 0),
             "created_at": getattr(current_user, 'created_at', None),
-            # Leaderboard
             "user_top_rank": leaderboard,
             # Placeholder
             "learning_history": [],
         }
-        logger.info(f"[DASHBOARD] Dashboard response ready. Total courses: {course_stats['total_courses']}, Total lessons: {course_stats['total_lessons']}, Total quizzes: {quiz_stats['total_quizzes']}")
         return DashboardResponse(status=200, info=dashboard_info)
     except Exception as e:  # pragma: no cover
         logger.error(f"Dashboard error for {getattr(current_user, 'email', 'unknown')}: {e}")
@@ -527,7 +505,6 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
 
 
 # ---------- Activity tracking ----------
-
 async def log_learning_activity(request: ActivityLogRequest, current_user: User, db: Session):
     return svc_log_activity(request, current_user, db)
 
@@ -567,8 +544,6 @@ async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredenti
         target_user = db.query(User).filter(User.id == user_id).first()
         if not target_user:
             return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
-
-        # Explicitly delete profile first to ensure cleanup
         profile = getattr(target_user, 'profile', None)
         if profile:
             db.delete(profile)
@@ -603,12 +578,9 @@ async def get_admin_logs(
     if guard:
         return guard
     try:
-        logger.info(f"Admin log request: filter={filter_key}, service={service}, stream={log_stream}, level={level}")
         result = fetch_admin_logs(filter_key, service=service, log_stream=log_stream, level_filter=level)
-        logger.info(f"Admin log fetch completed: status={getattr(result, 'status', 'unknown')}, logs={len(getattr(result, 'logs', []))}")
         return result
     except Exception as e:
-        logger.error(f"Admin log fetch error: {e}", exc_info=True)
         return AdminLogsResponse(status=500, message="Lỗi khi lấy logs", logs=[])
 
 

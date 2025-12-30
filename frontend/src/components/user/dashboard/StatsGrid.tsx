@@ -9,6 +9,17 @@ export const StatsGrid: React.FC<{ user: UserProfile }> = ({ user }) => {
   const totalLessons = user.total_lessons ?? user.lesson_num ?? 0;
   const totalUsers = user.total_users ?? user.user_num ?? 0;
   const effectiveExp = user.current_exp ?? (user as { experience?: number })?.experience ?? 0;
+  
+  // Debug logging for course data
+  if (process.env.NODE_ENV === 'development' && totalCourses === 0) {
+    console.group('⚠️ StatsGrid Debug - Course Data');
+    console.log('User object:', user);
+    console.log('total_courses:', user.total_courses);
+    console.log('course_num:', user.course_num);
+    console.log('Final totalCourses:', totalCourses);
+    console.groupEnd();
+  }
+  
   const stats: StatDef[] = [
     { label: 'Tổng Số Khóa Học', value: totalCourses, color: 'bg-orange-50 text-orange-600', icon: (<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 19h16M4 5h16M5 12h14"/></svg>) },
     { label: 'Tổng Số Quiz', value: totalQuizzes, color: 'bg-indigo-50 text-indigo-600', icon: (<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5h10M5 12h14M9 19h10"/></svg>) },
