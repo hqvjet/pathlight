@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/utils/toast';
 import { Lightbulb } from 'lucide-react';
 import { JSX } from 'react/jsx-runtime';
+import { MathRenderer } from '@/components/common/MathRenderer';
 
 interface LessonDetailApi {
   lesson_id: string;
@@ -720,7 +721,7 @@ export default function LessonDetailPage({ params }: PageProps) {
                 }
                 return (
                   <p key={idx} className="leading-7 text-gray-800 whitespace-pre-wrap">
-                    {block.text}
+                    <MathRenderer text={block.text} />
                   </p>
                 );
               })}

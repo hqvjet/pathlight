@@ -31,7 +31,6 @@ export interface UserProfile {
   // Quiz stats - from quiz-service
   total_quizzes?: number;
   completed_quizzes?: number;
-  average_quiz_score?: number;
   // User stats - from user-service
   rank?: number;
   total_users?: number;

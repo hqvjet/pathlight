@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { courseApi } from '@/lib/api/course';
 import { CourseCard, CourseCardData } from '@/components/user/courses/CourseCard';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { useAuthContext } from '@/context/AuthContext';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type SortOption = 'latest' | 'progress_desc' | 'title_asc';
+type TabType = 'my' | 'public';
 
 interface ApiCourseSummary {
   course_id: string;
@@ -29,6 +31,8 @@ interface ApiCourseListResponse {
   status: number;
   courses?: ApiCourseSummary[];
 }
+
+const ITEMS_PER_PAGE = 9;
 
 const minutesToWeeksLabel = (minutes: number) => {
   if (!minutes) return '4 tuần';
@@ -62,14 +66,14 @@ const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
 
 export default function MyCoursesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, loading: authLoading } = useAuthContext();
+  const [activeTab, setActiveTab] = useState<TabType>('my');
+  const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('latest');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [publicLevelFilter, setPublicLevelFilter] = useState<string>('all');
-  const [publicStatusFilter, setPublicStatusFilter] = useState<string>('all');
-  const [publicSearch, setPublicSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
@@ -82,6 +86,19 @@ export default function MyCoursesPage() {
     if (hour < 18) return 'Chào buổi chiều';
     return 'Chào buổi tối';
   })();
+
+  // Set initial tab from URL parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'public') {
+      setActiveTab('public');
+    }
+  }, [searchParams]);
+  
+  // Reset to page 1 when switching tabs or filters
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search, sort, levelFilter, statusFilter]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -101,7 +118,10 @@ export default function MyCoursesPage() {
         const list = (data?.courses || []).map(mapApiToCard);
         if (!cancelled) {
           setCourses(list);
-          if (list.length > 0 && !selectedId) setSelectedId(list[0].id || null);
+          // Only set selectedId if not already set
+          if (list.length > 0 && !selectedId) {
+            setSelectedId(list[0].id || null);
+          }
         }
       } catch {
         if (!cancelled) setError('Không thể tải danh sách khóa học. Vui lòng thử lại.');
@@ -113,7 +133,7 @@ export default function MyCoursesPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated, selectedId]);
+  }, [authLoading, isAuthenticated]); // Removed selectedId from dependencies
 
   // Load public courses once
   useEffect(() => {
@@ -161,7 +181,8 @@ export default function MyCoursesPage() {
   };
 
   const filtered = useMemo(() => {
-    let list = courses.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
+    const source = activeTab === 'my' ? courses : publicCourses;
+    let list = source.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
     
     // Filter by level
     if (levelFilter !== 'all') {
@@ -192,16 +213,22 @@ export default function MyCoursesPage() {
         );
     }
     return list;
-  }, [courses, search, sort, levelFilter, statusFilter]);
+  }, [courses, publicCourses, activeTab, search, sort, levelFilter, statusFilter]);
 
-  const heroCourse = selectedId ? filtered.find((c) => c.id === selectedId) : null;
-  const remaining = heroCourse ? filtered.filter((c) => c.id !== heroCourse.id) : filtered;
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedCourses = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const heroCourse = selectedId ? paginatedCourses.find((c) => c.id === selectedId) : null;
+  const remaining = heroCourse ? paginatedCourses.filter((c) => c.id !== heroCourse.id) : paginatedCourses;
 
   useEffect(() => {
-    if (selectedId && !filtered.find((c) => c.id === selectedId)) {
+    if (selectedId && !paginatedCourses.find((c) => c.id === selectedId)) {
       setSelectedId(null);
     }
-  }, [filtered, selectedId]);
+  }, [paginatedCourses, selectedId]);
 
   const handleSelect = (course: CourseCardData) => {
     setSelectedId(course.id);
@@ -213,28 +240,6 @@ export default function MyCoursesPage() {
   const handleOwnerClick = (ownerId: string) => {
     setSearch(ownerId);
   };
-
-  const filteredPublic = useMemo(() => {
-    let list = publicCourses.filter((c) => c.title.toLowerCase().includes(publicSearch.toLowerCase()));
-    
-    // Filter by level
-    if (publicLevelFilter !== 'all') {
-      list = list.filter((c) => c.level === publicLevelFilter);
-    }
-    
-    // Filter by status (based on progress)
-    if (publicStatusFilter !== 'all') {
-      if (publicStatusFilter === 'completed') {
-        list = list.filter((c) => c.progress >= 100 || c.badge === 'Hoàn thành');
-      } else if (publicStatusFilter === 'in_progress') {
-        list = list.filter((c) => c.progress > 0 && c.progress < 100);
-      } else if (publicStatusFilter === 'draft') {
-        list = list.filter((c) => c.progress === 0);
-      }
-    }
-    
-    return list;
-  }, [publicCourses, publicSearch, publicLevelFilter, publicStatusFilter]);
 
   if (!authLoading && !isAuthenticated) return null;
 
@@ -268,52 +273,87 @@ export default function MyCoursesPage() {
             </a>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 justify-between mt-2">
-          <div className="relative flex-1 min-w-[240px]">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm khóa học..."
-              className="w-full h-11 pl-10 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
-            />
-            <svg className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </header>
+
+      {/* Tabs */}
+      <div className="border-b">
+        <div className="flex gap-6">
+          <button
+            onClick={() => setActiveTab('my')}
+            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'my'
+                ? 'border-orange-600 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Khóa Học Của Tôi
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-xs">
+              {courses.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('public')}
+            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'public'
+                ? 'border-orange-600 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Khóa Học Công Khai
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-xs">
+              {publicCourses.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="relative flex-1 min-w-[240px]">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm khóa học..."
+            className="w-full h-11 pl-10 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
+          />
+          <svg className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative">
+            <select
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value)}
+              className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[110px]"
+            >
+              <option value="all">Tất cả mức</option>
+              <option value="Bắt đầu">Bắt đầu</option>
+              <option value="Trung bình">Trung bình</option>
+              <option value="Nâng cao">Nâng cao</option>
+            </select>
+            <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </div>
           
-          <div className="flex gap-2 flex-wrap">
-            <div className="relative">
-              <select
-                value={levelFilter}
-                onChange={(e) => setLevelFilter(e.target.value)}
-                className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[110px]"
-              >
-                <option value="all">Tất cả mức</option>
-                <option value="Bắt đầu">Bắt đầu</option>
-                <option value="Trung bình">Trung bình</option>
-                <option value="Nâng cao">Nâng cao</option>
-              </select>
-              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-            
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="in_progress">Đang học</option>
-                <option value="draft">Bản nháp</option>
-              </select>
-              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-            
+          <div className="relative">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="appearance-none h-11 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="in_progress">Đang học</option>
+              <option value="draft">Bản nháp</option>
+            </select>
+            <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          
           <div className="relative">
             <select
               value={sort}
@@ -328,9 +368,8 @@ export default function MyCoursesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </div>
-          </div>
         </div>
-      </header>
+      </div>
 
       {heroCourse && filtered.length > 0 && (
         <div className="transition-all duration-500 ease-out" key={heroCourse.id}>
@@ -417,91 +456,6 @@ export default function MyCoursesPage() {
             )}
           </div>
         )}
-      </section>
-
-      {/* Public courses section */}
-      <section className="space-y-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Khóa học công khai</h3>
-            <p className="text-sm text-gray-500 hidden sm:block">Nhấn vào chủ sở hữu để lọc theo người tạo</p>
-          </div>
-          
-          {/* Public courses filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <input
-                value={publicSearch}
-                onChange={(e) => setPublicSearch(e.target.value)}
-                placeholder="Tìm khóa học công khai..."
-                className="w-full h-10 pl-9 pr-4 rounded-full border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 text-sm"
-              />
-              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            
-            <div className="flex gap-2 flex-wrap">
-              <div className="relative">
-                <select
-                  value={publicLevelFilter}
-                  onChange={(e) => setPublicLevelFilter(e.target.value)}
-                  className="appearance-none h-10 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[110px]"
-                >
-                  <option value="all">Tất cả mức</option>
-                  <option value="Bắt đầu">Bắt đầu</option>
-                  <option value="Trung bình">Trung bình</option>
-                  <option value="Nâng cao">Nâng cao</option>
-                </select>
-                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-              
-              <div className="relative">
-                <select
-                  value={publicStatusFilter}
-                  onChange={(e) => setPublicStatusFilter(e.target.value)}
-                  className="appearance-none h-10 pl-3 pr-8 rounded-full bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 min-w-[120px]"
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="completed">Hoàn thành</option>
-                  <option value="in_progress">Đang học</option>
-                  <option value="draft">Bản nháp</option>
-                </select>
-                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="grid gap-5 md:grid-cols-2 auto-rows-fr">
-          {filteredPublic.map((course) => (
-            <div key={`public-${course.id}`} className="transition-all duration-300 ease-in-out hover:-translate-y-0.5">
-              <CourseCard course={course} onOwnerClick={handleOwnerClick} />
-            </div>
-          ))}
-          {filteredPublic.length === 0 && publicCourses.length > 0 && (
-            <div className="bg-white rounded-xl p-10 text-center border border-dashed border-gray-300 col-span-full">
-              <p className="text-gray-600">Không tìm thấy khóa học công khai phù hợp với bộ lọc.</p>
-              <button
-                onClick={() => { setPublicSearch(''); setPublicLevelFilter('all'); setPublicStatusFilter('all'); }}
-                className="mt-3 text-sm text-orange-600 hover:text-orange-700 font-medium"
-              >
-                Xóa bộ lọc
-              </button>
-            </div>
-          )}
-          {publicCourses.length === 0 && (
-            <div className="bg-white rounded-xl p-10 text-center border border-dashed border-gray-300 col-span-full text-gray-600">
-              <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-              <p>Chưa có khóa học công khai nào.</p>
-            </div>
-          )}
-        </div>
       </section>
 
       <footer className="pt-2 pb-8 text-xs text-gray-400 flex flex-wrap gap-6 justify-center">

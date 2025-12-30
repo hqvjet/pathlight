@@ -34,7 +34,7 @@ export function useDashboard(onLogout: () => void) {
   }, [normalizeAvatarUrl]);
 
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
-  const CACHE_EXPIRY_MS = 2 * 60 * 1000; // Reduce to 2 minutes for testing
+  const CACHE_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes cache
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -80,9 +80,17 @@ export function useDashboard(onLogout: () => void) {
         // Fetch from 3 microservices in parallel
         const [userResponse, courseStatsResponse, quizStatsResponse] = await Promise.all([
           api.user.getDashboard(),
-          courseApi.getStats().catch(() => ({ status: 200, total_courses: 0, completed_courses: 0, total_lessons: 0 })),
-          quizApi.getStats().catch(() => ({ status: 200, total_quizzes: 0, completed_quizzes: 0, average_score: 0 })),
+          courseApi.getStats().catch((err) => {
+            console.warn('⚠️ Course stats failed:', err);
+            return { status: 200, total_courses: 0, completed_courses: 0, total_lessons: 0 };
+          }),
+          quizApi.getStats().catch((err) => {
+            console.warn('⚠️ Quiz stats failed (expected if not configured):', err);
+            return { status: 200, total_quizzes: 0, completed_quizzes: 0, average_score: 0 };
+          }),
         ]);
+
+        console.log('📊 API Responses:', { userResponse, courseStatsResponse, quizStatsResponse });
 
         if (!userResponse || typeof (userResponse as { status?: number }).status !== 'number') {
           throw new Error('Invalid user API response');
@@ -98,9 +106,16 @@ export function useDashboard(onLogout: () => void) {
           ? data.info as Record<string, unknown>
           : data as Record<string, unknown>;
 
-        // Extract stats from course and quiz services
-        const courseStats = (courseStatsResponse as Record<string, unknown>) || {};
-        const quizStats = (quizStatsResponse as Record<string, unknown>) || {};
+        // Extract stats from course and quiz services - check if wrapped in data object
+        const courseStatsData = (courseStatsResponse as { data?: Record<string, unknown> }).data || courseStatsResponse as Record<string, unknown>;
+        const quizStatsData = (quizStatsResponse as { data?: Record<string, unknown> }).data || quizStatsResponse as Record<string, unknown>;
+        
+        console.log('📊 Extracted Stats:', { 
+          courseStatsData, 
+          quizStatsData,
+          courseStats_total: courseStatsData.total_courses,
+          courseStats_lessons: courseStatsData.total_lessons
+        });
 
         const leaderboard = normalizeLeaderboard(userInfo.user_top_rank as LeaderboardUser[] | undefined);
         const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || 
@@ -119,18 +134,26 @@ export function useDashboard(onLogout: () => void) {
           current_exp: (userInfo.current_exp as number) || 0,
           require_exp: (userInfo.require_exp as number) || 100,
           // Course stats from course-service
-          total_courses: (courseStats.total_courses as number) || 0,
-          completed_courses: (courseStats.completed_courses as number) || 0,
-          total_lessons: (courseStats.total_lessons as number) || 0,
+          total_courses: (courseStatsData.total_courses as number) || 0,
+          completed_courses: (courseStatsData.completed_courses as number) || 0,
+          total_lessons: (courseStatsData.total_lessons as number) || 0,
           // Quiz stats from quiz-service
-          total_quizzes: (quizStats.total_quizzes as number) || 0,
-          completed_quizzes: (quizStats.completed_quizzes as number) || 0,
-          average_quiz_score: (quizStats.average_score as number) || 0,
+          total_quizzes: (quizStatsData.total_quizzes as number) || 0,
+          completed_quizzes: (quizStatsData.completed_quizzes as number) || 0,
           // Ranking from user-service
           rank: (userInfo.rank as number) || 0,
           total_users: (userInfo.total_users as number) || 0,
           user_top_rank: leaderboard,
         };
+
+        console.log('✅ Final Profile Data:', {
+          total_courses: profileData.total_courses,
+          completed_courses: profileData.completed_courses,
+          total_lessons: profileData.total_lessons,
+          total_quizzes: profileData.total_quizzes,
+          level: profileData.level,
+          rank: profileData.rank,
+        });
 
         const dashboardInfo: DashboardData = { 
           info: { 
