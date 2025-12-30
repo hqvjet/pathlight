@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { courseApi } from '@/lib/api/course';
 import { CourseCard, CourseCardData } from '@/components/user/courses/CourseCard';
@@ -8,7 +8,6 @@ import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { useAuthContext } from '@/context/AuthContext';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type SortOption = 'latest' | 'progress_desc' | 'title_asc';
 type TabType = 'my' | 'public';
@@ -64,7 +63,7 @@ const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
   };
 };
 
-export default function MyCoursesPage() {
+function MyCoursesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, loading: authLoading } = useAuthContext();
@@ -133,7 +132,7 @@ export default function MyCoursesPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated]); // Removed selectedId from dependencies
+  }, [authLoading, isAuthenticated, selectedId]);
 
   // Load public courses once
   useEffect(() => {
@@ -215,7 +214,6 @@ export default function MyCoursesPage() {
     return list;
   }, [courses, publicCourses, activeTab, search, sort, levelFilter, statusFilter]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedCourses = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
@@ -464,5 +462,17 @@ export default function MyCoursesPage() {
         <Badge variant="outline" className="text-gray-500 border-gray-200">Terms & Condition</Badge>
       </footer>
     </div>
+  );
+}
+
+export default function MyCoursesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      </div>
+    }>
+      <MyCoursesContent />
+    </Suspense>
   );
 }

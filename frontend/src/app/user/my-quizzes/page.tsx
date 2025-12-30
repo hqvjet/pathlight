@@ -1,11 +1,10 @@
 'use client';
 import Link from 'next/link';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QuizCard, QuizCardData } from '@/components/user/quizzes/QuizCard';
 import { quizApi } from '@/lib/api/quiz';
 import { showToast } from '@/utils/toast';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type LevelFilter = 'all' | 'easy' | 'medium' | 'hard';
 type StatusFilter = 'all' | 'completed' | 'draft';
@@ -14,7 +13,7 @@ type TabType = 'my' | 'public';
 
 const ITEMS_PER_PAGE = 9;
 
-export default function MyQuizzesPage() {
+function MyQuizzesContent() {
 	const searchParams = useSearchParams();
 	const [activeTab, setActiveTab] = useState<TabType>('my');
 	const [currentPage, setCurrentPage] = useState(1);
@@ -275,13 +274,15 @@ export default function MyQuizzesPage() {
 							{totalPages > 1 && (
 								<div className="flex items-center justify-center gap-2 mt-6 pt-6 border-t">
 									<button
-										onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+										onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
 										disabled={currentPage === 1}
 										className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 									>
-										<ChevronLeft className="w-4 h-4" />
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+										</svg>
 									</button>
-									
+
 									<div className="flex items-center gap-1">
 										{[...Array(totalPages)].map((_, i) => {
 											const pageNum = i + 1;
@@ -303,26 +304,28 @@ export default function MyQuizzesPage() {
 														{pageNum}
 													</button>
 												);
-											} else if (
-												pageNum === currentPage - 2 ||
-												pageNum === currentPage + 2
-											) {
+											}
+
+											if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
 												return (
 													<span key={pageNum} className="px-2 text-gray-400">
 														...
 													</span>
 												);
 											}
+
 											return null;
 										})}
 									</div>
 
 									<button
-										onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+										onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
 										disabled={currentPage === totalPages}
 										className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 									>
-										<ChevronRight className="w-4 h-4" />
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+										</svg>
 									</button>
 								</div>
 							)}
@@ -337,5 +340,16 @@ export default function MyQuizzesPage() {
 				<span>Terms & Condition</span>
 			</footer>
 		</div>
+	);
+}
+export default function MyQuizzesPage() {
+	return (
+		<Suspense fallback={
+			<div className="flex items-center justify-center min-h-screen">
+				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+			</div>
+		}>
+			<MyQuizzesContent />
+		</Suspense>
 	);
 }

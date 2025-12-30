@@ -1,6 +1,6 @@
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
-import { JSX } from 'react/jsx-runtime';
+import React from 'react';
 
 interface MathRendererProps {
   text: string;
@@ -14,7 +14,7 @@ interface MathRendererProps {
 export function MathRenderer({ text }: MathRendererProps) {
   if (!text) return null;
 
-  const parts: (string | JSX.Element)[] = [];
+  const parts: (string | React.ReactElement)[] = [];
   let lastIndex = 0;
   let counter = 0;
 
