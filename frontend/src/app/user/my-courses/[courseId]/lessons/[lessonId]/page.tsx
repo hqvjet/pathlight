@@ -317,18 +317,22 @@ export default function LessonDetailPage({ params }: PageProps) {
         }
       }
 
-      if (snapshot) {
-        if (typeof snapshot.new_exp === 'number') {
-          setPlayerExp(Math.max(0, snapshot.new_exp));
-        }
-        if (typeof snapshot.new_level === 'number' && snapshot.new_level > 0) {
-          setPlayerLevel(snapshot.new_level);
-        }
-        if (typeof snapshot.require_exp === 'number' && snapshot.require_exp > 0) {
-          setRequireExp(snapshot.require_exp);
-        }
-      } else {
-        // Fallback to local progression if server does not provide experience snapshot
+      // If server provides a full snapshot containing `new_exp`, adopt it.
+      // Otherwise fall back to local progression using the awarded amount so
+      // the UI reflects the change even if the server didn't return totals.
+      const serverHasNewExp = Boolean(snapshot && typeof snapshot.new_exp === 'number');
+      if (serverHasNewExp) {
+        setPlayerExp(Math.max(0, snapshot!.new_exp as number));
+      }
+      if (snapshot && typeof snapshot.new_level === 'number' && snapshot.new_level > 0) {
+        setPlayerLevel(snapshot.new_level);
+      }
+      if (snapshot && typeof snapshot.require_exp === 'number' && snapshot.require_exp > 0) {
+        setRequireExp(snapshot.require_exp);
+      }
+
+      if (!serverHasNewExp) {
+        // Fallback to local progression when server didn't return totals
         let expPool = playerExp + adjustedExp;
         let nextLevel = playerLevel;
         let nextRequireExp = requireExp;
