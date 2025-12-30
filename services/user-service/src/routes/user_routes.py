@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Response, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Literal
 import logging
@@ -49,7 +49,9 @@ from controllers.user_controller import (
     admin_add_experience_for_user,
     admin_adjust_experience_step,
     list_admin_accounts,
+    svc_add_experience,
 )
+from fastapi.responses import JSONResponse
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,30 @@ async def add_experience_endpoint(
     db: Session = Depends(get_db)
 ):
     return await add_experience(request, current_user, db)
+
+@router.post("/internal/experience/add")
+async def internal_add_experience_endpoint(request_obj: Request, db: Session = Depends(get_db)):
+    from config import config as svc_config
+    token = request_obj.headers.get("X-Internal-Token") or request_obj.headers.get("x-internal-token")
+    if not token or token != getattr(svc_config, "INTERNAL_API_KEY", ""):
+        return JSONResponse(status_code=403, content={"status": 403, "message": "Forbidden"})
+    try:
+        payload = await request_obj.json()
+        user_id = payload.get("user_id")
+        exp = int(payload.get("exp", 0))
+    except Exception:
+        return JSONResponse(status_code=400, content={"status": 400, "message": "Invalid payload"})
+    if not user_id:
+        return JSONResponse(status_code=400, content={"status": 400, "message": "Missing user_id"})
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        return JSONResponse(status_code=404, content={"status": 404, "message": "User not found"})
+    try:
+        result = await svc_add_experience(exp, target_user, db)
+        return result
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": 500, "message": str(e)})
 
 # 2.8. Lưu cột mốc hoạt động của USER
 @router.post("/activity")

@@ -57,6 +57,8 @@ class Config:
 
     # Frontend configuration
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    # Internal key for trusted service-to-service calls
+    INTERNAL_API_KEY: str = os.getenv("INTERNAL_API_KEY", "")
 
 config = Config()
 

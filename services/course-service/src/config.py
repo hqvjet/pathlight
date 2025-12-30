@@ -22,6 +22,8 @@ class CourseConfig:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
     USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://user-service:8001")
+    # Internal authentication key for service-to-service calls (optional)
+    INTERNAL_API_KEY: str = os.getenv("INTERNAL_API_KEY", "")
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")

@@ -117,7 +117,6 @@ function MyCoursesContent() {
         const list = (data?.courses || []).map(mapApiToCard);
         if (!cancelled) {
           setCourses(list);
-          // Only set selectedId if not already set
           if (list.length > 0 && !selectedId) {
             setSelectedId(list[0].id || null);
           }

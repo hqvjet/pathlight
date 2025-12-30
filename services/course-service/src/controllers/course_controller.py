@@ -174,23 +174,47 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 	"""
 	if exp_amount == 0:
 		return None
+
 	base_url = _user_service_base_url()
+	if not base_url:
+		return None
+
 	auth_header = request.headers.get("Authorization")
-	if not base_url or not auth_header:
-		return None
-	url = f"{base_url.rstrip('/')}/user/experience/add"
-	try:
-		resp = httpx.post(
-			url,
-			headers={"Authorization": auth_header},
-			json={"exp": exp_amount},
-			timeout=5.0,
-		)
-		data = resp.json() if resp.content else {}
-		return {"status_code": resp.status_code, "body": data}
-	except Exception as e:  # pragma: no cover - network issues
-		logger.error("Failed to award experience for user %s: %s", user_id, e)
-		return None
+	# Primary attempt: forward user's Authorization header to /user/experience/add
+	if auth_header:
+		url = f"{base_url.rstrip('/')}/user/experience/add"
+		try:
+			resp = httpx.post(
+				url,
+				headers={"Authorization": auth_header},
+				json={"exp": exp_amount},
+				timeout=5.0,
+			)
+			data = resp.json() if resp.content else {}
+			# If successful or returned an error payload, return it to caller
+			return {"status_code": resp.status_code, "body": data}
+		except Exception as e:  # pragma: no cover - network issues
+			logger.warning("User-forward award_experience failed for user %s: %s", user_id, e)
+
+	# Fallback: use internal service-to-service endpoint if configured
+	internal_key = getattr(config, "INTERNAL_API_KEY", None)
+	if internal_key:
+		try:
+			url_internal = f"{base_url.rstrip('/')}/internal/experience/add"
+			resp2 = httpx.post(
+				url_internal,
+				headers={"X-Internal-Token": internal_key},
+				json={"user_id": user_id, "exp": exp_amount},
+				timeout=5.0,
+			)
+			data2 = resp2.json() if resp2.content else {}
+			return {"status_code": resp2.status_code, "body": data2}
+		except Exception as e:  # pragma: no cover - network issues
+			logger.error("Internal award_experience failed for user %s: %s", user_id, e)
+			return None
+
+	# No auth header and no internal key -> cannot award
+	return None
 
 
 def _log_activity(request: Request, user_id: str | None, event: str) -> dict | None:

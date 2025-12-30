@@ -207,7 +207,7 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
             "level_changed": level_changed,
             "original_stats": original_stats
         }
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         updated_stats.update(rank_data)
         level_msg = ""
         if level_changed:
@@ -232,7 +232,7 @@ async def reset_test_stats(current_user: User, db: Session) -> TestStatsResponse
         lines = [l for l in current_bio.split('\n') if not l.startswith('[TEST_DATA]')]
         setattr(current_user, 'bio', '\n'.join(lines).strip())
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         reset_stats = {"level": 1, "current_exp": 0, "require_exp": require_exp_for_level(1), **rank_data}
         logger.info(f"Successfully reset test stats for user {current_user.email}")
         return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=reset_stats)
@@ -253,7 +253,7 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
         setattr(current_user, 'level', new_level)
         setattr(current_user, 'require_exp', next_level_exp)
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         stats = {
             "original_level": original_level,
             "original_exp": original_exp,
@@ -288,7 +288,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
         setattr(current_user, 'level', new_level)
         setattr(current_user, 'require_exp', next_level_exp)
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         stats = {
             "original_level": original_level,
             "original_exp": original_exp,
