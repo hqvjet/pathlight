@@ -42,11 +42,11 @@ from src.schemas.course_schemas import (
 logger = logging.getLogger(__name__)
 
 DIFFICULTY_EXP = {
-	1: 10,
-	2: 20,
-	3: 30,
-	4: 40,
-	5: 50,
+	1: 100,
+	2: 200,
+	3: 300,
+	4: 400,
+	5: 500,
 }
 PASS_THRESHOLD = 80
 COURSE_COMPLETION_EXP = 100
@@ -204,9 +204,13 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			# Log the response for debugging and return the payload
 			logger.info("Award exp via user-forward: url=%s status=%s", url, resp.status_code)
 			logger.debug("Award exp response body: %s", data)
-			return {"status_code": resp.status_code, "body": data}
+			# If the forward was rejected (e.g. token decode failed), try internal-key fallback when available
+			if resp.status_code == 200:
+				return {"status_code": resp.status_code, "body": data}
+			logger.warning("Forwarded award returned non-200 (will attempt internal fallback if configured): %s", resp.status_code)
 		except Exception as e:  # pragma: no cover - network issues
 			logger.warning("User-forward award_experience failed for user %s: %s", user_id, e)
+			# fall through to internal fallback if available
 
 	# Fallback: use internal service-to-service endpoint if configured
 	internal_key = getattr(config, "INTERNAL_API_KEY", None)

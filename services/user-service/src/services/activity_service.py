@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from datetime import timedelta
-from typing import Dict, List
+from typing import Dict, List, Any
 from sqlalchemy.orm import Session
 
 from models import LearningActivity, User
@@ -19,6 +19,7 @@ _EVENT_POINTS: Dict[str, int] = {
     "create_course": 1, 
     "create_quiz": 1,     
     "assessment_move": 3,
+    "assessment_complete": 3,
 }
 
 
@@ -27,7 +28,7 @@ def _normalize_date(dt: datetime | None = None) -> datetime:
     return base.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def _get_yesterday_activity(user_id: str, day: datetime, db: Session) -> LearningActivity | None:
+def _get_yesterday_activity(user_id: Any, day: datetime, db: Session) -> LearningActivity | None:
     prev_day = day - timedelta(days=1)
     return (
         db.query(LearningActivity)
@@ -55,8 +56,8 @@ def log_activity(request: ActivityLogRequest, current_user: User, db: Session) -
             db.add(record)
             total = points
         else:
-            record.count = int(record.count or 0) + points
-            total = int(record.count)
+            setattr(record, "count", int(getattr(record, "count", 0) or 0) + points)
+            total = getattr(record, "count", 0)
 
         prev_activity = _get_yesterday_activity(current_user.id, day, db)
         current_streak = int(getattr(current_user, "streak", 0) or 0)
@@ -71,7 +72,7 @@ def log_activity(request: ActivityLogRequest, current_user: User, db: Session) -
         current_user.level = new_level
         current_user.require_exp = next_require_exp
 
-        current_user.streak = new_streak
+        setattr(current_user, "streak", int(new_streak))
 
         db.commit()
         logger.info(
@@ -112,12 +113,14 @@ def get_activity_series(current_user: User, db: Session, days: int = 365) -> Act
         )
         items: List[ActivityItem] = []
         for row in rows:
-            if not row.date:
+            if row.date is None:
                 continue
-            ordinal = row.date.date().toordinal()
+            row_date = row.date
+            ordinal = row_date.date().toordinal()
             if ordinal < cutoff:
                 continue
-            items.append(ActivityItem(date=row.date.date().isoformat(), points=int(row.count or 0)))
+            points = int(getattr(row, "count", 0) or 0)
+            items.append(ActivityItem(date=row_date.date().isoformat(), points=points))
         items.sort(key=lambda x: x.date)
         return ActivitySeriesResponse(status=200, items=items)
     except Exception as exc:
