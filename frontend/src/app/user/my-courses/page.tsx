@@ -129,7 +129,7 @@ function MyCoursesContent() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, selectedId]);
 
   useEffect(() => {
     let cancelled = false;
