@@ -203,33 +203,41 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			data = resp.json() if resp.content else {}
 			# Log the response for debugging and return the payload
 			logger.info("Award exp via user-forward: url=%s status=%s", url, resp.status_code)
-			logger.debug("Award exp response body: %s", data)
-			# If the forward was rejected (e.g. token decode failed), try internal-key fallback when available
-			if resp.status_code == 200:
+				except Exception as e:  # pragma: no cover - network errors
+						logger.exception("Failed to log activity for user %s", user_id)
+						return None
 				return {"status_code": resp.status_code, "body": data}
 			logger.warning("Forwarded award returned non-200 (will attempt internal fallback if configured): %s", resp.status_code)
 		except Exception as e:  # pragma: no cover - network issues
-			logger.warning("User-forward award_experience failed for user %s: %s", user_id, e)
+			logger.exception("User-forward award_experience failed for user %s", user_id)
 			# fall through to internal fallback if available
 
 	# Fallback: use internal service-to-service endpoint if configured
 	internal_key = getattr(config, "INTERNAL_API_KEY", None)
+	logger.debug("_award_experience: internal_key present=%s", bool(internal_key))
 	if internal_key:
-		try:
-			url_internal = f"{base_url.rstrip('/')}/internal/experience/add"
-			resp2 = httpx.post(
-				url_internal,
-				headers={"X-Internal-Token": internal_key},
-				json={"user_id": user_id, "exp": exp_amount},
-				timeout=5.0,
-			)
-			data2 = resp2.json() if resp2.content else {}
-			logger.info("Award exp via internal token: url=%s status=%s", url_internal, resp2.status_code)
-			logger.debug("Internal award response body: %s", data2)
-			return {"status_code": resp2.status_code, "body": data2}
-		except Exception as e:  # pragma: no cover - network issues
-			logger.error("Internal award_experience failed for user %s: %s", user_id, e)
-			return None
+		url_internal = f"{base_url.rstrip('/')}/internal/experience/add"
+		# Try a couple times for transient network errors
+		for attempt in range(2):
+			try:
+				resp2 = httpx.post(
+					url_internal,
+					headers={"X-Internal-Token": internal_key},
+					json={"user_id": user_id, "exp": exp_amount},
+					timeout=5.0,
+				)
+				data2 = resp2.json() if resp2.content else {}
+				logger.info("Award exp via internal token attempt=%s url=%s status=%s", attempt + 1, url_internal, resp2.status_code)
+				logger.debug("Internal award response body: %s", data2)
+				return {"status_code": resp2.status_code, "body": data2}
+			except Exception as e:  # pragma: no cover - network issues
+				logger.exception("Internal award_experience attempt=%s failed for user %s", attempt + 1, user_id)
+				# brief retry delay for transient errors
+				import time
+				time.sleep(0.15)
+		# if all attempts failed
+		logger.warning("All internal award_experience attempts failed for user %s", user_id)
+		return None
 
 	# No auth header and no internal key -> cannot award
 	return None
