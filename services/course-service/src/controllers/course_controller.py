@@ -203,10 +203,7 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			data = resp.json() if resp.content else {}
 			# Log the response for debugging and return the payload
 			logger.info("Award exp via user-forward: url=%s status=%s", url, resp.status_code)
-				except Exception as e:  # pragma: no cover - network errors
-						logger.exception("Failed to log activity for user %s", user_id)
-						return None
-				return {"status_code": resp.status_code, "body": data}
+			return {"status_code": resp.status_code, "body": data}
 			logger.warning("Forwarded award returned non-200 (will attempt internal fallback if configured): %s", resp.status_code)
 		except Exception as e:  # pragma: no cover - network issues
 			logger.exception("User-forward award_experience failed for user %s", user_id)
