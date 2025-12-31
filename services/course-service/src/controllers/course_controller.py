@@ -229,8 +229,7 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 		url = f"{base_url.rstrip('/')}/admin/user/experience?userid={user_id}"
 		json_payload = {"exp": exp_amount}
 	else:
-		# public API path on user-service is /experience/add (no /user prefix)
-		url = f"{base_url.rstrip('/')}/experience/add"
+		url = f"{base_url.rstrip('/')}/user/experience/add"
 		json_payload = {"exp": exp_amount}
 	max_attempts = 3
 	backoff = 0.1
@@ -298,22 +297,43 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 
 def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	payload: dict[str, int | None] = {"gained_exp": gained_exp}
-	if award_result and isinstance(award_result.get("body"), dict):
-		stats = award_result["body"].get("updated_stats") or {}
+	# award_result may contain the updated stats under different shapes depending
+	# on which user-service endpoint was called. Accept both `{...,'updated_stats':{...}}`
+	# and older responses that put fields at the top-level of the body.
+	if not award_result:
+		return payload
+	body = award_result.get("body") if isinstance(award_result.get("body"), dict) else None
+	if not body:
+		return payload
 
-		def _to_int_or_none(v):
-			try:
-				if v is None:
-					return None
-				return int(v)
-			except Exception:
+	# Prefer nested `updated_stats`, otherwise treat body as the stats mapping.
+	stats = body.get("updated_stats") if isinstance(body.get("updated_stats"), dict) else body
+
+	def _to_int_or_none(v):
+		try:
+			if v is None:
 				return None
+			return int(v)
+		except Exception:
+			return None
 
-		payload["new_level"] = _to_int_or_none(stats.get("new_level") or stats.get("level"))
-		payload["new_exp"] = _to_int_or_none(stats.get("new_exp") or stats.get("current_exp"))
-		payload["require_exp"] = _to_int_or_none(stats.get("new_require_exp") or stats.get("require_exp"))
-		payload["exp_needed_for_next"] = _to_int_or_none(stats.get("exp_needed_for_next"))
-		payload["rank"] = _to_int_or_none(stats.get("rank"))
+	# Normalize a few common key variants
+	new_level = stats.get("new_level") or stats.get("level")
+	new_exp = stats.get("new_exp") or stats.get("current_exp")
+	require_exp = stats.get("new_require_exp") or stats.get("require_exp")
+	exp_needed = stats.get("exp_needed_for_next") or stats.get("exp_needed_for_next")
+	# If exp_needed missing but we have require_exp and new_exp, compute it
+	if exp_needed is None and require_exp is not None and new_exp is not None:
+		try:
+			exp_needed = int(require_exp) - int(new_exp)
+		except Exception:
+			exp_needed = None
+
+	payload["new_level"] = _to_int_or_none(new_level)
+	payload["new_exp"] = _to_int_or_none(new_exp)
+	payload["require_exp"] = _to_int_or_none(require_exp)
+	payload["exp_needed_for_next"] = _to_int_or_none(exp_needed)
+	payload["rank"] = _to_int_or_none(stats.get("rank"))
 	return payload
 
 
