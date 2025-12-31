@@ -201,7 +201,9 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 				timeout=5.0,
 			)
 			data = resp.json() if resp.content else {}
-			# If successful or returned an error payload, return it to caller
+			# Log the response for debugging and return the payload
+			logger.info("Award exp via user-forward: url=%s status=%s", url, resp.status_code)
+			logger.debug("Award exp response body: %s", data)
 			return {"status_code": resp.status_code, "body": data}
 		except Exception as e:  # pragma: no cover - network issues
 			logger.warning("User-forward award_experience failed for user %s: %s", user_id, e)
@@ -218,6 +220,8 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 				timeout=5.0,
 			)
 			data2 = resp2.json() if resp2.content else {}
+			logger.info("Award exp via internal token: url=%s status=%s", url_internal, resp2.status_code)
+			logger.debug("Internal award response body: %s", data2)
 			return {"status_code": resp2.status_code, "body": data2}
 		except Exception as e:  # pragma: no cover - network issues
 			logger.error("Internal award_experience failed for user %s: %s", user_id, e)

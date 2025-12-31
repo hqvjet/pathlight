@@ -724,9 +724,9 @@ export default function LessonDetailPage({ params }: PageProps) {
                   );
                 }
                 return (
-                  <p key={idx} className="leading-7 text-gray-800 whitespace-pre-wrap">
+                  <div key={idx} className="leading-7 text-gray-800 whitespace-pre-wrap">
                     <MathRenderer text={block.text} />
-                  </p>
+                  </div>
                 );
               })}
             </div>
