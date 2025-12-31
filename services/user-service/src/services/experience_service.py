@@ -138,7 +138,7 @@ def auto_level_up(current_exp: int, current_level: Optional[int] = None) -> Tupl
     return new_level, next_level_exp, level_increased
 
 # ---------- Test / Simulation Utilities (originally test APIs) ----------
-from schemas.user_schemas import TestStatsRequest, TestStatsResponse  # type: ignore
+from schemas.user_schemas import TestStatsRequest, TestStatsResponse, UpdatedStats  # type: ignore
 
 async def update_test_stats(request: TestStatsRequest, current_user: User, db: Session) -> TestStatsResponse:
     try:
@@ -217,7 +217,7 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
         return TestStatsResponse(
             status=200,
             message=f"Cập nhật thành công! Level: {updated_stats['level']}, Exp: {updated_stats['current_exp']}, Rank: {updated_stats['rank']}{level_msg}",
-            updated_stats=updated_stats
+            updated_stats=UpdatedStats(**updated_stats)
         )
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to update test stats for user {getattr(current_user, 'email', 'unknown')}: {e}")
@@ -236,7 +236,7 @@ async def reset_test_stats(current_user: User, db: Session) -> TestStatsResponse
         rank_data = calculate_user_rank(current_user, db)
         reset_stats = {"level": 1, "current_exp": 0, "require_exp": require_exp_for_level(1), **rank_data}
         logger.info(f"Successfully reset test stats for user {current_user.email}")
-        return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=reset_stats)
+        return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=UpdatedStats(**reset_stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to reset test stats for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
@@ -273,7 +273,7 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
             gained = new_level - original_level
             level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level} (+{gained} level{'s' if gained > 1 else ''})"
         logger.info(f"Simulation completed for user {current_user.email}: {stats}")
-        return TestStatsResponse(status=200, message=f"Mô phỏng hoạt động học tập! +{activity_exp} exp{level_msg}", updated_stats=stats)
+        return TestStatsResponse(status=200, message=f"Mô phỏng hoạt động học tập! +{activity_exp} exp{level_msg}", updated_stats=UpdatedStats(**stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to simulate activity for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
@@ -311,7 +311,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
             gained = new_level - original_level
             level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level}" + (f" (+{gained} levels!)" if gained > 1 else "")
         logger.info("Experience added for user %s: %s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), stats)
-        return TestStatsResponse(status=200, message=f"Thêm {exp_amount} exp thành công!{level_msg}", updated_stats=stats)
+        return TestStatsResponse(status=200, message=f"Thêm {exp_amount} exp thành công!{level_msg}", updated_stats=UpdatedStats(**stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to add experience for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()

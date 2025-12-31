@@ -209,7 +209,7 @@ class TestStatsRequest(BaseModel):
 class TestStatsResponse(BaseModel):
     status: int
     message: Optional[str] = None
-    updated_stats: Optional[UpdatedStats] = None
+    updated_stats: Optional['UpdatedStats'] = None
 
 
 class UpdatedStats(BaseModel):
