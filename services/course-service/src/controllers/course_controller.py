@@ -42,6 +42,14 @@ from src.schemas.course_schemas import (
 
 logger = logging.getLogger(__name__)
 
+# Reuse a module-level httpx client to share connection pool across Lambda
+# invocations. Creating a new client per request can exhaust sockets and
+# trigger "Device or resource busy" / connection errors.
+_httpx_client = httpx.Client(
+	timeout=5.0,
+	limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+)
+
 DIFFICULTY_EXP = {
 	1: 100,
 	2: 200,
@@ -213,7 +221,7 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 
 	for attempt in range(1, max_attempts + 1):
 		try:
-			resp = httpx.post(
+			resp = _httpx_client.post(
 				url,
 				headers={"Authorization": auth_header},
 				json={"exp": exp_amount},
@@ -260,7 +268,7 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 		return None
 	url = f"{base_url.rstrip('/')}/user/activity"
 	try:
-		resp = httpx.post(
+		rest = _httpx_client.post(
 			url,
 			headers={"Authorization": auth_header},
 			json={"event": event},

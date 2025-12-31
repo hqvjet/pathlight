@@ -136,11 +136,6 @@ async def add_experience_endpoint(
 ):
     return await add_experience(request, current_user, db)
 
-# Note: `/internal/experience/add` internal endpoint removed. Prefer callers
-# forward the user's Authorization JWT to `/experience/add` so the operation
-# executes in the context of the user and normal auth flows. The old internal
-# secret-based endpoint has been deleted to remove shared-secret usage.
-
 # 2.8. Lưu cột mốc hoạt động của USER
 @router.post("/activity")
 async def save_activity(
