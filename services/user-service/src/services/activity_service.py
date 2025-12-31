@@ -99,7 +99,7 @@ def log_activity(request: ActivityLogRequest, current_user: User, db: Session) -
             require_exp=next_require_exp,
         )
     except Exception as exc:
-        logger.error("Failed to log activity for user %s: %s", current_user.id, exc)
+        logger.error("Failed to log activity for user %s: %s", current_user.id, exc, exc_info=True)
         db.rollback()
         return ActivityLogResponse(status=500, message="Không thể lưu hoạt động")
 

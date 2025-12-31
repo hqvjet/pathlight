@@ -494,7 +494,11 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
 
 # ---------- Activity tracking ----------
 async def log_learning_activity(request: ActivityLogRequest, current_user: User, db: Session):
-    return svc_log_activity(request, current_user, db)
+    # Ensure we operate on a User instance attached to this DB session
+    target_user = db.query(User).filter(User.id == getattr(current_user, 'id')).first()
+    if not target_user:
+        target_user = current_user
+    return svc_log_activity(request, target_user, db)
 
 
 async def get_learning_activity(current_user: User, db: Session, days: int = 365):
