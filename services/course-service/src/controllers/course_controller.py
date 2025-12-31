@@ -211,11 +211,27 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 		if cookie_token:
 			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 
+	# If a user JWT is present, forward it to credit the caller. Otherwise,
+	# fall back to an internal admin call (if configured) so the service can
+	# credit a specific `user_id` even without the user's JWT.
+	use_admin_fallback = False
 	if not auth_header or not auth_header.startswith("Bearer "):
-		logger.warning("No user JWT present; skipping award_experience for user %s", user_id)
-		return None
+		internal_token = getattr(config, "USER_SERVICE_INTERNAL_TOKEN", None) or os.getenv("USER_SERVICE_INTERNAL_TOKEN")
+		if internal_token:
+			use_admin_fallback = True
+			auth_header = f"Bearer {internal_token}"
+		else:
+			logger.warning("No user JWT present and no internal token configured; skipping award_experience for user %s", user_id)
+			return None
 
-	url = f"{base_url.rstrip('/')}/user/experience/add"
+	if use_admin_fallback:
+		# call admin endpoint that accepts userid query param
+		url = f"{base_url.rstrip('/')}/admin/user/experience?userid={user_id}"
+		json_payload = {"exp": exp_amount}
+	else:
+		# public API path on user-service is /experience/add (no /user prefix)
+		url = f"{base_url.rstrip('/')}/experience/add"
+		json_payload = {"exp": exp_amount}
 	max_attempts = 3
 	backoff = 0.1
 
@@ -224,7 +240,7 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			resp = _httpx_client.post(
 				url,
 				headers={"Authorization": auth_header},
-				json={"exp": exp_amount},
+				json=json_payload,
 				timeout=5.0,
 			)
 			data = resp.json() if resp.content else {}
@@ -262,13 +278,12 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 			or request.cookies.get("access_token")
 		)
 		if cookie_token:
-			# normalize to Bearer format if needed
 			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 	if not base_url or not auth_header:
 		return None
 	url = f"{base_url.rstrip('/')}/user/activity"
 	try:
-		rest = _httpx_client.post(
+		resp = _httpx_client.post(
 			url,
 			headers={"Authorization": auth_header},
 			json={"event": event},
@@ -276,7 +291,7 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 		)
 		data = resp.json() if resp.content else {}
 		return {"status_code": resp.status_code, "body": data}
-	except Exception as e:  # pragma: no cover - network issues
+	except Exception as e: 
 		logger.error("Failed to log activity for user %s: %s", user_id, e)
 		return None
 
@@ -348,23 +363,17 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	
 	current_finished = min(cast(int, getattr(progress, "num_finished_lesson") or 0), total)
 	
-	# Validate target lesson exists
 	if target_idx is None:
 		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
 		return current_finished, total
-	
-	# Only allow completing the NEXT lesson in sequence
-	# current_finished = number of lessons already completed (0-indexed in progress)
-	# target_idx = index of lesson trying to complete (0-indexed)
+
 	if target_idx != current_finished:
-		# Not the next lesson - either already completed or trying to skip
 		if target_idx < current_finished:
 			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished})")
 		else:
 			logger.warning(f"Cannot skip to lesson {lesson_id} (target={target_idx}, finished={current_finished}). Complete previous lessons first.")
 		return current_finished, total
 	
-	# This is the next lesson - increment by 1
 	new_finished = current_finished + 1
 	session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
@@ -393,7 +402,6 @@ def _random_value(length: int = 8) -> str:
 
 def _sanitize_filename_base(original_name: str, max_len: int = 60) -> str:
 	base = original_name.rsplit('.', 1)[0]
-	# keep alnum, dash, underscore; replace others with '-'
 	cleaned = []
 	prev_dash = False
 	for ch in base:

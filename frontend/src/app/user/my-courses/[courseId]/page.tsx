@@ -18,7 +18,7 @@ interface LessonDetailApi {
   content?: string;
   duration?: number;
   finish: boolean;
-  locked?: boolean;  // Add locked field from backend
+  locked?: boolean; 
   order?: number;
 }
 

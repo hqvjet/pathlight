@@ -86,7 +86,6 @@ function MyCoursesContent() {
     return 'Chào buổi tối';
   })();
 
-  // Set initial tab from URL parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'public') {
@@ -94,7 +93,6 @@ function MyCoursesContent() {
     }
   }, [searchParams]);
   
-  // Reset to page 1 when switching tabs or filters
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, search, sort, levelFilter, statusFilter]);
@@ -133,7 +131,6 @@ function MyCoursesContent() {
     };
   }, [authLoading, isAuthenticated]);
 
-  // Load public courses once
   useEffect(() => {
     let cancelled = false;
     const loadPublic = async () => {
@@ -155,7 +152,6 @@ function MyCoursesContent() {
     try {
       await courseApi.updateVisibility({ course_id: courseId, is_public: isPublic });
       setCourses((prev) => prev.map((c) => (c.id === courseId ? { ...c, isPublic } : c)));
-      // Don't redundantly set `selectedId` to the same value — avoids extra renders/effects
     } catch {
       setError('Không thể cập nhật quyền riêng tư của khóa học.');
     } finally {
@@ -180,12 +176,10 @@ function MyCoursesContent() {
     const source = activeTab === 'my' ? courses : publicCourses;
     let list = source.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
     
-    // Filter by level
     if (levelFilter !== 'all') {
       list = list.filter((c) => c.level === levelFilter);
     }
     
-    // Filter by status
     if (statusFilter !== 'all') {
       if (statusFilter === 'completed') {
         list = list.filter((c) => c.progress >= 100 || c.badge === 'Hoàn thành');
@@ -270,7 +264,6 @@ function MyCoursesContent() {
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
           <button
@@ -302,7 +295,6 @@ function MyCoursesContent() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="relative flex-1 min-w-[240px]">
           <input

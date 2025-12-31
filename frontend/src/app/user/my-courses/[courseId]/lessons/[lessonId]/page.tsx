@@ -29,7 +29,7 @@ interface AssessmentItemApi {
   lesson_id: string;
   question: string;
   hint?: string | null;
-  has_hint?: boolean;  // Flag from backend to show hint button
+  has_hint?: boolean;
   explanation?: string | null;
   difficulty?: string | number | null;
   option1: string;
@@ -69,11 +69,11 @@ interface LessonTestSubmitResultApi {
 
 interface ExperienceSnapshotApi {
   gained_exp: number;
-  new_level?: number | null;
-  new_exp?: number | null;
-  require_exp?: number | null;
-  exp_needed_for_next?: number | null;
-  rank?: number | null;
+  new_level?: number;
+  new_exp?: number;
+  require_exp?: number;
+  exp_needed_for_next?: number;
+  rank?: number;
 }
 
 interface LessonTestSubmitResponseApi {
@@ -125,7 +125,7 @@ type NormalizedQuestion = {
   question: string;
   options: NormalizedOption[];
   hint?: string;
-  has_hint?: boolean;  // Flag to show hint button
+  has_hint?: boolean;
   explanation?: string;
   level?: number;
   difficult_level_id?: number;
@@ -243,7 +243,7 @@ export default function LessonDetailPage({ params }: PageProps) {
       id: a.assessment_id || `assessment-${idx}`,
       question: a.question,
       hint: a.hint || undefined,
-      has_hint: a.has_hint || false,  // Flag from backend
+      has_hint: a.has_hint || false,
       explanation: a.explanation || undefined,
       level: typeof a.difficulty === 'number' ? a.difficulty : undefined,
       difficult_level_id: typeof a.difficulty === 'number' ? a.difficulty : undefined,
@@ -317,9 +317,6 @@ export default function LessonDetailPage({ params }: PageProps) {
         }
       }
 
-      // If server provides a full snapshot containing `new_exp`, adopt it.
-      // Otherwise fall back to local progression using the awarded amount so
-      // the UI reflects the change even if the server didn't return totals.
       const serverHasNewExp = Boolean(snapshot && typeof snapshot.new_exp === 'number');
       if (serverHasNewExp) {
         setPlayerExp(Math.max(0, snapshot!.new_exp as number));
@@ -332,7 +329,6 @@ export default function LessonDetailPage({ params }: PageProps) {
       }
 
       if (!serverHasNewExp) {
-        // Fallback to local progression when server didn't return totals
         let expPool = playerExp + adjustedExp;
         let nextLevel = playerLevel;
         let nextRequireExp = requireExp;
@@ -401,7 +397,6 @@ export default function LessonDetailPage({ params }: PageProps) {
     }
 
     try {
-      // Call hint API - this will deduct exp on server side
       const resp = await courseApi.getHint(courseId, lessonId, target.assessment_id);
       const data = resp.data;
       
@@ -410,7 +405,6 @@ export default function LessonDetailPage({ params }: PageProps) {
         return;
       }
 
-      // Update assessment with hint text
       setAssessments((prev) => 
         prev.map((a) => 
           a.assessment_id === target.assessment_id 
@@ -418,16 +412,12 @@ export default function LessonDetailPage({ params }: PageProps) {
             : a
         )
       );
-      
-      // Show hint in UI
       setVisibleHints((prev) => ({ ...prev, [questionId]: true }));
-      
-      // Show penalty notification
+
       if (data.exp_penalty && data.exp_penalty > 0) {
         showToast.info(`Đã trừ ${data.exp_penalty} EXP để xem gợi ý`);
       }
       
-      // Refresh user info to get updated exp
       try {
         const userResp = await userApi.getInfo();
         const userData = userResp.data as UserInfoApi;
@@ -441,7 +431,6 @@ export default function LessonDetailPage({ params }: PageProps) {
           setRequireExp(userData.Info.require_exp);
         }
       } catch {
-        // Ignore if can't refresh user info
       }
     } catch (e: unknown) {
       showToast.error(e instanceof Error ? e.message : 'Không thể lấy gợi ý');
