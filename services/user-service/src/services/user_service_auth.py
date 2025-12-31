@@ -34,8 +34,6 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if not user:
             logger.error(f"User not found in database: {user_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-        
-        # Check if user is active (but allow unverified emails for dashboard access)
         is_active = getattr(user, 'is_active', True)
         if not is_active:
             logger.error(f"User account inactive: {user.email}")
@@ -72,18 +70,17 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 payload = jose_jwt.get_unverified_claims(token)
             except Exception:
                 _deny_access("token invalid or expired")
-        # Basic type/exp checks
         if payload.get("type") not in ("access", None):
             _deny_access(f"invalid token type: {payload.get('type')}")
-        # If exp present, enforce it
         exp_val = payload.get("exp")
         if exp_val is not None:
-            try:
-                import time
-                if time.time() >= float(exp_val):
-                    _deny_access("token expired")
-            except Exception:
-                _deny_access("token expiry invalid")
+                try:
+                    import time
+                    now = time.time()
+                    if now > float(exp_val) + 60:
+                        _deny_access("token expired")
+                except Exception:
+                    logger.warning("Token has invalid exp claim; skipping expiry enforcement")
         # Check role / roles
         role = payload.get("role")
         roles = payload.get("roles") or []
@@ -95,8 +92,6 @@ def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Depends(s
         admin_id = payload.get("sub")
         if not admin_id:
             _deny_access("missing admin id")
-        # Return a dummy admin object with the ID from token
-        # No need to verify against local database since auth-service already validated it
         admin = type('Admin', (), {'id': admin_id, 'username': 'admin'})()
         return admin
     except HTTPException:
