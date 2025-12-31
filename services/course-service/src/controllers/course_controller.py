@@ -138,7 +138,17 @@ def _verify_token(request: Request):
 	2) Fallback: parse unverified claims to extract a user id from common keys (sub, user_id, uid, id).
 	   This prevents 401 due to mismatched secrets across services while we align secrets.
 	"""
+	# Try header first, then fall back to common auth cookies used by the frontend
 	auth_header = request.headers.get("Authorization")
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
+		)
+		if cookie_token:
+			# normalize to Bearer format if needed
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 	if not auth_header or not auth_header.startswith("Bearer "):
 		return None
 	token = auth_header.split(" ")[1]
@@ -225,7 +235,17 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 	if not user_id:
 		return None
 	base_url = _user_service_base_url()
+	# Try header first, then fall back to common auth cookies used by the frontend
 	auth_header = request.headers.get("Authorization")
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
+		)
+		if cookie_token:
+			# normalize to Bearer format if needed
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 	if not base_url or not auth_header:
 		return None
 	url = f"{base_url.rstrip('/')}/user/activity"
