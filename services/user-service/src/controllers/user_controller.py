@@ -464,6 +464,7 @@ async def add_experience(request: ExperienceAddRequest, current_user: User, db: 
             # Fallback to the provided current_user if not found in this session
             target_user = current_user
         result = await svc_add_experience(request.exp, target_user, db)
+        logger.info("controllers.add_experience result for user %s: %s", getattr(target_user, 'email', getattr(target_user, 'id', 'unknown')), getattr(result, 'updated_stats', None))
         return result
     except Exception as e:
         logger.error(f"add_experience controller error: {e}")

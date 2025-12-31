@@ -20,6 +20,7 @@ _EVENT_POINTS: Dict[str, int] = {
     "create_quiz": 1,     
     "assessment_move": 3,
     "assessment_complete": 3,
+    "complete_lesson": 4,
 }
 
 
@@ -64,7 +65,7 @@ def log_activity(request: ActivityLogRequest, current_user: User, db: Session) -
         new_streak = current_streak + 1 if prev_activity else 1
         current_exp = int(getattr(current_user, "current_exp", 0) or 0)
         raw_multiplier = 0.01 * (new_streak + 1)
-        bonus_multiplier = min(raw_multiplier, 1.0)  # max +100%
+        bonus_multiplier = min(raw_multiplier, 1.0)
         bonus_exp = int(current_exp * bonus_multiplier)
         new_exp_total = current_exp + bonus_exp
         new_level, next_require_exp, _ = auto_level_up(new_exp_total, getattr(current_user, "level", 1))

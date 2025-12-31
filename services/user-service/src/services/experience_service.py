@@ -279,6 +279,7 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
 
 async def add_experience(exp_amount: int, current_user: User, db: Session) -> TestStatsResponse:
     try:
+        logger.info("add_experience called: user=%s exp=%s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), exp_amount)
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
         original_require_exp = getattr(current_user, 'require_exp', require_exp_for_level(original_level))
@@ -307,7 +308,7 @@ async def add_experience(exp_amount: int, current_user: User, db: Session) -> Te
         if level_increased:
             gained = new_level - original_level
             level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level}" + (f" (+{gained} levels!)" if gained > 1 else "")
-        logger.info(f"Experience added for user {current_user.email}: {stats}")
+        logger.info("Experience added for user %s: %s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), stats)
         return TestStatsResponse(status=200, message=f"Thêm {exp_amount} exp thành công!{level_msg}", updated_stats=stats)
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to add experience for user {getattr(current_user, 'email', 'unknown')}: {e}")

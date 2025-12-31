@@ -140,13 +140,17 @@ async def add_experience_endpoint(
 async def internal_add_experience_endpoint(request_obj: Request, db: Session = Depends(get_db)):
     from config import config as svc_config
     token = request_obj.headers.get("X-Internal-Token") or request_obj.headers.get("x-internal-token")
+    logger.info("internal_add_experience called, token_present=%s", bool(token))
     if not token or token != getattr(svc_config, "INTERNAL_API_KEY", ""):
+        logger.warning("internal_add_experience: invalid internal token")
         return JSONResponse(status_code=403, content={"status": 403, "message": "Forbidden"})
     try:
         payload = await request_obj.json()
+        logger.info("internal_add_experience payload: %s", payload)
         user_id = payload.get("user_id")
         exp = int(payload.get("exp", 0))
     except Exception:
+        logger.exception("internal_add_experience: invalid payload")
         return JSONResponse(status_code=400, content={"status": 400, "message": "Invalid payload"})
     if not user_id:
         return JSONResponse(status_code=400, content={"status": 400, "message": "Missing user_id"})
@@ -156,8 +160,10 @@ async def internal_add_experience_endpoint(request_obj: Request, db: Session = D
         return JSONResponse(status_code=404, content={"status": 404, "message": "User not found"})
     try:
         result = await svc_add_experience(exp, target_user, db)
+        logger.info("internal_add_experience result for user %s: %s", user_id, getattr(result, 'updated_stats', None))
         return result
     except Exception as e:
+        logger.exception("internal_add_experience failed for user %s: %s", user_id, e)
         return JSONResponse(status_code=500, content={"status": 500, "message": str(e)})
 
 # 2.8. Lưu cột mốc hoạt động của USER
