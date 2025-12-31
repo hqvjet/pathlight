@@ -4,6 +4,7 @@ from datetime import datetime
 import hashlib
 import secrets
 import logging
+import time
 import string
 import httpx
 import boto3
@@ -177,10 +178,12 @@ def _user_service_base_url() -> str | None:
 
 
 def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict | None:
-	"""Call user-service to add experience for the current user.
+	"""Call user-service to add experience for the current user by forwarding
+	the user's JWT. This avoids using a shared INTERNAL_API_KEY secret.
 
-	Returns a dict with status_code and body when the call was attempted, otherwise None.
-	exp_amount can be negative for penalties (hint usage, etc.)
+	We will retry on transient network errors / 5xx responses with
+	exponential backoff. If no user JWT is present (header or common
+	cookies), we will not attempt a service-level secret fallback.
 	"""
 	if exp_amount == 0:
 		return None
@@ -189,10 +192,26 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 	if not base_url:
 		return None
 
+	# Prefer explicit Authorization header, fall back to common auth cookies
 	auth_header = request.headers.get("Authorization")
-	# Primary attempt: forward user's Authorization header to /user/experience/add
-	if auth_header:
-		url = f"{base_url.rstrip('/')}/user/experience/add"
+	if not auth_header:
+		cookie_token = (
+			request.cookies.get("auth_token")
+			or request.cookies.get("session_token")
+			or request.cookies.get("access_token")
+		)
+		if cookie_token:
+			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
+
+	if not auth_header or not auth_header.startswith("Bearer "):
+		logger.warning("No user JWT present; skipping award_experience for user %s", user_id)
+		return None
+
+	url = f"{base_url.rstrip('/')}/user/experience/add"
+	max_attempts = 3
+	backoff = 0.1
+
+	for attempt in range(1, max_attempts + 1):
 		try:
 			resp = httpx.post(
 				url,
@@ -201,42 +220,20 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 				timeout=5.0,
 			)
 			data = resp.json() if resp.content else {}
-			# Log the response for debugging and return the payload
-			logger.info("Award exp via user-forward: url=%s status=%s", url, resp.status_code)
-			return {"status_code": resp.status_code, "body": data}
-			logger.warning("Forwarded award returned non-200 (will attempt internal fallback if configured): %s", resp.status_code)
+			# If success or client error, return immediately. Retry only on 5xx.
+			if resp.status_code < 500:
+				logger.info("Award exp via user-forward attempt=%s url=%s status=%s", attempt, url, resp.status_code)
+				return {"status_code": resp.status_code, "body": data}
+			# else 5xx - will retry
+			logger.warning("User-forward award_experience returned 5xx (attempt=%s): %s", attempt, resp.status_code)
 		except Exception as e:  # pragma: no cover - network issues
-			logger.exception("User-forward award_experience failed for user %s", user_id)
-			# fall through to internal fallback if available
+			logger.exception("User-forward award_experience network error on attempt=%s for user %s", attempt, user_id)
+		# backoff before next attempt
+		if attempt < max_attempts:
+			time.sleep(backoff)
+			backoff *= 2
 
-	# Fallback: use internal service-to-service endpoint if configured
-	internal_key = getattr(config, "INTERNAL_API_KEY", None)
-	logger.debug("_award_experience: internal_key present=%s", bool(internal_key))
-	if internal_key:
-		url_internal = f"{base_url.rstrip('/')}/internal/experience/add"
-		# Try a couple times for transient network errors
-		for attempt in range(2):
-			try:
-				resp2 = httpx.post(
-					url_internal,
-					headers={"X-Internal-Token": internal_key},
-					json={"user_id": user_id, "exp": exp_amount},
-					timeout=5.0,
-				)
-				data2 = resp2.json() if resp2.content else {}
-				logger.info("Award exp via internal token attempt=%s url=%s status=%s", attempt + 1, url_internal, resp2.status_code)
-				logger.debug("Internal award response body: %s", data2)
-				return {"status_code": resp2.status_code, "body": data2}
-			except Exception as e:  # pragma: no cover - network issues
-				logger.exception("Internal award_experience attempt=%s failed for user %s", attempt + 1, user_id)
-				# brief retry delay for transient errors
-				import time
-				time.sleep(0.15)
-		# if all attempts failed
-		logger.warning("All internal award_experience attempts failed for user %s", user_id)
-		return None
-
-	# No auth header and no internal key -> cannot award
+	logger.error("All user-forward award_experience attempts failed for user %s", user_id)
 	return None
 
 
