@@ -46,27 +46,28 @@ class Orchestrator:
                 pass
             return "create_plan"
 
-        # 2) Generate ALL lessons in ONE call (not iterative) for speed
+        # 2) Generate lessons ONE BY ONE (sequential) to prevent timeout
         planned_total = expected or (len(roadmap) if roadmap else None)
-        if planned_total is None:
-            if len(lessons) == 0:
-                tracer.record("decide", "lesson creator initial (no lessons yet)")
-                # Mark plan ready once we have title/description/roadmap
+        if planned_total:
+            current_count = len(lessons)
+            if current_count < planned_total:
+                tracer.record(
+                    "decide",
+                    "lesson creator (sequential)",
+                    current=current_count,
+                    planned=planned_total,
+                )
                 try:
-                    status.mark_plan_ready(id, title, description, len(roadmap))
+                    status.mark_lessons_progress(id, current_count, planned_total)
                 except Exception:
                     pass
                 return "create_lesson"
         else:
-            # Only call lesson creator ONCE if no lessons exist yet
+            # No planned total - fallback
             if len(lessons) == 0:
-                tracer.record(
-                    "decide",
-                    "lesson creator batch (all at once)",
-                    planned=planned_total,
-                )
+                tracer.record("decide", "lesson creator initial (no lessons yet)")
                 try:
-                    status.mark_lessons_progress(id, 0, planned_total)
+                    status.mark_plan_ready(id, title, description, len(roadmap))
                 except Exception:
                     pass
                 return "create_lesson"
