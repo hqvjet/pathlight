@@ -69,10 +69,9 @@ def log_activity(request: ActivityLogRequest, current_user: User, db: Session) -
         bonus_exp = int(current_exp * bonus_multiplier)
         new_exp_total = current_exp + bonus_exp
         new_level, next_require_exp, _ = auto_level_up(new_exp_total, getattr(current_user, "level", 1))
-        current_user.current_exp = new_exp_total
-        current_user.level = new_level
-        current_user.require_exp = next_require_exp
-
+        setattr(current_user, "current_exp", new_exp_total)
+        setattr(current_user, "level", new_level)
+        setattr(current_user, "require_exp", next_require_exp)
         setattr(current_user, "streak", int(new_streak))
 
         db.commit()

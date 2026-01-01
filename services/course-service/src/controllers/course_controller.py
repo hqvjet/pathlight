@@ -245,7 +245,7 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			data = resp.json() if resp.content else {}
 			# If success or client error, return immediately. Retry only on 5xx.
 			if resp.status_code < 500:
-				logger.info("Award exp via user-forward attempt=%s url=%s status=%s", attempt, url, resp.status_code)
+				logger.info("Award exp via user-forward attempt=%s url=%s status=%s data=%s", attempt, url, resp.status_code, data)
 				return {"status_code": resp.status_code, "body": data}
 			# else 5xx - will retry
 			logger.warning("User-forward award_experience returned 5xx (attempt=%s): %s", attempt, resp.status_code)
