@@ -341,11 +341,12 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	return payload
 
 
-def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int]:
+def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int, bool]:
 	"""Increment learning progress for a user on a course based on lesson order.
 	Only allows completing the NEXT lesson in sequence (no skipping).
 
-	Returns (finished_count, total_lessons).
+	Returns (finished_count, total_lessons, is_newly_completed).
+	is_newly_completed is True only if this is the first time completing this lesson.
 	"""
 	from src.models import Lesson, LearningProgress
 
@@ -357,7 +358,7 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	)
 	total = len(lessons)
 	if total == 0:
-		return 0, 0
+		return 0, 0, False
 	order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 	target_idx = order_map.get(lesson_id)
 	
@@ -389,14 +390,14 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	
 	if target_idx is None:
 		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
-		return current_finished, total
+		return current_finished, total, False
 
 	if target_idx != current_finished:
 		if target_idx < current_finished:
-			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished})")
+			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished}). No exp awarded for retake.")
 		else:
 			logger.warning(f"Cannot skip to lesson {lesson_id} (target={target_idx}, finished={current_finished}). Complete previous lessons first.")
-		return current_finished, total
+		return current_finished, total, False
 	
 	new_finished = current_finished + 1
 	session.query(LearningProgress).filter(
@@ -404,8 +405,8 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 		LearningProgress.user_id == user_id,
 	).update({"num_finished_lesson": new_finished}, synchronize_session=False)
 	session.flush()
-	logger.info(f"Progress updated for user {user_id} course {course_id}: {new_finished}/{total} lessons completed")
-	return new_finished, total
+	logger.info(f"Progress updated for user {user_id} course {course_id}: {new_finished}/{total} lessons completed (NEWLY COMPLETED - exp will be awarded)")
+	return new_finished, total, True
 
 
 def _get_s3_client():
@@ -1427,8 +1428,10 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		applied_exp = max(0, earned_exp - penalty_exp)
 		passed = score >= PASS_THRESHOLD
 
+		# Track if this is a new completion (first time passing) for exp award
+		is_newly_completed = False
 		if passed:
-			_update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+			_, _, is_newly_completed = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 			session.commit()
 		else:
 			session.rollback()
@@ -1445,16 +1448,19 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			answers=answer_results,
 		)
 		experience = None
-		if passed and applied_exp > 0:
-			logger.info(f"Awarding {applied_exp} exp to user {user_id} for passing lesson {lesson_id}")
+		# Only award exp if this is the FIRST TIME completing the lesson
+		if passed and applied_exp > 0 and is_newly_completed:
+			logger.info(f"Awarding {applied_exp} exp to user {user_id} for FIRST TIME passing lesson {lesson_id}")
 			award_result = _award_experience(request, user_id, applied_exp)
 			if award_result:
 				logger.info(f"Experience award response: status={award_result.get('status_code')}, body={award_result.get('body')}")
 			else:
 				logger.warning(f"Failed to award experience to user {user_id} - no response from user-service")
 			experience = _experience_payload(applied_exp, award_result)
+		elif passed and not is_newly_completed:
+			logger.info(f"Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")
 		else:
-			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}")
+			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
 		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
@@ -1546,7 +1552,7 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 		lesson = session.query(Lesson).filter_by(lesson_id=payload.lesson_id, course_id=course.course_id).first()
 		if not lesson:
 			return JSONResponse(status_code=404, content={"status": 404, "message": "Lesson không tồn tại"})
-		finished, total = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+		finished, total, _ = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
 		session.commit()
 		_log_activity(request, user_id, "course_move")
 		return {

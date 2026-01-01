@@ -13,14 +13,15 @@ from services.experience_service import auto_level_up
 logger = logging.getLogger(__name__)
 
 _EVENT_POINTS: Dict[str, int] = {
-    "login": 1,           # Daily login activity
+    "login": 1,
     "course_move": 3, 
     "quiz_move": 3, 
     "create_course": 1, 
     "create_quiz": 1,     
     "assessment_move": 3,
     "assessment_complete": 3,
-    "complete_lesson": 4,
+    "complete_lesson": 3,
+    "complete_course": 5,
 }
 
 
