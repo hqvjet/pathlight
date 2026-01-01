@@ -279,8 +279,9 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
         db.rollback()
         return TestStatsResponse(status=500, message="Có lỗi xảy ra khi mô phỏng hoạt động học tập")
 
-async def add_experience(exp_amount: int, current_user: User, db: Session) -> TestStatsResponse:
+async def add_experience(request, current_user: User, db: Session) -> TestStatsResponse:
     try:
+        exp_amount = request.exp if hasattr(request, 'exp') else request
         logger.info("add_experience called: user=%s exp=%s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), exp_amount)
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)

@@ -302,10 +302,14 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	# and older responses that put fields at the top-level of the body.
 	if not award_result:
 		return payload
+	
+	# award_result is {"status_code": 200, "body": {...}}
+	# where body is the actual JSON response from user-service
 	body = award_result.get("body") if isinstance(award_result.get("body"), dict) else None
 	if not body:
 		return payload
 
+	# Response from /user/experience/add is {"status": 200, "message": "...", "updated_stats": {...}}
 	# Prefer nested `updated_stats`, otherwise treat body as the stats mapping.
 	stats = body.get("updated_stats") if isinstance(body.get("updated_stats"), dict) else body
 
@@ -321,7 +325,7 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	new_level = stats.get("new_level") or stats.get("level")
 	new_exp = stats.get("new_exp") or stats.get("current_exp")
 	require_exp = stats.get("new_require_exp") or stats.get("require_exp")
-	exp_needed = stats.get("exp_needed_for_next") or stats.get("exp_needed_for_next")
+	exp_needed = stats.get("exp_needed_for_next")
 	# If exp_needed missing but we have require_exp and new_exp, compute it
 	if exp_needed is None and require_exp is not None and new_exp is not None:
 		try:
