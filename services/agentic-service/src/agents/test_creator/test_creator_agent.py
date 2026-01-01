@@ -45,8 +45,14 @@ class TestCreatorAgent(BaseAgent):
         super().__init__(name, foundation_model, prompt_manager)
         self.tool_manager = tool_manager
         self.tools = {t.name: t for t in tool_manager.get_tools(name)}
+        # CRITICAL FIX: Test creator needs moderate tokens for 4-6 assessments
+        # Each assessment ~ 150-200 tokens, 6 assessments ~ 1200 tokens
+        from constant import LLM_MAX_TOKENS_TEST
         self.llm = llm_manager.get_llm(
-            model_name=foundation_model, tools=list(self.tools.values())
+            model_name=foundation_model, 
+            tools=list(self.tools.values()),
+            max_tokens=LLM_MAX_TOKENS_TEST,
+            enable_json_mode=True  # CRITICAL: Enable JSON mode
         )
         self.chain = self.build_chain(self.llm)
         self.logger = setup_logger(__name__)
@@ -176,14 +182,20 @@ class TestCreatorAgent(BaseAgent):
                 max_rounds=MAX_TOOL_CALLS_PER_AGENT,
             )
             self.logger.warning(f"Test Creator hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
-            history.append(
-                SystemMessage(
-                    content=(
-                        "Dừng gọi công cụ ngay. Hãy xuất JSON cuối cùng với trường assessments theo schema, không thêm giải thích."
-                    )
-                )
+            # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
+            from langchain_openai import ChatOpenAI
+            from constant import LLM_MAX_TOKENS_TEST, LLM_REQUEST_TIMEOUT
+            final_llm = ChatOpenAI(
+                model_name=self.foundation_model,
+                openai_api_key=self.llm.openai_api_key,
+                temperature=0.3,
+                request_timeout=LLM_REQUEST_TIMEOUT,
+                max_tokens=LLM_MAX_TOKENS_TEST,
+                model_kwargs={"response_format": {"type": "json_object"}}
             )
-            ai = self.chain.invoke(
+            final_chain = self.build_chain(final_llm)
+            
+            ai = final_chain.invoke(
                 {
                     "id": state.id,
                     "history": history,
@@ -193,70 +205,32 @@ class TestCreatorAgent(BaseAgent):
                 }
             )
 
+        # CRITICAL FIX: Validate content before parsing
+        if not ai.content or not ai.content.strip():
+            tracer.record("error", "empty content", lesson_id=lesson.lesson_id, has_tool_calls=bool(getattr(ai, 'tool_calls', None)))
+            raise ValueError(
+                f"Test Creator {lesson.lesson_id}: LLM returned empty content. "
+                f"Has tool_calls: {bool(getattr(ai, 'tool_calls', None))}"
+            )
+        
+        # Log content for debugging
+        self.logger.debug(f"Test Creator {lesson.lesson_id} content: {ai.content[:1000]}")
+        
         # Parse response, accept map keyed by lesson_id or a direct list under assessments
         try:
             json_content = json.loads(ai.content)
         except Exception as e:
             tracer.record("error", "failed to parse ai json", lesson_id=lesson.lesson_id, error=str(e), content=str(ai.content)[:500])
-            # FALLBACK: Try to force JSON response
-            history.append(
-                SystemMessage(
-                    content=(
-                        'CRITICAL: Trả về JSON với format:\n{"assessments": {"' + lesson.lesson_id + '": [...]}}.\n'
-                        'Chỉ JSON, không text khác.'
-                    )
-                )
-            )
-            ai = self.chain.invoke(
-                {
-                    "id": state.id,
-                    "history": history,
-                    "difficulty": state.difficulty,
-                    "duration": str(state.duration),
-                    "lessons": lessons_payload,
-                }
-            )
-            try:
-                json_content = json.loads(ai.content)
-            except Exception:
-                tracer.record("error", "fallback also failed", lesson_id=lesson.lesson_id)
-                return
+            self.logger.error(f"Test Creator {lesson.lesson_id} parse error. Content: {ai.content[:1000]}")
+            raise ValueError(f"Test Creator: Failed to parse JSON for {lesson.lesson_id} - {str(e)}")
 
-        # Try both old format (tests) and new format (assessments)
-        # Format: {"tests": {"lesson_id": [{question, options, answer, ...}]}}
-        assessments_payload = json_content.get("assessments") or json_content.get("tests")
-        arr: Optional[List] = None
-        
-        if assessments_payload is None:
-            tracer.record("error", "no assessments/tests field in response", lesson_id=lesson.lesson_id, keys=list(json_content.keys()))
-            # FALLBACK 2: Force explicit JSON request
-            history.append(
-                SystemMessage(
-                    content=(
-                        'Response thiếu field "assessments". Hãy trả về lại với format:\n'
-                        '{"assessments": {"' + lesson.lesson_id + '": [{...}]}}'
-                    )
-                )
-            )
-            ai = self.chain.invoke(
-                {
-                    "id": state.id,
-                    "history": history,
-                    "difficulty": state.difficulty,
-                    "duration": str(state.duration),
-                    "lessons": lessons_payload,
-                }
-            )
-            try:
-                json_content = json.loads(ai.content)
-                assessments_payload = json_content.get("assessments") or json_content.get("tests")
-                if assessments_payload is None:
-                    tracer.record("error", "fallback 2 failed - giving up", lesson_id=lesson.lesson_id)
-                    return
-            except Exception:
-                tracer.record("error", "fallback 2 parse failed", lesson_id=lesson.lesson_id)
-                return
+        # CRITICAL FIX: Strict validation
+        assessments_payload = json_content.get("assessments")
+        if not assessments_payload:
+            tracer.record("error", "no assessments field", lesson_id=lesson.lesson_id, keys=list(json_content.keys()))
+            raise ValueError(f"Test Creator: Response missing 'assessments' field for {lesson.lesson_id}")
             
+        arr: Optional[List] = None
         if isinstance(assessments_payload, dict):
             # Try exact match first
             arr = assessments_payload.get(lesson.lesson_id)
@@ -266,48 +240,59 @@ class TestCreatorAgent(BaseAgent):
         elif isinstance(assessments_payload, list):
             arr = assessments_payload
 
-        if arr and isinstance(arr, list):
-            # Coerce items to TestQA model shape with proper validation
-            coerced: List[TestQA] = []
-            for item in arr:
-                try:
-                    if isinstance(item, dict):
-                        # Answer từ LLM là string (text của option đúng), convert sang index 1-4
-                        answer_raw = item.get("answer")
-                        options = item.get("options", [])
-                        
-                        if isinstance(answer_raw, str) and options:
-                            # Tìm index của answer trong options (1-based)
-                            try:
-                                answer = options.index(answer_raw) + 1
-                            except ValueError:
-                                # Fallback: try to find partial match
-                                answer = 1
-                                for i, opt in enumerate(options):
-                                    if answer_raw.strip().lower() in opt.strip().lower():
-                                        answer = i + 1
-                                        break
-                        elif isinstance(answer_raw, int):
-                            answer = answer_raw
-                        else:
-                            answer = 1
-                        
-                        if not (1 <= answer <= 4):
-                            answer = 1
-                        
-                        coerced.append(TestQA(
-                            question=item.get("question", ""),
-                            options=item.get("options", [])[:4],
-                            answer=answer,
-                            hint=item.get("hint", ""),
-                            explanation=item.get("explanation", "") or item.get("explaination", ""),
-                            difficulty=item.get("difficulty", "medium")
-                        ))
-                except Exception as e:
-                    tracer.record("warn", "failed to parse single assessment", error=str(e))
+        if not arr or not isinstance(arr, list) or len(arr) < 3:
+            tracer.record("error", "invalid assessments array", lesson_id=lesson.lesson_id, 
+                         type=type(arr), count=len(arr) if isinstance(arr, list) else 0)
+            raise ValueError(f"Test Creator: Need at least 3 assessments for {lesson.lesson_id}, got {len(arr) if isinstance(arr, list) else 0}")
+
+        # CRITICAL FIX: Strict parsing with validation
+        coerced: List[TestQA] = []
+        for idx, item in enumerate(arr):
+            try:
+                if not isinstance(item, dict):
+                    tracer.record("warn", f"assessment {idx} not dict", type=type(item))
                     continue
-            
-            lesson.assessments = coerced
-            tracer.record("done", "assessments attached", lesson_id=lesson.lesson_id, count=len(coerced))
-        else:
-            tracer.record("warn", "no assessments returned for lesson", lesson_id=lesson.lesson_id)
+                
+                # CRITICAL FIX: answer MUST be int 1-4
+                answer_raw = item.get("answer")
+                if not isinstance(answer_raw, int):
+                    tracer.record("error", f"assessment {idx}: answer not int", 
+                                 value=answer_raw, type=type(answer_raw))
+                    continue
+                
+                if not (1 <= answer_raw <= 4):
+                    tracer.record("error", f"assessment {idx}: answer out of range", value=answer_raw)
+                    continue
+                
+                # Validate options
+                options = item.get("options", [])
+                if not isinstance(options, list) or len(options) != 4:
+                    tracer.record("error", f"assessment {idx}: invalid options", 
+                                 count=len(options) if isinstance(options, list) else "not list")
+                    continue
+                
+                # Validate question
+                question = item.get("question", "")
+                if not question or len(question.strip()) < 10:
+                    tracer.record("warn", f"assessment {idx}: question too short")
+                    continue
+                
+                coerced.append(TestQA(
+                    question=question,
+                    options=options,
+                    answer=answer_raw,
+                    hint=item.get("hint", ""),
+                    explanation=item.get("explanation", ""),
+                    difficulty=item.get("difficulty", "medium")
+                ))
+            except Exception as e:
+                tracer.record("warn", f"assessment {idx}: parse error", error=str(e))
+                continue
+        
+        if len(coerced) < 3:
+            tracer.record("error", "too few valid assessments after parsing", 
+                         lesson_id=lesson.lesson_id, valid=len(coerced))
+            raise ValueError(f"Test Creator: Only {len(coerced)} valid assessments for {lesson.lesson_id}, need at least 3")
+        
+        lesson.assessments = coerced
+        tracer.record("done", "assessments attached", lesson_id=lesson.lesson_id, count=len(coerced))

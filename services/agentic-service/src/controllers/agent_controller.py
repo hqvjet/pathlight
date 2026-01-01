@@ -26,7 +26,15 @@ class AgentController:
         try:
             self.logger.info("Invoking course agent with recursion_limit=%s", getattr(__import__('config').config, 'RECURSION_LIMIT', 500))
             result = invoke_course_agent(init_state)
+        except ValueError as e:
+            # Validation errors from agents (schema mismatch, missing fields, etc.)
+            self.logger.error(f"Course generation validation error: {str(e)}")
+            raise InternalServerError(f"Course generation validation failed: {str(e)}")
         except Exception as e:
+            # Catch-all for other errors
+            import traceback
+            error_trace = traceback.format_exc()
+            self.logger.error(f"Course generation failed with error: {error_trace}")
             raise InternalServerError(f"Course generation failed: {str(e)}")
 
         # concise summary instead of full payload to console

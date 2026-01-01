@@ -46,8 +46,14 @@ class LessonCreatorAgent(BaseAgent):
         super().__init__(name, foundation_model, prompt_manager)
         self.tool_manager = tool_manager
         self.tools = {t.name: t for t in tool_manager.get_tools(name)}
+        # STABLE FIX: Use GPT-4o-mini with JSON mode
+        # Reliable model + strict JSON = no more parsing errors
+        from constant import LLM_MAX_TOKENS_LESSON
         self.llm = llm_manager.get_llm(
-            model_name=foundation_model, tools=list(self.tools.values())
+            model_name=foundation_model, 
+            tools=list(self.tools.values()),
+            max_tokens=LLM_MAX_TOKENS_LESSON,
+            enable_json_mode=True  # CRITICAL: Enable JSON mode for reliable output
         )
         self.chain = self.build_chain(self.llm)
         self.logger = setup_logger(__name__)
@@ -63,50 +69,17 @@ class LessonCreatorAgent(BaseAgent):
         # Determine total planned lessons
         planned_total: Optional[int] = state.lessons_expected or (len(state.roadmap) if state.roadmap else None)
 
-        # Generate ALL lessons in PARALLEL if none exist yet (FAST PATH - PARALLEL)
-        if planned_total and len(lessons) == 0:
-            tracer.record("parallel", "generate all lessons in parallel", count=planned_total)
-            results = generate_lessons_parallel(self, state, planned_total)
-            if results:
-                lessons.extend(results)
-                tracer.record("done", f"generated {len(results)} lessons in parallel", total=len(lessons))
-            else:
-                # Fallback: create placeholder lessons
-                for i in range(1, planned_total + 1):
-                    lid = f"{state.id}-L{i}"
-                    lessons.append(Lesson(
-                        lesson_id=lid,
-                        title=f"Lesson {i}",
-                        overview="",
-                        content="",
-                        duration=30
-                    ))
-                tracer.record("warn", "batch generation failed; placeholders used")
-            
-            state.next_lesson_index = len(lessons) + 1
-            try:
-                status.mark_lessons_progress(state.id, len(lessons), planned_total)
-            except Exception:
-                pass
-            return state
-
-        # Fallback: generate lessons one by one (SLOW PATH - only when partial)
+        # SEQUENTIAL GENERATION - CRITICAL FIX for timeout
+        # Generate ONE lesson at a time to prevent timeout and ensure quality
         if planned_total and len(lessons) < planned_total:
             start_index = len(lessons) + 1
-            tracer.record("single", "generate next lesson", index=start_index)
+            tracer.record("single", "generate next lesson (sequential)", index=start_index, total=planned_total)
             prev_ids = [l.lesson_id for l in lessons]
 
             result = self._generate_single_lesson(state, start_index, prev_ids)
             if result is None:
-                lid = f"{state.id}-L{start_index}"
-                tracer.record("warn", "lesson generation returned None; placeholder used", index=start_index)
-                lessons.append(Lesson(
-                    lesson_id=lid,
-                    title=f"Lesson {start_index}",
-                    overview="",
-                    content="",
-                    duration=30
-                ))
+                # CRITICAL: Thất bại → raise error thay vì placeholder
+                raise ValueError(f"Failed to generate lesson {start_index}: LLM returned None or invalid JSON")
             else:
                 lessons.append(result)
 
@@ -122,14 +95,7 @@ class LessonCreatorAgent(BaseAgent):
         next_index = state.next_lesson_index or (len(lessons) + 1)
         result = self._generate_single_lesson(state, next_index, [l.lesson_id for l in lessons])
         if result is None:
-            lid = f"{state.id}-L{next_index}"
-            lessons.append(Lesson(
-                lesson_id=lid,
-                title=f"Lesson {next_index}",
-                overview="",
-                content="",
-                duration=30
-            ))
+            raise ValueError(f"Failed to generate lesson {next_index}: LLM returned None or invalid JSON")
         else:
             lessons.append(result)
         state.next_lesson_index = next_index + 1
@@ -388,6 +354,7 @@ class LessonCreatorAgent(BaseAgent):
                 )
             count += 1
 
+        # CRITICAL FIX: Force final JSON output after hitting max tool calls
         if getattr(ai, "tool_calls", None):
             tracer.record(
                 "warn",
@@ -397,95 +364,157 @@ class LessonCreatorAgent(BaseAgent):
                 max_rounds=MAX_TOOL_CALLS_PER_AGENT,
             )
             self.logger.warning(f"Lesson Creator hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
-            history.append(
-                SystemMessage(
-                    content=(
-                        "Ngừng gọi công cụ ngay bây giờ. Hãy xuất JSON cuối cùng theo đúng schema yêu cầu, "
-                        "dựa trên ngữ cảnh hiện có. Tuyệt đối không chèn thêm lời giải thích hay gọi công cụ."
-                    )
+            # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
+            from langchain_openai import ChatOpenAI
+            from constant import LLM_MAX_TOKENS_LESSON, LLM_REQUEST_TIMEOUT, LLM_TEMPERATURE
+            final_llm = ChatOpenAI(
+                model_name=self.foundation_model,
+                openai_api_key=self.llm.openai_api_key,
+                temperature=LLM_TEMPERATURE,  # CRITICAL: 0 for deterministic output
+                request_timeout=LLM_REQUEST_TIMEOUT,
+                max_tokens=LLM_MAX_TOKENS_LESSON,
+                model_kwargs={"response_format": {"type": "json_object"}}
+            )
+            final_chain = self.build_chain(final_llm)
+            
+            try:
+                ai = final_chain.invoke(
+                    {
+                        "id": state.id,
+                        "history": history,
+                        "difficulty": state.difficulty,
+                        "duration": str(state.duration),
+                        "title": state.title,
+                        "description": state.description,
+                        "roadmap": slim_roadmap or state.roadmap,
+                        "lessons_expected": state.lessons_expected or "",
+                        "next_lesson_index": str(index),
+                        "prev_lessons": prev_lessons,
+                    }
                 )
-            )
-            ai = self.chain.invoke(
-                {
-                    "id": state.id,
-                    "history": history,
-                    "difficulty": state.difficulty,
-                    "duration": str(state.duration),
-                    "title": state.title,
-                    "description": state.description,
-                    "roadmap": slim_roadmap or state.roadmap,
-                    "lessons_expected": state.lessons_expected or "",
-                    "next_lesson_index": str(index),
-                    "prev_lessons": prev_lessons,
-                }
-            )
+            except Exception as e:
+                # Handle LengthFinishReasonError
+                if "LengthFinishReasonError" in str(type(e).__name__) or "length limit" in str(e).lower():
+                    tracer.record("error", "hit token limit even after forcing short output", index=index, error=str(e))
+                    raise ValueError(
+                        f"Lesson {index}: LLM exceeded token limit even with shortened instructions. "
+                        "Try reducing content requirements further or increasing max_tokens."
+                    )
+                raise
 
+        # CRITICAL FIX: Validate content before parsing
+        if not ai.content or not ai.content.strip():
+            tracer.record("error", "empty content", index=index, has_tool_calls=bool(getattr(ai, 'tool_calls', None)))
+            raise ValueError(
+                f"Lesson {index}: LLM returned empty content. "
+                f"Has tool_calls: {bool(getattr(ai, 'tool_calls', None))}"
+            )
+        
+        # Log content for debugging
+        self.logger.debug(f"Lesson {index} LLM content (first 1000 chars): {ai.content[:1000]}")
+        
         # Parse JSON robustly and build a single Lesson
         try:
             json_content = json.loads(ai.content)
         except Exception as e:
-            tracer.record("error", "failed to parse ai json", index=index, error=str(e))
-            return None
+            tracer.record("error", "failed to parse ai json", index=index, error=str(e), content=ai.content[:500])
+            self.logger.error(f"Lesson {index} JSON parse error. Content: {ai.content[:1000]}")
+            raise ValueError(f"Lesson {index}: Failed to parse LLM JSON response - {str(e)}")
 
-        created = json_content.get("lessons") or []
-        items = created if isinstance(created, list) else ([created] if created else [])
-        if not items:
-            # No lesson in response; create placeholder id
-            lid = f"{state.id}-L{index}"
-            tracer.record("warn", "no lessons in ai json; placeholder", index=index, lesson_id=lid)
-            return Lesson(
-                lesson_id=lid,
-                title="Placeholder Lesson",
-                overview="",
-                content="",
-                duration=30,
-                assessments=None
-            )
+        # CRITICAL FIX: Strict JSON structure validation
+        lessons_array = json_content.get("lessons")
+        if not lessons_array:
+            tracer.record("error", "no 'lessons' field in response", index=index, keys=list(json_content.keys()))
+            raise ValueError(f"Lesson {index}: LLM response missing 'lessons' field. Got keys: {list(json_content.keys())}")
+        
+        if not isinstance(lessons_array, list) or len(lessons_array) == 0:
+            tracer.record("error", "lessons field is not a non-empty list", index=index, type=type(lessons_array))
+            raise ValueError(f"Lesson {index}: 'lessons' must be non-empty list, got {type(lessons_array)}")
 
-        obj = items[0]
-        # Map from LLM response to new schema
+        obj = lessons_array[0]
+        
+        # CRITICAL FIX: Strict field validation
         lesson_id = obj.get("lesson_id") or f"{state.id}-L{index}"
-        title = obj.get("title") or obj.get("lesson_name") or f"Lesson {index}"
-        overview = obj.get("overview") or obj.get("lesson_description") or ""
-        content = obj.get("content") or obj.get("lesson_content") or ""
+        title = obj.get("title")
+        if not title:
+            tracer.record("error", "missing title", index=index)
+            raise ValueError(f"Lesson {index}: missing required field 'title'")
+        
+        overview = obj.get("overview")
+        if not overview or len(overview.strip()) < 20:
+            tracer.record("error", "overview too short", index=index, length=len(overview) if overview else 0)
+            raise ValueError(f"Lesson {index}: overview must be at least 20 chars, got {len(overview) if overview else 0}")
+        
+        content = obj.get("content")
+        from constant import MIN_CONTENT_LENGTH
+        if not content or len(content.strip()) < MIN_CONTENT_LENGTH:
+            tracer.record("error", "content too short", index=index, length=len(content) if content else 0, min=MIN_CONTENT_LENGTH)
+            raise ValueError(f"Lesson {index}: content must be at least {MIN_CONTENT_LENGTH} chars (40-60 lines for production quality), got {len(content) if content else 0}")
+        
+        # Truncate if too long (safety)
+        from constant import MAX_CONTENT_LENGTH
+        if len(content) > MAX_CONTENT_LENGTH:
+            tracer.record("warn", "content truncated", index=index, original_len=len(content), max=MAX_CONTENT_LENGTH)
+            content = content[:MAX_CONTENT_LENGTH]
+        
         duration = obj.get("duration") or 30
         
-        # Parse assessments if present
+        # Parse assessments with strict validation
         assessments_raw = obj.get("assessments") or []
         assessments = []
-        for qa in assessments_raw:
+        for qa_idx, qa in enumerate(assessments_raw):
             try:
-                # Ensure answer is int
+                # CRITICAL FIX: Validate answer format
                 answer = qa.get("answer")
                 if isinstance(answer, str):
                     # Try to extract number from string like "1", "A", "option 1"
                     import re
                     match = re.search(r'\d+', str(answer))
-                    answer = int(match.group()) if match else 1
+                    if match:
+                        answer = int(match.group())
+                    else:
+                        # If no number found, try to map A/B/C/D to 1/2/3/4
+                        answer_upper = answer.strip().upper()
+                        if answer_upper in ['A', 'B', 'C', 'D']:
+                            answer = ord(answer_upper) - ord('A') + 1
+                        else:
+                            tracer.record("warn", f"assessment {qa_idx}: invalid answer format", answer=answer)
+                            continue  # Skip invalid assessment
                 elif not isinstance(answer, int):
-                    answer = 1
+                    tracer.record("warn", f"assessment {qa_idx}: answer not int or string", type=type(answer))
+                    continue
                 
                 # Validate answer range
                 if not (1 <= answer <= 4):
-                    answer = 1
+                    tracer.record("warn", f"assessment {qa_idx}: answer out of range", answer=answer)
+                    continue
+                
+                # Validate options
+                options = qa.get("options", [])
+                if not isinstance(options, list) or len(options) != 4:
+                    tracer.record("warn", f"assessment {qa_idx}: invalid options", count=len(options) if isinstance(options, list) else "not list")
+                    continue
                 
                 assessments.append({
                     "question": qa.get("question", ""),
-                    "options": qa.get("options", []),
+                    "options": options,
                     "answer": answer,
                     "hint": qa.get("hint", ""),
                     "explanation": qa.get("explanation", ""),
                     "difficulty": qa.get("difficulty", "medium")
                 })
             except Exception as e:
-                tracer.record("warn", "failed to parse assessment", error=str(e))
+                tracer.record("warn", f"assessment {qa_idx}: parse error", error=str(e))
                 continue
         
-        # Basic validation
-        if len(content) < 100:
-            tracer.record("warn", "content too short", index=index, length=len(content))
-        if len(assessments) < 3:
-            tracer.record("warn", "too few assessments", index=index, count=len(assessments))
+        # CRITICAL: Validate EXACTLY 3 assessments (not >=3, not <=3)
+        from constant import MIN_ASSESSMENTS_COUNT, MAX_ASSESSMENTS_COUNT
+        if len(assessments) != MIN_ASSESSMENTS_COUNT:
+            tracer.record("error", "invalid assessment count", index=index, valid=len(assessments), required=MIN_ASSESSMENTS_COUNT)
+            raise ValueError(
+                f"Lesson {index}: must have EXACTLY {MIN_ASSESSMENTS_COUNT} assessments, "
+                f"got {len(assessments)}. This is a HARD requirement for schema validation."
+            )
         
         lesson = Lesson(
             lesson_id=lesson_id,
@@ -497,4 +526,6 @@ class LessonCreatorAgent(BaseAgent):
         )
 
         tracer.record("done", "single lesson generated", index=index, lesson_id=lesson.lesson_id, 
-                     assessments_count=len(assessments))
+                     content_length=len(content), assessments_count=len(assessments))
+        
+        return lesson
