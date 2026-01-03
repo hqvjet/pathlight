@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { storage } from '@/utils/api';
 import { api } from '@/lib/api';
-import { userApi } from '@/lib/api/user';
+import { userApi, courseApi, quizApi } from '@/lib/api/user';
 import { DashboardData, UserProfile, LeaderboardUser } from './types';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/utils/toast';
@@ -34,7 +34,7 @@ export function useDashboard(onLogout: () => void) {
   }, [normalizeAvatarUrl]);
 
   const DASHBOARD_CACHE_KEY = 'pathlight_dashboard_cache';
-  const CACHE_EXPIRY_MS = 5 * 60 * 1000;
+  const CACHE_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes cache
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -55,6 +55,8 @@ export function useDashboard(onLogout: () => void) {
           onLogout();
           return;
         }
+
+        // Check cache
         const canUseStorage = typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function';
         if (canUseStorage) {
           try {
@@ -74,58 +76,127 @@ export function useDashboard(onLogout: () => void) {
             if (process.env.NODE_ENV === 'development') console.warn('Cache read error:', cacheError);
           }
         }
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000));
-        const response = await Promise.race([api.user.getDashboard(), timeoutPromise]);
-        if (!response || typeof response !== 'object' || typeof (response as { status?: number }).status !== 'number') {
-          throw new Error('Invalid API response');
+
+        // Fetch from 3 microservices in parallel
+        const [userResponse, courseStatsResponse, quizStatsResponse] = await Promise.all([
+          api.user.getDashboard(),
+          courseApi.getStats().catch((err) => {
+            console.warn('⚠️ Course stats failed:', err);
+            return { status: 200, total_courses: 0, completed_courses: 0, total_lessons: 0 };
+          }),
+          quizApi.getStats().catch((err) => {
+            console.warn('⚠️ Quiz stats failed (expected if not configured):', err);
+            return { status: 200, total_quizzes: 0, completed_quizzes: 0, average_score: 0 };
+          }),
+        ]);
+
+        console.log('📊 API Responses:', { userResponse, courseStatsResponse, quizStatsResponse });
+
+        if (!userResponse || typeof (userResponse as { status?: number }).status !== 'number') {
+          throw new Error('Invalid user API response');
         }
-        const { status, data } = response as { status: number; data?: unknown };
-        if (status === 401) { setLoading(false); onLogout(); return; }
-        if (status !== 200) throw new Error(`API returned status ${status}`);
-        const raw = data as DashboardData | { info?: UserProfile } | UserProfile | undefined;
-        const userInfo: UserProfile = (raw && typeof raw === 'object' && 'info' in raw)
-          ? (raw as { info?: UserProfile }).info || { email: '', name: '', id: '' }
-          : (raw as UserProfile);
-        const leaderboard = normalizeLeaderboard(userInfo.user_top_rank);
-        const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || (userInfo.email ? userInfo.email.split('@')[0] : 'User');
+
+        const { status, data } = userResponse as { status: number; data?: unknown };
+        if (status !== 200 || !data || typeof data !== 'object') {
+          throw new Error('Failed to fetch user dashboard');
+        }
+
+        // Extract user info
+        const userInfo = ('info' in data && data.info && typeof data.info === 'object') 
+          ? data.info as Record<string, unknown>
+          : data as Record<string, unknown>;
+
+        // Extract stats from course and quiz services - check if wrapped in data object
+        const courseStatsData = (courseStatsResponse as { data?: Record<string, unknown> }).data || courseStatsResponse as Record<string, unknown>;
+        const quizStatsData = (quizStatsResponse as { data?: Record<string, unknown> }).data || quizStatsResponse as Record<string, unknown>;
+        
+        console.log('📊 Extracted Stats:', { 
+          courseStatsData, 
+          quizStatsData,
+          courseStats_total: courseStatsData.total_courses,
+          courseStats_lessons: courseStatsData.total_lessons
+        });
+
+        const leaderboard = normalizeLeaderboard(userInfo.user_top_rank as LeaderboardUser[] | undefined);
+        const fullName = [userInfo.family_name, userInfo.given_name].filter(Boolean).join(' ') || 
+                        ((userInfo.email as string)?.split('@')[0] || 'User');
+
         const profileData: UserProfile = {
-          id: userInfo.id || '',
-          email: userInfo.email || '',
+          id: (userInfo.id as string) || '',
+          email: (userInfo.email as string) || '',
           name: fullName,
-          given_name: userInfo.given_name,
-          family_name: userInfo.family_name,
-          avatar_url: normalizeAvatarUrl(userInfo.id, userInfo.avatar_url),
+          given_name: userInfo.given_name as string,
+          family_name: userInfo.family_name as string,
+          avatar_url: normalizeAvatarUrl(userInfo.id as string, userInfo.avatar_url as string),
           avatarKey: Date.now(),
-          remind_time: userInfo.remind_time,
-          level: userInfo.level || 1,
-          current_exp: userInfo.current_exp || 0,
-          require_exp: userInfo.require_exp || 100,
-          total_courses: userInfo.total_courses || userInfo.course_num || 0,
-          completed_courses: userInfo.completed_courses || userInfo.finish_course_num || 0,
-          total_quizzes: userInfo.total_quizzes || userInfo.quiz_num || 0,
-          lesson_num: userInfo.lesson_num || 0,
-          total_lessons: (userInfo as { total_lessons?: number }).total_lessons || userInfo.lesson_num || 0,
-          average_score: userInfo.average_quiz_score || userInfo.average_score || 0,
-          rank: userInfo.rank || 1,
-          user_num: userInfo.user_num || 1,
-          total_users: (userInfo as { total_users?: number }).total_users || userInfo.user_num || 1,
+          remind_time: userInfo.remind_time as string,
+          level: (userInfo.level as number) || 1,
+          current_exp: (userInfo.current_exp as number) || 0,
+          require_exp: (userInfo.require_exp as number) || 100,
+          // Course stats from course-service
+          total_courses: (courseStatsData.total_courses as number) || 0,
+          completed_courses: (courseStatsData.completed_courses as number) || 0,
+          total_lessons: (courseStatsData.total_lessons as number) || 0,
+          // Quiz stats from quiz-service
+          total_quizzes: (quizStatsData.total_quizzes as number) || 0,
+          completed_quizzes: (quizStatsData.completed_quizzes as number) || 0,
+          // Ranking from user-service
+          rank: (userInfo.rank as number) || 0,
+          total_users: (userInfo.total_users as number) || 0,
           user_top_rank: leaderboard,
         };
-        const dashboardInfo: DashboardData = { info: { ...(profileData as UserProfile), user_top_rank: leaderboard } as UserProfile & { user_top_rank?: LeaderboardUser[] } };
+
+        console.log('✅ Final Profile Data:', {
+          total_courses: profileData.total_courses,
+          completed_courses: profileData.completed_courses,
+          total_lessons: profileData.total_lessons,
+          total_quizzes: profileData.total_quizzes,
+          level: profileData.level,
+          rank: profileData.rank,
+        });
+
+        const dashboardInfo: DashboardData = { 
+          info: { 
+            ...profileData, 
+            user_top_rank: leaderboard 
+          } as UserProfile & { user_top_rank?: LeaderboardUser[] } 
+        };
+
         setDashboardData(dashboardInfo);
         setUser(profileData);
         setLoading(false);
+
+        // Cache the result
         if (canUseStorage) {
-          try { window.localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ user: profileData, dashboardData: dashboardInfo, timestamp: Date.now() })); } catch {}
+          try { 
+            window.localStorage.setItem(
+              DASHBOARD_CACHE_KEY, 
+              JSON.stringify({ 
+                data: { user: profileData, dashboardData: dashboardInfo }, 
+                timestamp: Date.now() 
+              })
+            ); 
+          } catch {}
         }
+
+        // Check study time setup
         const skipped = storage.get('study_time_setup_completed') === 'true';
-        if (!userInfo.remind_time && !skipped) setTimeout(() => router.replace('/user/study-time-setup'), 100);
+        if (!userInfo.remind_time && !skipped) {
+          setTimeout(() => router.replace('/user/study-time-setup'), 100);
+        }
       } catch (error) {
+        console.error('Dashboard fetch error:', error);
         setLoading(false);
+        
+        // Clear cache on error
+        if (typeof window !== 'undefined') {
+          try { window.localStorage.removeItem(DASHBOARD_CACHE_KEY); } catch {}
+        }
+
         if (error instanceof Error && error.message === 'Request timeout') {
           showToast.warning('⏱️ Trang web tải chậm. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
         } else {
-          onLogout();
+          showToast.error('❌ Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
         }
       }
     };

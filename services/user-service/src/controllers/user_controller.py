@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from models import User, UserProfile
 from services.experience_service import get_exp_for_level
-from schemas.user_schemas import *  # noqa
+from schemas.user_schemas import *
 from config import config
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
@@ -24,8 +24,6 @@ from services.experience_service import (
 from services.activity_service import log_activity as svc_log_activity, get_activity_series as svc_get_activity_series
 from services.ranking_service import calculate_user_rank, get_leaderboard_data, get_users_by_ids as svc_get_users_by_ids
 from services.user_services import get_user_by_id
-from services.external.course_client import get_course_stats
-from services.external.quiz_client import get_quiz_stats
 from services.log_service import (
     FilterKey,
     get_admin_logs as fetch_admin_logs,
@@ -157,7 +155,6 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
         dob_value = getattr(target_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         avatar_id = getattr(target_user, 'avatar_url', None)
-        # Unified avatar_url format with user-id query param (same as dashboard)
         avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
         user_info = {
             "id": getattr(target_user, 'id', None),
@@ -253,7 +250,6 @@ async def create_admin_account(request: AdminCreateRequest, credentials: HTTPAut
         try:
             create_admin(db, username, request.password)
         except Exception as exc:
-            logger.error(f"Failed to create admin '{username}': {exc}")
             return _send_result(MessageResponse(status=500, message="Không thể tạo admin mới"))
         return _send_result(MessageResponse(status=200, message="Admin đã được tạo thành công"))
     except Exception as e:  # pragma: no cover
@@ -285,22 +281,17 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
         setattr(target_user, 'subscription', request.subscription)
-        db.flush()  # Force write to DB
+        db.flush()
         db.commit()
         
-        # Verify by re-querying
         db.expire_all()
         verified_user = get_user_by_id(db, user_id)
         verified_sub = getattr(verified_user, 'subscription', None)
-        
-        logger.info(f"Admin updated subscription for user {getattr(target_user, 'email', 'unknown')}: requested={request.subscription}, verified={verified_sub}")
-        
         if verified_sub != request.subscription:
             logger.error(f"Subscription update failed: expected {request.subscription}, got {verified_sub}")
             return MessageResponse(status=500, message=f"Lỗi: Gói không được lưu (hiện tại: {verified_sub})")
-        
         return MessageResponse(status=200, message=f"Đã cập nhật gói thuê bao thành {verified_sub}")
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.error(f"Failed to update subscription for user {user_id}: {e}")
         db.rollback()
         return MessageResponse(status=500, message="Không thể cập nhật gói thuê bao")
@@ -332,7 +323,7 @@ async def admin_add_experience_for_user(user_id: str, request: AdminExperienceRe
             db.commit()
 
         return await svc_add_experience(request.exp, target_user, db)
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         logger.error(f"Failed to add exp for user {user_id}: {e}", exc_info=True)
         db.rollback()
         return TestStatsResponse(status=500, message="Không thể thêm exp cho người dùng")
@@ -362,10 +353,7 @@ async def admin_adjust_experience_step(user_id: str, request: AdminExperienceDel
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
             db.commit()
-
         result = await svc_add_experience(request.delta, target_user, db)
-        # Always return the result status without wrapping in _send_result
-        # to avoid double wrapping
         return result
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to adjust exp for user {user_id}: {e}", exc_info=True)
@@ -398,7 +386,6 @@ async def list_admin_accounts(credentials: HTTPAuthorizationCredentials, db: Ses
 # ---------- Settings ----------
 async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Session) -> MessageResponse:
     try:
-        # Convert HH:MM to timezone-aware datetime (today, UTC) to satisfy DB DateTime column
         parsed_time = datetime.strptime(request.remind_time, "%H:%M").time()
         now = datetime.now(timezone.utc)
         remind_dt = datetime.combine(now.date(), parsed_time, tzinfo=timezone.utc)
@@ -431,14 +418,11 @@ async def set_notify_time(request: NotifyTimeRequest, current_user: User, db: Se
 async def get_user_dashboard(current_user: User, db: Session) -> DashboardResponse:
     try:
         avatar_id = getattr(current_user, 'avatar_url', None)
-        # Always provide endpoint with user-id query param when user has (or may have) an avatar.
         avatar_url = (
             f"{config.BASE_URL}/user/avatar?user-id={current_user.id}" if avatar_id else None
         )
         dob_value = getattr(current_user, 'dob', None)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
-        course_stats = get_course_stats(str(getattr(current_user, 'email', '')))
-        quiz_stats = get_quiz_stats(str(getattr(current_user, 'email', '')))
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
         dashboard_info = {
@@ -455,40 +439,36 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "remind_time": getattr(current_user, 'remind_time', None),
             "bio": getattr(current_user, 'bio', None),
             "sex": getattr(current_user, 'sex', None),
-            # Course
-            "course_num": course_stats["total_courses"],
-            "total_courses": course_stats["total_courses"],
-            "finish_course_num": course_stats["completed_courses"],
-            "completed_courses": course_stats["completed_courses"],
-            "lesson_num": course_stats["total_lessons"],
-            # Quiz
-            "quiz_num": quiz_stats["total_quizzes"],
-            "total_quizzes": quiz_stats["total_quizzes"],
-            "completed_quizzes": quiz_stats["completed_quizzes"],
-            "average_quiz_score": quiz_stats["average_score"],
-            "average_score": quiz_stats["average_score"],
-            # Rank
+            # Ranking
             "rank": rank_data["rank"],
-            "user_num": rank_data["total_users"],
+            "total_users": rank_data["total_users"],
             "subscription": getattr(current_user, 'subscription', 0),
             "created_at": getattr(current_user, 'created_at', None),
-            # Leaderboard
             "user_top_rank": leaderboard,
-            # Placeholder
-            "learning_history": [],
         }
         return DashboardResponse(status=200, info=dashboard_info)
     except Exception as e:  # pragma: no cover
         logger.error(f"Dashboard error for {getattr(current_user, 'email', 'unknown')}: {e}")
-        return DashboardResponse(status=401, message="Có lỗi xảy ra, xin vui lòng thử lại")
+        return DashboardResponse(status=500, message="Có lỗi xảy ra, xin vui lòng thử lại")
 
 
 # ---------- Experience ----------
 async def add_experience(request: ExperienceAddRequest, current_user: User, db: Session) -> TestStatsResponse:
-    if request.exp <= 0:
-        return TestStatsResponse(status=400, message="Giá trị exp phải lớn hơn 0")
-    result = await svc_add_experience(request.exp, current_user, db)
-    return result
+    # Accept positive and negative experience adjustments. Internal services
+    # (course/quiz) may send negative values to apply penalties (e.g. hint usage).
+    # Zero is a no-op and will be forwarded to the service which will handle it.
+    # Ensure we operate on a user object attached to the same DB session `db`.
+    try:
+        target_user = db.query(User).filter(User.id == getattr(current_user, 'id')).first()
+        if not target_user:
+            # Fallback to the provided current_user if not found in this session
+            target_user = current_user
+        result = await svc_add_experience(request.exp, target_user, db)
+        logger.info("controllers.add_experience result for user %s: %s", getattr(target_user, 'email', getattr(target_user, 'id', 'unknown')), getattr(result, 'updated_stats', None))
+        return result
+    except Exception as e:
+        logger.error(f"add_experience controller error: {e}")
+        raise
 
 # ---------- Activity (placeholder) ----------
 async def save_user_activity(current_user: User, db: Session) -> MessageResponse:
@@ -513,9 +493,12 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
 
 
 # ---------- Activity tracking ----------
-
 async def log_learning_activity(request: ActivityLogRequest, current_user: User, db: Session):
-    return svc_log_activity(request, current_user, db)
+    # Ensure we operate on a User instance attached to this DB session
+    target_user = db.query(User).filter(User.id == getattr(current_user, 'id')).first()
+    if not target_user:
+        target_user = current_user
+    return svc_log_activity(request, target_user, db)
 
 
 async def get_learning_activity(current_user: User, db: Session, days: int = 365):
@@ -553,8 +536,6 @@ async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredenti
         target_user = db.query(User).filter(User.id == user_id).first()
         if not target_user:
             return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
-
-        # Explicitly delete profile first to ensure cleanup
         profile = getattr(target_user, 'profile', None)
         if profile:
             db.delete(profile)
@@ -589,12 +570,9 @@ async def get_admin_logs(
     if guard:
         return guard
     try:
-        logger.info(f"Admin log request: filter={filter_key}, service={service}, stream={log_stream}, level={level}")
         result = fetch_admin_logs(filter_key, service=service, log_stream=log_stream, level_filter=level)
-        logger.info(f"Admin log fetch completed: status={getattr(result, 'status', 'unknown')}, logs={len(getattr(result, 'logs', []))}")
         return result
     except Exception as e:
-        logger.error(f"Admin log fetch error: {e}", exc_info=True)
         return AdminLogsResponse(status=500, message="Lỗi khi lấy logs", logs=[])
 
 

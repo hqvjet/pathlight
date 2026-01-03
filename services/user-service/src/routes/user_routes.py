@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Response, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Literal
 import logging
@@ -49,7 +49,9 @@ from controllers.user_controller import (
     admin_add_experience_for_user,
     admin_adjust_experience_step,
     list_admin_accounts,
+    svc_add_experience,
 )
+from fastapi.responses import JSONResponse
 from services.user_service_auth import get_current_user, get_current_admin_user, security
 
 logger = logging.getLogger(__name__)

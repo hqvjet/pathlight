@@ -15,7 +15,7 @@ export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
     <Card className="bg-cyan-50 border border-cyan-200 shadow-md md:col-span-1">
       <CardContent className="p-5 space-y-6">
         <div className="flex items-center gap-4">
-          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-cyan-400/60" cacheKey={user.avatarKey} />
+          <Avatar user={user} size={64} displayName={user.name} showInitialsFallback className="ring-2 ring-cyan-400/60" cacheKey={user.avatarKey} priority />
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-tight truncate text-gray-800">{user.name}</h2>
             <p className="text-[11px] text-gray-600 truncate">{user.email}</p>

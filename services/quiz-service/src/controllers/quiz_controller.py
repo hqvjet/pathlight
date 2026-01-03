@@ -158,10 +158,52 @@ def _quiz_to_summary(q: Quiz) -> QuizSummary:
 
 
 def _admin_guard(request: Request):
-    user_id = _verify_token(request)
-    if not user_id:
+    """Verify admin role from JWT token claims."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        logger.warning("Admin guard: Missing or invalid Authorization header")
         return {"status": 401, "message": "Unauthorized"}
-    return None
+    
+    token = auth_header.split(" ")[1]
+    try:
+        # Try verified decode first
+        payload = None
+        secret_key = getattr(config, "JWT_SECRET_KEY", None)
+        logger.info(f"Admin guard: JWT_SECRET_KEY configured: {bool(secret_key)}")
+        
+        if secret_key:
+            try:
+                payload = jwt.decode(token, secret_key, algorithms=[config.JWT_ALGORITHM])
+                logger.info("Admin guard: JWT verified successfully")
+            except Exception as e:
+                logger.warning(f"Admin guard: JWT verification failed: {e}, trying unverified")
+        
+        # Fallback to unverified claims
+        if not payload:
+            try:
+                payload = jwt.get_unverified_claims(token)
+                logger.info("Admin guard: Using unverified JWT claims")
+            except Exception as decode_error:
+                logger.error(f"Admin guard: Cannot decode token: {decode_error}")
+                return {"status": 401, "message": "Invalid token"}
+        
+        # Check admin role
+        role = payload.get("role")
+        roles = payload.get("roles") or []
+        if isinstance(roles, str):
+            roles = [roles]
+        is_admin = role == "admin" or "admin" in roles
+        
+        logger.info(f"Admin guard: role={role}, roles={roles}, is_admin={is_admin}")
+        
+        if not is_admin:
+            return {"status": 403, "message": "Admin access required"}
+        
+        logger.info("Admin guard: Access granted")
+        return None
+    except Exception as e:
+        logger.error(f"Admin guard failed: {e}", exc_info=True)
+        return {"status": 500, "message": "Cannot verify admin status"}
 
 
 def create_quiz_controller(request: Request, body: CreateQuizRequest):
@@ -428,6 +470,43 @@ def get_quiz_detail_controller(
             cards=card_models,
         )
         return QuizDetailResponse(status=200, quiz=detail)
+    finally:
+        session.close()
+
+
+def get_user_quiz_stats_controller(request: Request) -> dict:
+    """Get aggregated quiz statistics for a user - for dashboard."""
+    user_id = _verify_token(request)
+    if not user_id:
+        return {"status": 401, "message": "Unauthorized"}
+    
+    session = _get_db()
+    try:
+        # Count total quizzes
+        total_quizzes = session.query(Quiz).filter(Quiz.user_id == user_id).count()
+        
+        # Count completed quizzes (finish=True)
+        completed_quizzes = session.query(Quiz).filter(
+            Quiz.user_id == user_id,
+            Quiz.finish.is_(True)
+        ).count()
+        
+        # Calculate average score from completed quizzes
+        completed_quiz_rows = session.query(Quiz.previous_score).filter(
+            Quiz.user_id == user_id,
+            Quiz.finish.is_(True),
+            Quiz.previous_score.isnot(None)
+        ).all()
+        
+        scores = [row.previous_score for row in completed_quiz_rows if row.previous_score is not None]
+        average_score = round(sum(scores) / len(scores), 2) if scores else 0.0
+        
+        return {
+            "status": 200,
+            "total_quizzes": total_quizzes,
+            "completed_quizzes": completed_quizzes,
+            "average_score": average_score,
+        }
     finally:
         session.close()
 

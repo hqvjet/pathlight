@@ -65,6 +65,13 @@ def create_manual_quiz(request: Request, body: CreateManualQuizRequest):
     return create_manual_quiz_controller(request, body)
 
 
+@router.get("/stats")
+def get_user_quiz_stats(request: Request):
+    """Get aggregated quiz statistics for current user."""
+    from src.controllers.quiz_controller import get_user_quiz_stats_controller
+    return get_user_quiz_stats_controller(request)
+
+
 @router.get("/all", response_model=QuizListResponse)
 def list_my_quizzes(request: Request):
     return list_user_quizzes_controller(request)

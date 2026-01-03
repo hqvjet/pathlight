@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { QuizCard, QuizCardData } from '@/components/user/quizzes/QuizCard';
 import { quizApi } from '@/lib/api/quiz';
 import { showToast } from '@/utils/toast';
@@ -8,8 +9,14 @@ import { showToast } from '@/utils/toast';
 type LevelFilter = 'all' | 'easy' | 'medium' | 'hard';
 type StatusFilter = 'all' | 'completed' | 'draft';
 type SortOption = 'latest' | 'questions_desc' | 'title_asc';
+type TabType = 'my' | 'public';
 
-export default function MyQuizzesPage() {
+const ITEMS_PER_PAGE = 9;
+
+function MyQuizzesContent() {
+	const searchParams = useSearchParams();
+	const [activeTab, setActiveTab] = useState<TabType>('my');
+	const [currentPage, setCurrentPage] = useState(1);
 	const [search, setSearch] = useState('');
 	const [sort, setSort] = useState<SortOption>('latest');
 	const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
@@ -18,6 +25,19 @@ export default function MyQuizzesPage() {
 	const [publicQuizzes, setPublicQuizzes] = useState<QuizCardData[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+
+	// Set initial tab from URL parameter
+	useEffect(() => {
+		const tabParam = searchParams.get('tab');
+		if (tabParam === 'public') {
+			setActiveTab('public');
+		}
+	}, [searchParams]);
+
+	// Reset to page 1 when switching tabs or filters
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [activeTab, search, sort, levelFilter, statusFilter]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -51,7 +71,8 @@ export default function MyQuizzesPage() {
 	}, []);
 
 	const filteredMy = useMemo(() => {
-		let list = myQuizzes.filter((q) =>
+		const source = activeTab === 'my' ? myQuizzes : publicQuizzes;
+		let list = source.filter((q) =>
 			q.title.toLowerCase().includes(search.toLowerCase())
 		);
 
@@ -59,9 +80,9 @@ export default function MyQuizzesPage() {
 			list = list.filter((q) => q.level === levelFilter);
 		}
 
-		if (statusFilter === 'completed') {
+		if (activeTab === 'my' && statusFilter === 'completed') {
 			list = list.filter((q) => q.finish);
-		} else if (statusFilter === 'draft') {
+		} else if (activeTab === 'my' && statusFilter === 'draft') {
 			list = list.filter((q) => !q.publish);
 		}
 
@@ -78,21 +99,13 @@ export default function MyQuizzesPage() {
 				);
 		}
 		return list;
-	}, [myQuizzes, search, sort, levelFilter, statusFilter]);
+	}, [myQuizzes, publicQuizzes, activeTab, search, sort, levelFilter, statusFilter]);
 
-	const filteredPublic = useMemo(() => {
-		let list = publicQuizzes.filter((q) =>
-			q.title.toLowerCase().includes(search.toLowerCase())
-		);
-
-		if (levelFilter !== 'all') {
-			list = list.filter((q) => q.level === levelFilter);
-		}
-
-		return list.sort(
-			(a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
-		);
-	}, [publicQuizzes, search, levelFilter]);
+	const totalPages = Math.ceil(filteredMy.length / ITEMS_PER_PAGE);
+	const paginatedQuizzes = filteredMy.slice(
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
+	);
 
 	const greeting = (() => {
 		const h = new Date().getHours();
@@ -136,101 +149,189 @@ export default function MyQuizzesPage() {
 				</div>
 			)}
 
-			<div className="flex flex-col gap-4">
-				<div className="relative">
-					<input
-						value={search}
-						onChange={(e) => setSearch(e.target.value)}
-						placeholder="Tìm quiz ..."
-						className="w-full h-11 pl-10 pr-4 rounded-lg border border-transparent bg-white shadow-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 text-sm placeholder:text-gray-400 transition"
-					/>
-					<svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.2-5.2M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
-					</svg>
-				</div>
-
-				<div className="flex flex-wrap items-center gap-3">
-					<div className="flex items-center gap-2">
-						<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Độ khó</label>
-						<select
-							value={levelFilter}
-							onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
-							className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
-						>
-							<option value="all">Tất cả</option>
-							<option value="easy">Dễ</option>
-							<option value="medium">Trung bình</option>
-							<option value="hard">Khó</option>
-						</select>
-					</div>
-
-					<div className="flex items-center gap-2">
-						<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Trạng thái</label>
-						<select
-							value={statusFilter}
-							onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-							className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
-						>
-							<option value="all">Tất cả</option>
-							<option value="completed">Hoàn thành</option>
-							<option value="draft">Bản nháp</option>
-						</select>
-					</div>
-
-					<div className="flex items-center gap-2">
-						<label className="text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:block">Sắp xếp</label>
-						<div className="relative">
-							<select
-								value={sort}
-								onChange={(e) => setSort(e.target.value as SortOption)}
-								className="appearance-none h-11 pl-4 pr-10 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
-							>
-								<option value="latest">Mới nhất</option>
-								<option value="questions_desc">Số câu hỏi giảm dần</option>
-								<option value="title_asc">Theo tên A-Z</option>
-							</select>
-							<svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-								<path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-							</svg>
-						</div>
-					</div>
+			{/* Tabs */}
+			<div className="border-b">
+				<div className="flex gap-6">
+					<button
+						onClick={() => setActiveTab('my')}
+						className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+							activeTab === 'my'
+								? 'border-sky-600 text-sky-600'
+								: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+						}`}
+					>
+						Quiz Của Tôi
+						<span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-xs">
+							{myQuizzes.length}
+						</span>
+					</button>
+					<button
+						onClick={() => setActiveTab('public')}
+						className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+							activeTab === 'public'
+								? 'border-sky-600 text-sky-600'
+								: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+						}`}
+					>
+						Quiz Công Khai
+						<span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-xs">
+							{publicQuizzes.length}
+						</span>
+					</button>
 				</div>
 			</div>
 
 			<div className="space-y-6">
-				<div>
-					<h2 className="text-lg font-semibold text-gray-900 mb-4">Quiz của tôi</h2>
-					{filteredMy.length === 0 ? (
-						<div className="bg-white rounded-xl p-12 text-center border border-dashed border-gray-300">
-							<p className="text-gray-600 mb-4">
-								{myQuizzes.length === 0 ? 'Bạn chưa có quiz nào.' : 'Không tìm thấy quiz phù hợp.'}
-							</p>
-							<Link href="/user/create-quiz" className="inline-flex items-center gap-2 px-5 h-11 rounded-md bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold shadow-sm">
-								<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-								</svg>
-								Tạo Quiz Mới
-							</Link>
-						</div>
-					) : (
-						<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-							{filteredMy.map((quiz) => (
-								<QuizCard key={quiz.id} quiz={quiz} />
-							))}
-						</div>
-					)}
-				</div>
+				<div className="flex flex-col gap-4">
+					<div className="relative">
+						<input
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+							placeholder="Tìm quiz ..."
+							className="w-full h-11 pl-10 pr-4 rounded-lg border border-transparent bg-white shadow-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 text-sm placeholder:text-gray-400 transition"
+						/>
+						<svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.2-5.2M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
+						</svg>
+					</div>
 
-				{filteredPublic.length > 0 && (
-					<div className="pt-6 border-t border-gray-200">
-						<h2 className="text-lg font-semibold text-gray-900 mb-4">Quiz công khai</h2>
-						<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-							{filteredPublic.map((quiz) => (
-								<QuizCard key={quiz.id} quiz={quiz} />
-							))}
+					<div className="flex flex-wrap items-center gap-3">
+						<div className="flex items-center gap-2">
+							<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Độ khó</label>
+							<select
+								value={levelFilter}
+								onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
+								className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
+							>
+								<option value="all">Tất cả</option>
+								<option value="easy">Dễ</option>
+								<option value="medium">Trung bình</option>
+								<option value="hard">Khó</option>
+							</select>
+						</div>
+
+						{activeTab === 'my' && (
+							<div className="flex items-center gap-2">
+								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Trạng thái</label>
+								<select
+									value={statusFilter}
+									onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+									className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
+								>
+									<option value="all">Tất cả</option>
+									<option value="completed">Hoàn thành</option>
+									<option value="draft">Bản nháp</option>
+								</select>
+							</div>
+						)}
+
+						<div className="flex items-center gap-2">
+							<label className="text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:block">Sắp xếp</label>
+							<div className="relative">
+								<select
+									value={sort}
+									onChange={(e) => setSort(e.target.value as SortOption)}
+									className="appearance-none h-11 pl-4 pr-10 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
+								>
+									<option value="latest">Mới nhất</option>
+									<option value="questions_desc">Số câu hỏi giảm dần</option>
+									<option value="title_asc">Theo tên A-Z</option>
+								</select>
+								<svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+								</svg>
+							</div>
 						</div>
 					</div>
-				)}
+				</div>
+
+				<div>
+					{paginatedQuizzes.length === 0 ? (
+						<div className="bg-white rounded-xl p-12 text-center border border-dashed border-gray-300">
+							<p className="text-gray-600 mb-4">
+								{filteredMy.length === 0 && (activeTab === 'my' ? myQuizzes : publicQuizzes).length === 0
+									? (activeTab === 'my' ? 'Bạn chưa có quiz nào.' : 'Chưa có quiz công khai nào.')
+									: 'Không tìm thấy quiz phù hợp.'}
+							</p>
+							{activeTab === 'my' && myQuizzes.length === 0 && (
+								<Link href="/user/create-quiz" className="inline-flex items-center gap-2 px-5 h-11 rounded-md bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold shadow-sm">
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+									</svg>
+									Tạo Quiz Mới
+								</Link>
+							)}
+						</div>
+					) : (
+						<>
+							<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+								{paginatedQuizzes.map((quiz) => (
+									<QuizCard key={quiz.id} quiz={quiz} />
+								))}
+							</div>
+
+							{/* Pagination */}
+							{totalPages > 1 && (
+								<div className="flex items-center justify-center gap-2 mt-6 pt-6 border-t">
+									<button
+										onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+										disabled={currentPage === 1}
+										className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									>
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+										</svg>
+									</button>
+
+									<div className="flex items-center gap-1">
+										{[...Array(totalPages)].map((_, i) => {
+											const pageNum = i + 1;
+											if (
+												pageNum === 1 ||
+												pageNum === totalPages ||
+												Math.abs(pageNum - currentPage) <= 1
+											) {
+												return (
+													<button
+														key={pageNum}
+														onClick={() => setCurrentPage(pageNum)}
+														className={`min-w-[32px] h-8 px-2 rounded-lg text-sm font-medium transition-colors ${
+															currentPage === pageNum
+																? 'bg-sky-600 text-white'
+																: 'hover:bg-gray-100 text-gray-700'
+														}`}
+													>
+														{pageNum}
+													</button>
+												);
+											}
+
+											if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+												return (
+													<span key={pageNum} className="px-2 text-gray-400">
+														...
+													</span>
+												);
+											}
+
+											return null;
+										})}
+									</div>
+
+									<button
+										onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+										disabled={currentPage === totalPages}
+										className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									>
+										<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+										</svg>
+									</button>
+								</div>
+							)}
+						</>
+					)}
+				</div>
 			</div>
 
 			<footer className="pt-4 pb-10 text-xs text-gray-400 flex flex-wrap gap-6 justify-center">
@@ -239,5 +340,16 @@ export default function MyQuizzesPage() {
 				<span>Terms & Condition</span>
 			</footer>
 		</div>
+	);
+}
+export default function MyQuizzesPage() {
+	return (
+		<Suspense fallback={
+			<div className="flex items-center justify-center min-h-screen">
+				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+			</div>
+		}>
+			<MyQuizzesContent />
+		</Suspense>
 	);
 }

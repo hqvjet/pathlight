@@ -127,6 +127,11 @@ class User(Base):
     def streak(self):
         return getattr(self._p(), "streak", 0) if self._p() else 0
 
+    @streak.setter
+    def streak(self, value):
+        profile = self._ensure_profile()
+        setattr(profile, "streak", value)
+
     @property
     def subscription(self):
         return getattr(self._p(), "subscription", 0) if self._p() else 0

@@ -133,12 +133,16 @@ def require_exp_for_level(level: int) -> int:
     return get_exp_for_level(next_level)
 
 def auto_level_up(current_exp: int, current_level: Optional[int] = None) -> Tuple[int, int, bool]:
+    """Calculate new level based on current exp. 
+    Returns (new_level, next_level_exp, level_changed).
+    level_changed is True if level increased OR decreased from current_level.
+    """
     new_level, _, next_level_exp = calculate_level_from_exp(current_exp)
-    level_increased = current_level is not None and new_level > current_level
-    return new_level, next_level_exp, level_increased
+    level_changed = current_level is not None and new_level != current_level
+    return new_level, next_level_exp, level_changed
 
 # ---------- Test / Simulation Utilities (originally test APIs) ----------
-from schemas.user_schemas import TestStatsRequest, TestStatsResponse  # type: ignore
+from schemas.user_schemas import TestStatsRequest, TestStatsResponse, UpdatedStats  # type: ignore
 
 async def update_test_stats(request: TestStatsRequest, current_user: User, db: Session) -> TestStatsResponse:
     try:
@@ -203,11 +207,12 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
             "level": getattr(current_user, 'level'),
             "current_exp": getattr(current_user, 'current_exp'),
             "require_exp": getattr(current_user, 'require_exp'),
+            "gained_exp": calculated_exp if request.current_exp is None else None,
             "calculated_exp_from_activities": calculated_exp if request.current_exp is None else None,
             "level_changed": level_changed,
             "original_stats": original_stats
         }
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         updated_stats.update(rank_data)
         level_msg = ""
         if level_changed:
@@ -216,7 +221,7 @@ async def update_test_stats(request: TestStatsRequest, current_user: User, db: S
         return TestStatsResponse(
             status=200,
             message=f"Cập nhật thành công! Level: {updated_stats['level']}, Exp: {updated_stats['current_exp']}, Rank: {updated_stats['rank']}{level_msg}",
-            updated_stats=updated_stats
+            updated_stats=UpdatedStats(**updated_stats)
         )
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to update test stats for user {getattr(current_user, 'email', 'unknown')}: {e}")
@@ -232,10 +237,10 @@ async def reset_test_stats(current_user: User, db: Session) -> TestStatsResponse
         lines = [l for l in current_bio.split('\n') if not l.startswith('[TEST_DATA]')]
         setattr(current_user, 'bio', '\n'.join(lines).strip())
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         reset_stats = {"level": 1, "current_exp": 0, "require_exp": require_exp_for_level(1), **rank_data}
         logger.info(f"Successfully reset test stats for user {current_user.email}")
-        return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=reset_stats)
+        return TestStatsResponse(status=200, message="Đã reset thống kê về mặc định", updated_stats=UpdatedStats(**reset_stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to reset test stats for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
@@ -253,11 +258,12 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
         setattr(current_user, 'level', new_level)
         setattr(current_user, 'require_exp', next_level_exp)
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         stats = {
             "original_level": original_level,
             "original_exp": original_exp,
             "original_require_exp": original_require_exp,
+            "gained_exp": activity_exp,
             "activity_exp_gained": activity_exp,
             "new_level": new_level,
             "new_exp": new_total_exp,
@@ -271,44 +277,67 @@ async def simulate_learning_activity(current_user: User, db: Session) -> TestSta
             gained = new_level - original_level
             level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level} (+{gained} level{'s' if gained > 1 else ''})"
         logger.info(f"Simulation completed for user {current_user.email}: {stats}")
-        return TestStatsResponse(status=200, message=f"Mô phỏng hoạt động học tập! +{activity_exp} exp{level_msg}", updated_stats=stats)
+        return TestStatsResponse(status=200, message=f"Mô phỏng hoạt động học tập! +{activity_exp} exp{level_msg}", updated_stats=UpdatedStats(**stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to simulate activity for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
         return TestStatsResponse(status=500, message="Có lỗi xảy ra khi mô phỏng hoạt động học tập")
 
-async def add_experience(exp_amount: int, current_user: User, db: Session) -> TestStatsResponse:
+async def add_experience(request, current_user: User, db: Session) -> TestStatsResponse:
     try:
+        exp_amount = request.exp if hasattr(request, 'exp') else request
+        logger.info("add_experience called: user=%s exp=%s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), exp_amount)
         original_level = getattr(current_user, 'level', 1)
         original_exp = getattr(current_user, 'current_exp', 0)
         original_require_exp = getattr(current_user, 'require_exp', require_exp_for_level(original_level))
-        new_total_exp = original_exp + exp_amount
+        
+        # Calculate new exp, but prevent it from going below 0
+        new_total_exp = max(0, original_exp + exp_amount)
+        
+        if exp_amount < 0:
+            logger.info("PENALTY: Deducting exp - user=%s original_exp=%s deduction=%s new_exp=%s", 
+                       getattr(current_user, 'id', 'unknown'), original_exp, exp_amount, new_total_exp)
+        
         setattr(current_user, 'current_exp', new_total_exp)
-        new_level, next_level_exp, level_increased = auto_level_up(new_total_exp, original_level)
+        new_level, next_level_exp, level_changed = auto_level_up(new_total_exp, original_level)
         setattr(current_user, 'level', new_level)
         setattr(current_user, 'require_exp', next_level_exp)
         db.commit()
-        rank_data = await calculate_user_rank(current_user, db)
+        rank_data = calculate_user_rank(current_user, db)
         stats = {
             "original_level": original_level,
             "original_exp": original_exp,
             "original_require_exp": original_require_exp,
-            "exp_gained": exp_amount,
+            "gained_exp": exp_amount,
             "new_level": new_level,
             "new_exp": new_total_exp,
             "new_require_exp": next_level_exp,
-            "level_increased": level_increased,
-            "levels_gained": new_level - original_level if level_increased else 0,
+            "level_increased": new_level > original_level if level_changed else False,
+            "level_decreased": new_level < original_level if level_changed else False,
+            "levels_gained": new_level - original_level if level_changed else 0,
             "exp_progress_to_next": new_total_exp - get_exp_for_level(new_level),
             "exp_needed_for_next": next_level_exp - new_total_exp,
             **rank_data
         }
         level_msg = ""
-        if level_increased:
-            gained = new_level - original_level
-            level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level}" + (f" (+{gained} levels!)" if gained > 1 else "")
-        logger.info(f"Experience added for user {current_user.email}: {stats}")
-        return TestStatsResponse(status=200, message=f"Thêm {exp_amount} exp thành công!{level_msg}", updated_stats=stats)
+        if level_changed:
+            if new_level > original_level:
+                gained = new_level - original_level
+                level_msg = f" 🎉 LEVEL UP! {original_level} → {new_level}" + (f" (+{gained} levels!)" if gained > 1 else "")
+            elif new_level < original_level:
+                lost = original_level - new_level
+                level_msg = f" ⚠️ Level giảm: {original_level} → {new_level}" + (f" (-{lost} levels)" if lost > 1 else "")
+        
+        # Build appropriate message
+        if exp_amount > 0:
+            message = f"Thêm {exp_amount} exp thành công!{level_msg}"
+        elif exp_amount < 0:
+            message = f"Trừ {abs(exp_amount)} exp (hint penalty){level_msg}"
+        else:
+            message = "Không có thay đổi exp"
+        
+        logger.info("Experience changed for user %s: %s", getattr(current_user, 'email', getattr(current_user, 'id', 'unknown')), stats)
+        return TestStatsResponse(status=200, message=message, updated_stats=UpdatedStats(**stats))
     except Exception as e:  # pragma: no cover
         logger.error(f"Failed to add experience for user {getattr(current_user, 'email', 'unknown')}: {e}")
         db.rollback()
