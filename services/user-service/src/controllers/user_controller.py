@@ -432,6 +432,11 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
+        
+        # Calculate current streak
+        from services.activity_service import get_current_streak
+        current_streak = get_current_streak(current_user.id, db)
+        
         dashboard_info = {
             "id": current_user.id,
             "email": current_user.email,
@@ -446,6 +451,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "remind_time": getattr(current_user, 'remind_time', None),
             "bio": getattr(current_user, 'bio', None),
             "sex": getattr(current_user, 'sex', None),
+            "streak": current_streak,
             # Ranking
             "rank": rank_data["rank"],
             "total_users": rank_data["total_users"],

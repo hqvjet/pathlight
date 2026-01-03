@@ -391,6 +391,8 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 		logger.warning(f"Lesson {lesson_id} not found in course {course_id}")
 		return current_finished, total, False
 
+	logger.info(f"[PROGRESS CHECK] lesson_id={lesson_id}, target_idx={target_idx}, current_finished={current_finished}, total={total}")
+
 	if target_idx != current_finished:
 		if target_idx < current_finished:
 			logger.info(f"Lesson {lesson_id} already completed (target={target_idx}, finished={current_finished}). No exp awarded for retake.")
@@ -1477,7 +1479,8 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		# Track if this is a new completion (first time passing) for exp award
 		is_newly_completed = False
 		if passed:
-			_, _, is_newly_completed = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+			finished_before, total_lessons, is_newly_completed = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
+			logger.info(f"[PROGRESS DEBUG] lesson_id={lesson_id}, finished_before={finished_before}, total_lessons={total_lessons}, is_newly_completed={is_newly_completed}")
 			session.commit()
 		else:
 			session.rollback()

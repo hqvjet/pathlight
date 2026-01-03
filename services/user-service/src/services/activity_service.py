@@ -127,3 +127,39 @@ def get_activity_series(current_user: User, db: Session, days: int = 365) -> Act
     except Exception as exc:
         logger.error("Failed to fetch activity series for user %s: %s", current_user.id, exc)
         return ActivitySeriesResponse(status=500, message="Không thể tải hoạt động")
+
+
+def get_current_streak(user_id: str, db: Session) -> int:
+    """Calculate current learning streak by counting consecutive days of activity."""
+    try:
+        today = _normalize_date()
+        streak = 0
+        check_date = today
+        
+        # Count backwards from today to find consecutive activity days
+        while True:
+            activity = (
+                db.query(LearningActivity)
+                .filter(
+                    LearningActivity.user_id == user_id,
+                    LearningActivity.date == check_date
+                )
+                .first()
+            )
+            
+            if activity and getattr(activity, 'count', 0) > 0:
+                streak += 1
+                check_date = check_date - timedelta(days=1)
+            else:
+                # Allow 1 day grace period (yesterday can be skipped)
+                if streak == 0 and check_date == today:
+                    # Check yesterday
+                    check_date = check_date - timedelta(days=1)
+                    continue
+                break
+                
+        return streak
+    except Exception as exc:
+        logger.error("Failed to calculate streak for user %s: %s", user_id, exc)
+        return 0
+
