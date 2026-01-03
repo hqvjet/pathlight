@@ -1308,12 +1308,18 @@ def get_assessment_hint_controller(
 		# same value in UI and server-side accounting.
 		exp_penalty = HINT_PENALTY
 		
-		# Deduct exp (negative exp)
+		# IMPORTANT: Deduct exp immediately when hint is requested
+		# This prevents users from spamming hints without penalty
 		if exp_penalty > 0:
-			logger.info(f"Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
+			logger.info(f"[HINT] Deducting {exp_penalty} exp from user {user_id} for hint on assessment {assessment_id}")
 			penalty_result = _award_experience(request, user_id, -exp_penalty)
 			if penalty_result:
-				logger.info(f"Hint penalty response: status={penalty_result.get('status_code')}")
+				status_code = penalty_result.get('status_code')
+				logger.info(f"[HINT] Penalty applied successfully: status={status_code}, data={penalty_result.get('body')}")
+				if status_code != 200:
+					logger.warning(f"[HINT] Penalty request returned non-200 status: {status_code}")
+			else:
+				logger.error(f"[HINT] Failed to apply penalty - no response from user-service")
 		
 		return {
 			"status": 200,
