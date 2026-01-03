@@ -552,12 +552,16 @@ async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredenti
         admin_email = decoded.get("email", "admin")
         
         # Delete all courses owned by the user (cascade delete)
-        from services.external.course_client import delete_user_courses
-        courses_deleted = delete_user_courses(user_id, admin_email)
-        if not courses_deleted:
-            logger.warning(f"Failed to delete courses for user {user_id}, continuing with user deletion")
-        else:
-            logger.info(f"Successfully deleted all courses for user {user_id}")
+        try:
+            from services.external.course_client import delete_user_courses
+            courses_deleted = delete_user_courses(user_id, admin_email)
+            if not courses_deleted:
+                logger.warning(f"Failed to delete courses for user {user_id}, continuing with user deletion")
+            else:
+                logger.info(f"Successfully deleted all courses for user {user_id}")
+        except Exception as course_delete_error:
+            logger.error(f"Error deleting courses for user {user_id}: {course_delete_error}")
+            logger.warning(f"Continuing with user deletion despite course deletion error")
         
         # Delete user profile and account
         profile = getattr(target_user, 'profile', None)
