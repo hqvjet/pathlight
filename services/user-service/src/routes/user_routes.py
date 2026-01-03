@@ -154,6 +154,17 @@ async def list_activity(
 ):
     return await get_learning_activity(current_user, db, days)
 
+
+# 2.9. Lấy bảng xếp hạng
+@router.get("/ranking")
+async def get_ranking(
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    from services.ranking_service import get_leaderboard_data
+    return get_leaderboard_data(db, limit=limit)
+
+
 # 6.5. Admin update user email
 @router.put("/admin/user", response_model=MessageResponse)
 async def admin_update_email(

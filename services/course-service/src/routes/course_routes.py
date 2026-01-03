@@ -19,6 +19,7 @@ from src.controllers.course_controller import (
     create_course_controller,
     list_all_courses_admin_controller,
     delete_course_admin_controller,
+    delete_all_courses_by_user_admin_controller,
     toggle_course_visibility_admin_controller,
 )
 from src.services.course_auth import require_bearer
@@ -188,6 +189,12 @@ async def list_all_courses_admin(
 async def delete_course_admin(course_id: str, request: Request, _auth=Depends(require_bearer)):
     """Admin endpoint to delete any course."""
     return await delete_course_admin_controller(course_id, request)
+
+
+@router.delete("/admin/courses/user/{user_id}")
+async def delete_user_courses_admin(user_id: str, request: Request, _auth=Depends(require_bearer)):
+    """Admin endpoint to delete all courses owned by a specific user."""
+    return await delete_all_courses_by_user_admin_controller(user_id, request)
 
 
 @router.put("/admin/courses/{course_id}/visibility")

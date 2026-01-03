@@ -192,10 +192,9 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 	We will retry on transient network errors / 5xx responses with
 	exponential backoff. If no user JWT is present (header or common
 	cookies), we will not attempt a service-level secret fallback.
+	
+	If exp_amount is 0, this will still call the endpoint to fetch current stats.
 	"""
-	if exp_amount == 0:
-		return None
-
 	base_url = _user_service_base_url()
 	if not base_url:
 		return None
@@ -575,6 +574,47 @@ async def delete_course_admin_controller(course_id: str, request: Request):
 		return guard
 
 	return await delete_single_course(request, course_id, admin_override=True)
+
+
+async def delete_all_courses_by_user_admin_controller(user_id: str, request: Request):
+	"""Admin endpoint to delete all courses owned by a specific user."""
+	guard = _admin_guard(request)
+	if guard:
+		return guard
+
+	from src.database import SessionLocal, Base
+	from src.models import Course, Lesson, Assessment
+	session = SessionLocal()
+	try:
+		# Ensure tables exist for in-memory databases used in tests
+		Base.metadata.create_all(bind=session.get_bind())
+		
+		# Find all courses owned by the user
+		courses = session.query(Course).filter(Course.user_id == user_id).all()
+		if not courses:
+			return JSONResponse(status_code=200, content={"status": 200, "message": "Không có khóa học nào để xóa"})
+		
+		course_ids = [c.course_id for c in courses]
+		
+		# Delete related assessments and lessons
+		lesson_ids = [lid for (lid,) in session.query(Lesson.lesson_id).filter(Lesson.course_id.in_(course_ids)).all()]
+		if lesson_ids:
+			session.query(Assessment).filter(Assessment.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+			session.query(Lesson).filter(Lesson.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+		
+		# Delete all courses
+		session.query(Course).filter(Course.course_id.in_(course_ids)).delete(synchronize_session=False)
+		session.commit()
+		
+		logger.info(f"Admin deleted all courses for user {user_id}: {len(course_ids)} courses")
+		return JSONResponse(status_code=200, content={"status": 200, "message": f"Đã xóa {len(course_ids)} khóa học thành công"})
+		
+	except Exception as e:
+		logger.error("delete_all_courses_by_user_admin error user=%s err=%s", user_id, e)
+		session.rollback()
+		return JSONResponse(status_code=500, content={"status": 500, "message": "Lỗi khi xóa khóa học"})
+	finally:
+		session.close()
 
 
 async def toggle_course_visibility_admin_controller(course_id: str, request: Request, body: CourseVisibilityUpdate):
@@ -1465,8 +1505,16 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			experience = _experience_payload(applied_exp, award_result)
 		elif passed and not is_newly_completed:
 			logger.info(f"Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")
+			# Still fetch current user stats so frontend knows current level/exp
+			award_result = _award_experience(request, user_id, 0)  # 0 exp = just fetch current stats
+			experience = _experience_payload(0, award_result)
+		elif passed:
+			logger.info(f"Passed but no exp awarded: applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
+			# Fetch current stats even if no exp awarded
+			award_result = _award_experience(request, user_id, 0)
+			experience = _experience_payload(0, award_result)
 		else:
-			logger.info(f"Not awarding exp: passed={passed}, applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
+			logger.info(f"Not passed - no exp awarded")
 		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
