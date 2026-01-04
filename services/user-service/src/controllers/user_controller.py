@@ -435,7 +435,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         
         # Calculate current streak
         from services.activity_service import get_current_streak
-        current_streak = get_current_streak(current_user.id, db)
+        current_streak = get_current_streak(str(current_user.id), db)
         
         dashboard_info = {
             "id": current_user.id,

@@ -42,9 +42,6 @@ from src.schemas.course_schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Reuse a module-level httpx client to share connection pool across Lambda
-# invocations. Creating a new client per request can exhaust sockets and
-# trigger "Device or resource busy" / connection errors.
 _httpx_client = httpx.Client(
 	timeout=5.0,
 	limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
@@ -186,20 +183,10 @@ def _user_service_base_url() -> str | None:
 
 
 def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict | None:
-	"""Call user-service to add experience for the current user by forwarding
-	the user's JWT. This avoids using a shared INTERNAL_API_KEY secret.
-
-	We will retry on transient network errors / 5xx responses with
-	exponential backoff. If no user JWT is present (header or common
-	cookies), we will not attempt a service-level secret fallback.
-	
-	If exp_amount is 0, this will still call the endpoint to fetch current stats.
-	"""
 	base_url = _user_service_base_url()
 	if not base_url:
 		return None
 
-	# Prefer explicit Authorization header, fall back to common auth cookies
 	auth_header = request.headers.get("Authorization")
 	if not auth_header:
 		cookie_token = (
@@ -210,9 +197,6 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 		if cookie_token:
 			auth_header = cookie_token if cookie_token.startswith("Bearer ") else f"Bearer {cookie_token}"
 
-	# If a user JWT is present, forward it to credit the caller. Otherwise,
-	# fall back to an internal admin call (if configured) so the service can
-	# credit a specific `user_id` even without the user's JWT.
 	use_admin_fallback = False
 	if not auth_header or not auth_header.startswith("Bearer "):
 		internal_token = getattr(config, "USER_SERVICE_INTERNAL_TOKEN", None) or os.getenv("USER_SERVICE_INTERNAL_TOKEN")
@@ -224,7 +208,6 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 			return None
 
 	if use_admin_fallback:
-		# call admin endpoint that accepts userid query param
 		url = f"{base_url.rstrip('/')}/admin/user/experience?userid={user_id}"
 		json_payload = {"exp": exp_amount}
 	else:
@@ -260,14 +243,9 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 
 
 def _log_activity(request: Request, user_id: str | None, event: str) -> dict | None:
-	"""Call user-service to log an activity event.
-
-	Returns a dict with status_code and body when the call was attempted, otherwise None.
-	"""
 	if not user_id:
 		return None
 	base_url = _user_service_base_url()
-	# Try header first, then fall back to common auth cookies used by the frontend
 	auth_header = request.headers.get("Authorization")
 	if not auth_header:
 		cookie_token = (
@@ -296,20 +274,11 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 
 def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 	payload: dict[str, int | None] = {"gained_exp": gained_exp}
-	# award_result may contain the updated stats under different shapes depending
-	# on which user-service endpoint was called. Accept both `{...,'updated_stats':{...}}`
-	# and older responses that put fields at the top-level of the body.
 	if not award_result:
 		return payload
-	
-	# award_result is {"status_code": 200, "body": {...}}
-	# where body is the actual JSON response from user-service
 	body = award_result.get("body") if isinstance(award_result.get("body"), dict) else None
 	if not body:
 		return payload
-
-	# Response from /user/experience/add is {"status": 200, "message": "...", "updated_stats": {...}}
-	# Prefer nested `updated_stats`, otherwise treat body as the stats mapping.
 	stats = body.get("updated_stats") if isinstance(body.get("updated_stats"), dict) else body
 
 	def _to_int_or_none(v):
@@ -320,12 +289,10 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 		except Exception:
 			return None
 
-	# Normalize a few common key variants
 	new_level = stats.get("new_level") or stats.get("level")
 	new_exp = stats.get("new_exp") or stats.get("current_exp")
 	require_exp = stats.get("new_require_exp") or stats.get("require_exp")
 	exp_needed = stats.get("exp_needed_for_next")
-	# If exp_needed missing but we have require_exp and new_exp, compute it
 	if exp_needed is None and require_exp is not None and new_exp is not None:
 		try:
 			exp_needed = int(require_exp) - int(new_exp)
@@ -341,12 +308,6 @@ def _experience_payload(gained_exp: int, award_result: dict | None) -> dict:
 
 
 def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: str) -> tuple[int, int, bool]:
-	"""Increment learning progress for a user on a course based on lesson order.
-	Only allows completing the NEXT lesson in sequence (no skipping).
-
-	Returns (finished_count, total_lessons, is_newly_completed).
-	is_newly_completed is True only if this is the first time completing this lesson.
-	"""
 	from src.models import Lesson, LearningProgress
 
 	lessons = (
@@ -361,7 +322,6 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 	order_map = {l.lesson_id: idx for idx, l in enumerate(lessons)}
 	target_idx = order_map.get(lesson_id)
 	
-	# Get or create progress record
 	progress = session.query(LearningProgress).filter(
 		LearningProgress.course_id == course_id,
 		LearningProgress.user_id == user_id,
@@ -411,7 +371,6 @@ def _update_learning_progress(session, course_id: str, lesson_id: str, user_id: 
 
 
 def _get_s3_client():
-	"""Create S3 client supporting both AWS cloud and S3-compatible endpoints."""
 	kwargs = {
 		"service_name": "s3",
 		"aws_access_key_id": getattr(config, "ACCESS_KEY_ID", None) or None,
@@ -445,13 +404,6 @@ def _sanitize_filename_base(original_name: str, max_len: int = 60) -> str:
 
 
 def _encrypted_filename(user_id: str, original_name: str) -> str:
-	"""Build an S3 object key that contains an encrypted/random prefix and the (sanitized) real filename.
-
-	Format: <rand8>-<shortcode>-<sanitizedBase><ext>
-	- rand8: random A-Za-z0-9 (like the provided approach)
-	- shortcode: 10-char short from SHA256(user_id|original|timestamp|salt)
-	- sanitizedBase: original filename (without extension), sanitized
-	"""
 	ext = ""
 	if "." in original_name:
 		ext = "." + original_name.rsplit(".", 1)[1].lower()
@@ -469,10 +421,6 @@ def _user_prefix(user_id: str) -> str:
 
 
 def _ensure_prefix(s3, bucket: str, prefix: str):
-	"""Create a zero-byte prefix marker to make the 'folder' appear in S3 consoles.
-
-	S3 is flat, but creating prefix/ helps visibility; ignore errors silently.
-	"""
 	if not os.getenv("CREATE_USER_PREFIX_MARKER"):
 		return
 	key = prefix.rstrip("/") + "/"
@@ -483,7 +431,6 @@ def _ensure_prefix(s3, bucket: str, prefix: str):
 
 
 def _admin_guard(request: Request):
-	"""Verify admin role from JWT token claims."""
 	auth_header = request.headers.get("Authorization")
 	if not auth_header or not auth_header.startswith("Bearer "):
 		logger.warning("Admin guard: Missing or invalid Authorization header")
@@ -491,7 +438,6 @@ def _admin_guard(request: Request):
 	
 	token = auth_header.split(" ")[1]
 	try:
-		# Try verified decode first
 		payload = None
 		secret_key = getattr(config, "JWT_SECRET_KEY", None)
 		logger.info(f"Admin guard: JWT_SECRET_KEY configured: {bool(secret_key)}")
@@ -503,7 +449,6 @@ def _admin_guard(request: Request):
 			except Exception as e:
 				logger.warning(f"Admin guard: JWT verification failed: {e}, trying unverified")
 		
-		# Fallback to unverified claims
 		if not payload:
 			try:
 				payload = jwt.get_unverified_claims(token)
@@ -512,7 +457,6 @@ def _admin_guard(request: Request):
 				logger.error(f"Admin guard: Cannot decode token: {decode_error}")
 				return {"status": 401, "message": "Invalid token"}
 		
-		# Check admin role
 		role = payload.get("role")
 		roles = payload.get("roles") or []
 		if isinstance(roles, str):
@@ -550,7 +494,6 @@ def list_all_courses_admin_controller(request: Request, page: int, limit: int, s
 		course_list = []
 		for c in courses:
 			created_at_val = getattr(c, "created_at", None)
-			# Count lessons from relationship
 			num_lessons = len(c.lessons) if hasattr(c, 'lessons') and c.lessons else 0
 			course_list.append({
 				"course_id": c.course_id,
@@ -579,7 +522,6 @@ async def delete_course_admin_controller(course_id: str, request: Request):
 
 
 async def delete_all_courses_by_user_admin_controller(user_id: str, request: Request):
-	"""Admin endpoint to delete all courses owned by a specific user."""
 	guard = _admin_guard(request)
 	if guard:
 		return guard
@@ -628,13 +570,6 @@ async def toggle_course_visibility_admin_controller(course_id: str, request: Req
 
 
 async def presign_upload_urls(request: Request, body: PresignUploadRequest) -> PresignUploadResponse | dict:
-	"""Return presigned PUT URLs for direct-to-S3 uploads (single-part).
-
-	Validations:
-	- Auth required
-	- Allowed extensions: pdf, doc, docx, ppt, pptx
-	- Total size must be <= 25MB
-	"""
 	user_id = _verify_token(request)
 	if not user_id:
 		logger.warning("Presign aborted: unauthorized (missing/invalid bearer token)")
@@ -726,7 +661,6 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 
 	_ensure_prefix(s3, bucket, prefix)
 
-	# Optional quick bucket check for clearer errors
 	try:
 		s3.head_bucket(Bucket=bucket)
 	except EndpointConnectionError as e:
@@ -773,11 +707,8 @@ async def upload_files_docs(request: Request, files: List[UploadFile]):
 	logger.info("Upload successful (user_id=%s): %d file(s) uploaded: %s", user_id, len(uploaded_names), uploaded_names)
 	return {"status": 200, "uploaded_file": uploaded_names}
 
-
-
 def _unauth_delete_response():
 	return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn chưa xác thực hoặc phiên đăng nhập đã hết hạn"})
-
 
 def update_course_visibility_controller(request: Request, body: CourseVisibilityUpdate, admin_override: bool = False):
 	from src.database import SessionLocal
@@ -796,7 +727,6 @@ def update_course_visibility_controller(request: Request, body: CourseVisibility
 		if not course:
 			raise HTTPException(status_code=404, detail="Không tìm thấy khóa học")
 		new_publish = bool(body.publish)
-		# use update to avoid assigning a raw bool to a Column-typed attribute
 		query.update({"publish": new_publish}, synchronize_session=False)
 		session.commit()
 		return {"status": 200, "course_id": course.course_id, "publish": new_publish}
@@ -845,6 +775,7 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 				user_id=r.user_id or "",
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
+				created_at=r.created_at.isoformat() if r.created_at else "",
 				updated_at=r.created_at.isoformat() if r.created_at else "",
 			)
 			for r in rows
@@ -855,7 +786,6 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 
 
 async def delete_single_course(request: Request, course_id: str | None, admin_override: bool = False):
-	"""Delete one course of the authenticated user (and its related data)."""
 	user_id = _verify_token(request)
 	if not user_id:
 		return _unauth_delete_response()
@@ -865,9 +795,7 @@ async def delete_single_course(request: Request, course_id: str | None, admin_ov
 	from src.models import Course, Lesson, Assessment
 	session = SessionLocal()
 	try:
-		# Ensure tables exist for in-memory databases used in tests
 		Base.metadata.create_all(bind=session.get_bind())
-		# If admin_override is True, allow deleting any course by course_id; otherwise enforce ownership
 		if admin_override:
 			course = session.query(Course).filter_by(course_id=course_id).first()
 		else:
@@ -890,7 +818,6 @@ async def delete_single_course(request: Request, course_id: str | None, admin_ov
 
 
 async def delete_all_courses(request: Request):
-	"""Delete all courses belonging to the authenticated user."""
 	user_id = _verify_token(request)
 	if not user_id:
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
@@ -898,7 +825,6 @@ async def delete_all_courses(request: Request):
 	from src.models import Course, Lesson, Assessment
 	session = SessionLocal()
 	try:
-		# Ensure tables exist for in-memory databases used in tests
 		Base.metadata.create_all(bind=session.get_bind())
 		courses = session.query(Course).filter(Course.user_id == user_id).all()
 		if not courses:
@@ -917,7 +843,6 @@ async def delete_all_courses(request: Request):
 		return JSONResponse(status_code=401, content={"status": 401, "message": "Bạn không có quyền xóa khóa học của người khác"})
 	finally:
 		session.close()
-
 
 # ---------------- Retrieval Controllers ----------------
 
@@ -950,7 +875,6 @@ def get_course_full_info_controller(request: Request, course_id: str) -> CourseF
 				LearningProgress.user_id == user_id,
 			).first()
 			if progress:
-				# Ensure we read a plain int from the ORM attribute to avoid ColumnElement types
 				finished_lessons = min(cast(int, getattr(progress, "num_finished_lesson") or 0), len(lessons))
 		lesson_models: list[LessonInfo] = []
 		for idx, l in enumerate(lessons):
@@ -1045,8 +969,10 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				Course.duration,
 				Course.publish,
 				Course.finish,
+				Course.user_id,
 			)
 			.filter(Course.user_id == user_id)
+			.order_by(Course.created_at.desc())  # Sort by creation date, newest first
 			.all()
 		)
 		course_ids = [r.course_id for r in rows]
@@ -1076,10 +1002,11 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
-				user_id=user_id,
+				user_id=getattr(r, "user_id", user_id),  # Owner ID from database
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
-				updated_at=r.created_at.isoformat() if r.created_at else "",
+				created_at=r.created_at.isoformat() if r.created_at else "",
+				updated_at=r.created_at.isoformat() if r.created_at else "",  # Same as created_at for now
 			)
 			for r in rows
 		]

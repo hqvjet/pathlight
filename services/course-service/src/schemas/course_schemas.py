@@ -56,7 +56,8 @@ class CourseSummary(BaseModel):
     user_id: str
     lesson_num: int
     finish_lesson_num: int
-    updated_at: str
+    created_at: str
+    updated_at: str  # Kept for backward compatibility
 
 
 class CourseListResponse(BaseModel):
