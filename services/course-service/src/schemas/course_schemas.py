@@ -54,6 +54,7 @@ class CourseSummary(BaseModel):
     finish: bool
     publish: bool = False
     user_id: str
+    owner_name: str = ""
     lesson_num: int
     finish_lesson_num: int
     created_at: str

@@ -50,6 +50,7 @@ from controllers.user_controller import (
     admin_adjust_experience_step,
     list_admin_accounts,
     svc_add_experience,
+    get_users_by_ids,
 )
 from fastapi.responses import JSONResponse
 from services.user_service_auth import get_current_user, get_current_admin_user, security
@@ -272,3 +273,12 @@ async def list_admins_endpoint(
     db: Session = Depends(get_db)
 ):
     return await list_admin_accounts(credentials, db)
+
+
+@router.post("/users/batch")
+async def get_users_by_ids_endpoint(
+    user_ids: list[str],
+    db: Session = Depends(get_db)
+):
+    """Batch fetch user information by IDs"""
+    return await get_users_by_ids(user_ids, db)

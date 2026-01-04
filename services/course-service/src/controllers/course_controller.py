@@ -182,6 +182,38 @@ def _user_service_base_url() -> str | None:
 	return getattr(config, "USER_SERVICE_URL", None) or os.getenv("USER_SERVICE_URL")
 
 
+def _fetch_user_names(user_ids: list[str]) -> dict[str, str]:
+	"""
+	Fetch user names from user-service in batch.
+	Returns dict mapping user_id -> user_name
+	"""
+	if not user_ids:
+		return {}
+	
+	base_url = _user_service_base_url()
+	if not base_url:
+		logger.warning("USER_SERVICE_URL not configured, cannot fetch user names")
+		return {}
+	
+	try:
+		url = f"{base_url.rstrip('/')}/user/users/batch"
+		resp = _httpx_client.post(
+			url,
+			json=user_ids,
+			timeout=5.0,
+		)
+		if resp.status_code == 200:
+			data = resp.json()
+			# data is {user_id: {id, name, avatar_url, level, initials}}
+			return {uid: info.get("name", "") for uid, info in data.items()}
+		else:
+			logger.warning("Failed to fetch user names: status=%s", resp.status_code)
+			return {}
+	except Exception as e:
+		logger.error("Error fetching user names: %s", e)
+		return {}
+
+
 def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict | None:
 	base_url = _user_service_base_url()
 	if not base_url:
@@ -780,6 +812,15 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 			)
 			for r in rows
 		]
+		
+		# Fetch owner names from user-service
+		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
+		owner_names = _fetch_user_names(unique_owner_ids)
+		
+		# Add owner_name to each summary
+		for summary in summaries:
+			summary.owner_name = owner_names.get(summary.user_id, "")
+		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
 		session.close()
@@ -1010,6 +1051,15 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 			)
 			for r in rows
 		]
+		
+		# Fetch owner names from user-service
+		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
+		owner_names = _fetch_user_names(unique_owner_ids)
+		
+		# Add owner_name to each summary
+		for summary in summaries:
+			summary.owner_name = owner_names.get(summary.user_id, "")
+		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
 		session.close()
