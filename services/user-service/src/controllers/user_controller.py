@@ -467,10 +467,6 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
 
 # ---------- Experience ----------
 async def add_experience(request: ExperienceAddRequest, current_user: User, db: Session) -> TestStatsResponse:
-    # Accept positive and negative experience adjustments. Internal services
-    # (course/quiz) may send negative values to apply penalties (e.g. hint usage).
-    # Zero is a no-op and will be forwarded to the service which will handle it.
-    # Ensure we operate on a user object attached to the same DB session `db`.
     try:
         target_user = db.query(User).filter(User.id == getattr(current_user, 'id')).first()
         if not target_user:

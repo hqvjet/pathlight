@@ -795,6 +795,11 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 			lessons = session.query(Lesson.course_id).filter(Lesson.course_id.in_(course_ids)).all()
 			for (cid,) in lessons:
 				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+		
+		# Fetch owner names from user-service BEFORE creating summaries
+		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
+		owner_names = _fetch_user_names(unique_owner_ids)
+		
 		summaries = [
 			CourseSummary(
 				course_id=r.course_id,
@@ -805,6 +810,7 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
 				user_id=r.user_id or "",
+				owner_name=owner_names.get(r.user_id, ""),  # Owner name from user-service
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				created_at=r.created_at.isoformat() if r.created_at else "",
@@ -812,14 +818,6 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 			)
 			for r in rows
 		]
-		
-		# Fetch owner names from user-service
-		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
-		owner_names = _fetch_user_names(unique_owner_ids)
-		
-		# Add owner_name to each summary
-		for summary in summaries:
-			summary.owner_name = owner_names.get(summary.user_id, "")
 		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
@@ -1034,6 +1032,11 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				finished = min(cast(int, getattr(p, "num_finished_lesson") or 0), total)
 				finish_counts[p.course_id] = finished
 				finish_map[p.course_id] = (total > 0) and (finished >= total)
+		
+		# Fetch owner names from user-service BEFORE creating summaries
+		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
+		owner_names = _fetch_user_names(unique_owner_ids)
+		
 		summaries = [
 			CourseSummary(
 				course_id=r.course_id,
@@ -1044,6 +1047,7 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
 				user_id=getattr(r, "user_id", user_id),  # Owner ID from database
+				owner_name=owner_names.get(getattr(r, "user_id", ""), ""),  # Owner name from user-service
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				created_at=r.created_at.isoformat() if r.created_at else "",
@@ -1051,14 +1055,6 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 			)
 			for r in rows
 		]
-		
-		# Fetch owner names from user-service
-		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
-		owner_names = _fetch_user_names(unique_owner_ids)
-		
-		# Add owner_name to each summary
-		for summary in summaries:
-			summary.owner_name = owner_names.get(summary.user_id, "")
 		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
