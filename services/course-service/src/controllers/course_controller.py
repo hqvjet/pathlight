@@ -42,11 +42,6 @@ from src.schemas.course_schemas import (
 
 logger = logging.getLogger(__name__)
 
-_httpx_client = httpx.Client(
-	timeout=5.0,
-	limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
-)
-
 DIFFICULTY_EXP = {
 	1: 100,
 	2: 200,
@@ -188,35 +183,40 @@ def _fetch_user_names(user_ids: list[str]) -> dict[str, str]:
 	Returns dict mapping user_id -> user_name
 	"""
 	if not user_ids:
-		logger.info("🔍 _fetch_user_names called with empty user_ids list")
+		logger.info("📋 No user IDs to fetch names for")
 		return {}
 	
 	base_url = _user_service_base_url()
-	logger.info(f"🔍 _fetch_user_names: base_url={base_url}, user_ids={user_ids}")
 	if not base_url:
-		logger.warning("USER_SERVICE_URL not configured, cannot fetch user names")
+		logger.warning("⚠️ USER_SERVICE_URL not configured, cannot fetch user names")
 		return {}
 	
 	try:
 		url = f"{base_url.rstrip('/')}/user/users/batch"
-		logger.info(f"🌐 Calling user-service at: {url}")
-		resp = _httpx_client.post(
+		logger.info(f"🔍 Fetching names for {len(user_ids)} users from {url}")
+		logger.info(f"📝 User IDs: {user_ids}")
+		
+		# Use httpx.post directly instead of persistent client (better for Lambda)
+		resp = httpx.post(
 			url,
 			json=user_ids,
 			timeout=5.0,
 		)
-		logger.info(f"📥 Response status: {resp.status_code}, body: {resp.text[:200]}")
+		
+		logger.info(f"📡 User service response status: {resp.status_code}")
+		
 		if resp.status_code == 200:
 			data = resp.json()
+			logger.info(f"Received user data: {data}")
 			# data is {user_id: {id, name, avatar_url, level, initials}}
 			result = {uid: info.get("name", "") for uid, info in data.items()}
-			logger.info(f"✅ Fetched {len(result)} user names: {result}")
+			logger.info(f"📦 Mapped names: {result}")
 			return result
 		else:
-			logger.warning("Failed to fetch user names: status=%s", resp.status_code)
+			logger.warning(f"Failed to fetch user names: status={resp.status_code}, body={resp.text}")
 			return {}
 	except Exception as e:
-		logger.error("Error fetching user names: %s", e)
+		logger.error(f"Error fetching user names: {e}")
 		return {}
 
 
@@ -256,7 +256,8 @@ def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict |
 
 	for attempt in range(1, max_attempts + 1):
 		try:
-			resp = _httpx_client.post(
+			# Use httpx.post directly instead of persistent client (better for Lambda)
+			resp = httpx.post(
 				url,
 				headers={"Authorization": auth_header},
 				json=json_payload,
@@ -297,7 +298,8 @@ def _log_activity(request: Request, user_id: str | None, event: str) -> dict | N
 		return None
 	url = f"{base_url.rstrip('/')}/user/activity"
 	try:
-		resp = _httpx_client.post(
+		# Use httpx.post directly instead of persistent client (better for Lambda)
+		resp = httpx.post(
 			url,
 			headers={"Authorization": auth_header},
 			json={"event": event},
@@ -1041,7 +1043,9 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 		
 		# Fetch owner names from user-service BEFORE creating summaries
 		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
+		logger.info(f"🎯 Fetching owner names for course list. Unique owner IDs: {unique_owner_ids}")
 		owner_names = _fetch_user_names(unique_owner_ids)
+		logger.info(f"📋 Owner names fetched: {owner_names}")
 		
 		summaries = [
 			CourseSummary(
@@ -1061,6 +1065,10 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 			)
 			for r in rows
 		]
+		
+		logger.info(f"✅ Created {len(summaries)} course summaries")
+		if summaries:
+			logger.info(f"📊 Sample summary - course_id: {summaries[0].course_id}, owner_name: '{summaries[0].owner_name}'")
 		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
@@ -1537,6 +1545,9 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		return AssessmentSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
 	finally:
 		session.close()
+
+
+
 
 # ---------------- Mutation Controllers ----------------
 
