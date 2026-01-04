@@ -46,7 +46,7 @@ class LessonCreatorAgent(BaseAgent):
         super().__init__(name, foundation_model, prompt_manager)
         self.tool_manager = tool_manager
         self.tools = {t.name: t for t in tool_manager.get_tools(name)}
-        # STABLE FIX: Use GPT-4o-mini with JSON mode
+        # STABLE FIX: Use gpt-4o-mini-mini with JSON mode
         # Reliable model + strict JSON = no more parsing errors
         from constant import LLM_MAX_TOKENS_LESSON
         self.llm = llm_manager.get_llm(

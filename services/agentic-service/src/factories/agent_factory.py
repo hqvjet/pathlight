@@ -31,21 +31,21 @@ class CourseAgentFactory:
         self.orchestrator = Orchestrator()
         self.planner_agent = PlannerAgent(
             name=PLANNER_AGENT_NAME, 
-            foundation_model="gpt-4o-mini", 
+            foundation_model="gpt-4o-mini-mini", 
             prompt_manager=prompt_manager,
             llm_manager=llm_manager,
             tool_manager=tool_manager
         )
         self.lesson_creator_agent = LessonCreatorAgent(
             name=LESSON_CREATOR_AGENT_NAME,
-            foundation_model="gpt-4o-mini",
+            foundation_model="gpt-4o-mini-mini",
             prompt_manager=prompt_manager,
             llm_manager=llm_manager,
             tool_manager=tool_manager
         )
         self.test_creator_agent = TestCreatorAgent(
             name=TEST_CREATOR_AGENT_NAME,
-            foundation_model="gpt-4o-mini",
+            foundation_model="gpt-4o-mini-mini",
             prompt_manager=prompt_manager,
             llm_manager=llm_manager,
             tool_manager=tool_manager

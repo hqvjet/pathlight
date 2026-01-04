@@ -1,19 +1,27 @@
-# 🚀 Agentic Service - Document Processing & AI Vectorization
+# 🚀 Agentic Service - AI Course Generation & Chatbot Q&A
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 # Trigger: AWS SQS (Lambda)
 [![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20S3%20%7C%20OpenSearch-orange.svg)](https://aws.amazon.com)
 
-> **Beautiful, modular, and production-ready** document processing service that transforms files into AI-searchable vectors using OpenAI embeddings and AWS infrastructure.
+> **Beautiful, modular, and production-ready** AI service for course generation and intelligent chatbot Q&A using RAG (Retrieval-Augmented Generation).
 
 ## ✨ What This Service Does
 
-Transform documents into intelligent, searchable vectors:
+### 1. AI Course Generation
+Transform documents into complete learning courses:
 - 📄 **Process Documents**: PDF, DOCX, TXT, MD, PPTX, XLSX files
 - 🧠 **Create Embeddings**: Using OpenAI's latest embedding models
 - 🔍 **Store & Search**: In AWS OpenSearch for lightning-fast retrieval
+- 🎓 **Generate Courses**: Multi-agent AI creates roadmaps, lessons, and tests
 - ☁️ **Cloud Ready**: Runs on AWS Lambda or locally
-- 🎯 **Production Grade**: Clean architecture, comprehensive testing, monitoring
+
+### 2. Chatbot Q&A (NEW!)
+Intelligent question-answering for lessons:
+- 💬 **RAG-Powered Answers**: Retrieves relevant context from lesson materials
+- 🎯 **Context-Aware**: Filters by course and lesson for precise answers
+- 📊 **Status Tracking**: DynamoDB tracks processing status
+- 🤖 **gpt-4o-mini**: Generates educational, accurate responses
 
 ## 🏗️ Clean Architecture
 
