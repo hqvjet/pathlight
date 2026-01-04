@@ -16,15 +16,15 @@ LESSON_GENERATION_TIMEOUT = 90  # Timeout for single lesson generation (seconds)
 # LLM max_tokens settings per agent type
 # CRITICAL: Must be tuned to prevent truncation while avoiding excessive tokens
 LLM_MAX_TOKENS_PLANNER = None  # No limit - needs full roadmap JSON
-LLM_MAX_TOKENS_LESSON = 8000   # Increased for extensive academic content (150-250 lines)
+LLM_MAX_TOKENS_LESSON = None   # No limit - let LLM decide based on prompt guidance
 LLM_MAX_TOKENS_TEST = 1500     # 4-6 assessments
 
 # LLM temperature settings
 LLM_TEMPERATURE = 0.0  # CRITICAL: 0 for deterministic output (no randomness)
 
-# Content validation
-MIN_CONTENT_LENGTH = 800      # Minimum content chars (realistic for detailed lessons)
-MAX_CONTENT_LENGTH = 8000     # Maximum content chars (for comprehensive, detailed lessons)
+# Content validation - soft limits, không enforce strict
+MIN_CONTENT_LENGTH = 300      # Soft minimum (chỉ warning, không reject)
+MAX_CONTENT_LENGTH = 10000    # Soft maximum (chỉ warning, không reject)
 MIN_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not >=3)
 MAX_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not <=3)
 MIN_ROADMAP_ITEMS = 2         # Minimum roadmap items
