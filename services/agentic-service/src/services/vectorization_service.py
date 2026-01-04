@@ -142,56 +142,59 @@ class VectorizationService:
             raise
         material_data = self.prepare_material_data(material_id, category, documents)
 
-        # Index to OpenSearch if available: one document per chunk
-        try:
-            def index_single_chunk(doc, chunk):
-                payload = {
-                    "id": str(material_data.id),
-                    "category": int(material_data.category),
-                    "documents": [
-                        {
-                            "document_id": int(doc.document_id),
-                            "document_source": str(doc.document_source),
-                            "chunks": [
-                                {
-                                    "chunk_id": int(chunk.chunk_id),
-                                    "chunk_text": str(chunk.chunk_text),
-                                    "embedding": list(chunk.embedding),
-                                }
-                            ],
-                        }
-                    ],
-                }
-                # Composite _id ensures uniqueness per chunk
-                composite_id = f"{material_id}:{int(doc.document_id)}:{int(chunk.chunk_id)}"
-                return self.opensearch_client.index_document(
-                    self.opensearch_index_name,
-                    payload,
-                    composite_id,
-                )
+        # Index to OpenSearch if available
+        if self.opensearch_client and self.opensearch_client.is_available():
+            try:
+                def index_single_chunk(doc, chunk):
+                    payload = {
+                        "id": str(material_data.id),
+                        "category": int(material_data.category),
+                        "documents": [
+                            {
+                                "document_id": int(doc.document_id),
+                                "document_source": str(doc.document_source),
+                                "chunks": [
+                                    {
+                                        "chunk_id": int(chunk.chunk_id),
+                                        "chunk_text": str(chunk.chunk_text),
+                                        "embedding": list(chunk.embedding),
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                    # Composite _id ensures uniqueness per chunk
+                    composite_id = f"{material_id}:{int(doc.document_id)}:{int(chunk.chunk_id)}"
+                    return self.opensearch_client.index_document(
+                        self.opensearch_index_name,
+                        payload,
+                        composite_id,
+                    )
 
-            # Index chunks sequentially
-            for doc in material_data.documents:
-                for chunk in doc.chunks:
-                    try:
-                        index_single_chunk(doc, chunk)
-                    except Exception as e:
-                        if not processing_errors:
-                            processing_errors = []
-                        processing_errors.append({
-                            "opensearch": f"Indexing chunk failed: {str(e)}"
-                        })
-        except Exception as e:
-            log_exception(logger, "OpenSearch indexing failed", e)
-            # Only add to warnings, don't fail the entire process unless in Lambda
-            if self.opensearch_client.environment == 'lambda':
-                # In Lambda/production, re-raise the exception
-                raise
-            else:
-                # In local/dev, add to warnings and continue
-                if not processing_errors:
-                    processing_errors = []
-                processing_errors.append({"opensearch": f"Indexing failed: {str(e)}"})
+                # Index chunks sequentially
+                for doc in material_data.documents:
+                    for chunk in doc.chunks:
+                        try:
+                            index_single_chunk(doc, chunk)
+                        except Exception as e:
+                            if not processing_errors:
+                                processing_errors = []
+                            processing_errors.append({
+                                "opensearch": f"Indexing chunk failed: {str(e)}"
+                            })
+            except Exception as e:
+                log_exception(logger, "OpenSearch indexing failed", e)
+                # Only add to warnings, don't fail the entire process unless in Lambda
+                if self.opensearch_client.environment == 'lambda':
+                    # In Lambda/production, re-raise the exception
+                    raise
+                else:
+                    # In local/dev, add to warnings and continue
+                    if not processing_errors:
+                        processing_errors = []
+                    processing_errors.append({"opensearch": f"Indexing failed: {str(e)}"})
+        else:
+            logger.info("OpenSearch client not available - skipping indexing step")
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -238,7 +241,7 @@ class VectorizationService:
             total_documents=len(documents),
             total_chunks=sum(len(doc.chunks) for doc in documents),
             processing_time_seconds=f"{processing_time:.3f}",
-            environment=self.opensearch_client.environment,
+            environment=self.opensearch_client.environment if self.opensearch_client else 'unknown',
             has_warnings=str(has_any_errors),
         )
 

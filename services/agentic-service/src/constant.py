@@ -10,21 +10,21 @@ MAX_GRAPH_ITERATIONS = 50  # Tăng để đủ cho lessons (orchestrator iterati
 EARLY_STOP_NO_PROGRESS_LIMIT = 3  # Stop if no state change for N iterations
 
 # Timeout settings
-LLM_REQUEST_TIMEOUT = 60  # Timeout for each LLM request (seconds)
+LLM_REQUEST_TIMEOUT = 180  # Timeout for each LLM request (seconds) - increased for long content generation
 LESSON_GENERATION_TIMEOUT = 90  # Timeout for single lesson generation (seconds)
 
 # LLM max_tokens settings per agent type
 # CRITICAL: Must be tuned to prevent truncation while avoiding excessive tokens
 LLM_MAX_TOKENS_PLANNER = None  # No limit - needs full roadmap JSON
-LLM_MAX_TOKENS_LESSON = 4500   # Increased for production-quality detailed content (40-60 lines)
+LLM_MAX_TOKENS_LESSON = 8000   # Increased for extensive academic content (150-250 lines)
 LLM_MAX_TOKENS_TEST = 1500     # 4-6 assessments
 
 # LLM temperature settings
 LLM_TEMPERATURE = 0.0  # CRITICAL: 0 for deterministic output (no randomness)
 
 # Content validation
-MIN_CONTENT_LENGTH = 400      # Minimum content chars (roughly 40-50 lines) - production quality
-MAX_CONTENT_LENGTH = 2400     # Maximum content chars (x4 increase for detailed lessons)
+MIN_CONTENT_LENGTH = 800      # Minimum content chars (realistic for detailed lessons)
+MAX_CONTENT_LENGTH = 8000     # Maximum content chars (for comprehensive, detailed lessons)
 MIN_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not >=3)
 MAX_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not <=3)
 MIN_ROADMAP_ITEMS = 2         # Minimum roadmap items

@@ -65,6 +65,12 @@ class PlannerAgent(BaseAgent):
             difficulty=state.difficulty,
             duration=state.duration,
         )
+        
+        # Mark planning phase started
+        try:
+            status.mark_planning(state.id)
+        except Exception:
+            pass
 
         history: List = [
             SystemMessage(
@@ -201,6 +207,8 @@ class PlannerAgent(BaseAgent):
         
         # Set lessons_expected based on roadmap length
         state.lessons_expected = len(state.roadmap)
+        # Initialize next_lesson_index to 1 (start from first lesson)
+        state.next_lesson_index = 1
         
         tracer.record(
             "done", "plan extracted", 

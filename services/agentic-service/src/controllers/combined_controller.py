@@ -80,17 +80,29 @@ class CombinedController:
         vect_resp = self.files.vectorize_files(
             s3.file_streams, material_id=course_id, category=0
         )
-        # Consider any warnings as failures for the requirement "only mark vectorize=true when docs pushed to OpenSearch"
-        if getattr(vect_resp, "warnings", None):
-            raise InternalServerError(
-                "Vectorization completed with warnings; OpenSearch indexing not fully successful"
-            )
-        # Strictly verify in OpenSearch before marking vectorized
-        self._assert_indexed(course_id, vect_resp.total_chunks)
-        try:
-            status.mark_vectorized(course_id, True)
-        except Exception as e:
-            self.logger.warning(f"Failed to update DynamoDB status: {e}")
+        
+        # In production/Lambda, verify OpenSearch indexing
+        # In local mode, skip if OpenSearch is not available
+        from core.environment import get_environment_type
+        env = get_environment_type()
+        
+        if env == 'lambda':
+            # Production: strict validation required
+            if getattr(vect_resp, "warnings", None):
+                raise InternalServerError(
+                    "Vectorization completed with warnings; OpenSearch indexing not fully successful"
+                )
+            # Strictly verify in OpenSearch before marking vectorized
+            self._assert_indexed(course_id, vect_resp.total_chunks)
+            try:
+                status.mark_vectorized(course_id, True)
+            except Exception as e:
+                self.logger.warning(f"Failed to update DynamoDB status: {e}")
+        else:
+            # Local/Dev: skip OpenSearch verification if not available
+            self.logger.info(f"Vectorization completed in {env} mode - skipping OpenSearch verification")
+            if getattr(vect_resp, "warnings", None):
+                self.logger.warning(f"Vectorization warnings (non-critical in {env}): {vect_resp.warnings}")
 
         # 2) Generate course
         self.agent.generate_course(

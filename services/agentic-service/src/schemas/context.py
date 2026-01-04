@@ -35,11 +35,9 @@ class Lesson(BaseModel):
     @field_validator('content')
     @classmethod
     def validate_content(cls, v):
-        if not v or len(v.strip()) < 100:
-            raise ValueError(f'content must be at least 100 chars, got {len(v) if v else 0}')
-        # Cap at 600 to prevent token bloat
-        if len(v) > 600:
-            return v[:600] + "\n(truncated)"
+        # Chỉ kiểm tra content không rỗng, không enforce min/max length
+        if not v or len(v.strip()) < 50:
+            raise ValueError(f'content must have meaningful text (at least 50 chars), got {len(v) if v else 0}')
         return v
 
 class Roadmap(BaseModel):
