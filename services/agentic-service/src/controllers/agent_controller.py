@@ -4,6 +4,7 @@ from schemas.agent_schemas import AgentRequest, AgentResponse
 from schemas.context import State
 from core.logging import setup_logger
 from core.exceptions import InternalServerError
+from core import status_tracker as status
 from persistence import save_course_state, init_database
 
 class AgentController:
@@ -29,12 +30,22 @@ class AgentController:
         except ValueError as e:
             # Validation errors from agents (schema mismatch, missing fields, etc.)
             self.logger.error(f"Course generation validation error: {str(e)}")
+            # Mark as failed in tracking
+            try:
+                status.mark_failed(request.id, f"Validation error: {str(e)}")
+            except Exception:
+                pass
             raise InternalServerError(f"Course generation validation failed: {str(e)}")
         except Exception as e:
             # Catch-all for other errors
             import traceback
             error_trace = traceback.format_exc()
             self.logger.error(f"Course generation failed with error: {error_trace}")
+            # Mark as failed in tracking
+            try:
+                status.mark_failed(request.id, f"Error: {str(e)}")
+            except Exception:
+                pass
             raise InternalServerError(f"Course generation failed: {str(e)}")
 
         # concise summary instead of full payload to console

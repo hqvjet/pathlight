@@ -92,9 +92,10 @@ class TestCreatorAgent(BaseAgent):
             # If all lessons have assessments now, mark lessons_ready
             if all(getattr(l, "assessments", None) for l in state.lessons or []):
                 status.mark_lessons_ready(state.id, len(state.lessons or []))
+            # Mark tests ready
+            status.mark_tests_ready(state.id)
         except Exception:
             pass
-        return state
 
     def _generate_single_lesson_tests(self, state: State, lesson) -> None:
         """Generate tests for a single lesson, with tool-call cap and forced finalization."""

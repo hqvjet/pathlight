@@ -57,10 +57,7 @@ class Orchestrator:
                     current=current_count,
                     planned=planned_total,
                 )
-                try:
-                    status.mark_lessons_progress(id, current_count, planned_total)
-                except Exception:
-                    pass
+                # Tracking will be done by lesson_creator after generating
                 return "create_lesson"
         else:
             # No planned total - fallback
@@ -85,6 +82,8 @@ class Orchestrator:
                 status.mark_plan_ready(id, title, description, len(roadmap))
             if lessons:
                 status.mark_lessons_ready(id, len(lessons))
+            # Mark as completed
+            status.mark_completed(id)
         except Exception:
             pass
         return "done"
