@@ -188,24 +188,30 @@ def _fetch_user_names(user_ids: list[str]) -> dict[str, str]:
 	Returns dict mapping user_id -> user_name
 	"""
 	if not user_ids:
+		logger.info("🔍 _fetch_user_names called with empty user_ids list")
 		return {}
 	
 	base_url = _user_service_base_url()
+	logger.info(f"🔍 _fetch_user_names: base_url={base_url}, user_ids={user_ids}")
 	if not base_url:
 		logger.warning("USER_SERVICE_URL not configured, cannot fetch user names")
 		return {}
 	
 	try:
 		url = f"{base_url.rstrip('/')}/user/users/batch"
+		logger.info(f"🌐 Calling user-service at: {url}")
 		resp = _httpx_client.post(
 			url,
 			json=user_ids,
 			timeout=5.0,
 		)
+		logger.info(f"📥 Response status: {resp.status_code}, body: {resp.text[:200]}")
 		if resp.status_code == 200:
 			data = resp.json()
 			# data is {user_id: {id, name, avatar_url, level, initials}}
-			return {uid: info.get("name", "") for uid, info in data.items()}
+			result = {uid: info.get("name", "") for uid, info in data.items()}
+			logger.info(f"✅ Fetched {len(result)} user names: {result}")
+			return result
 		else:
 			logger.warning("Failed to fetch user names: status=%s", resp.status_code)
 			return {}
@@ -1531,9 +1537,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		return AssessmentSubmitResponse(status=500, message="Có lỗi xảy ra khi chấm bài")
 	finally:
 		session.close()
-
-
-
 
 # ---------------- Mutation Controllers ----------------
 
