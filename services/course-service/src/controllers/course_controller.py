@@ -1470,18 +1470,16 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			answers=answer_results,
 		)
 		experience = None
-		exp_award_failed = False  # Track if exp award failed for FE fallback
 		
 		# Only award exp if this is the FIRST TIME completing the lesson
 		if passed and applied_exp > 0 and is_newly_completed:
-			logger.info(f"Awarding {applied_exp} exp to user {user_id} for FIRST TIME passing lesson {lesson_id}")
+			logger.info(f"✅ Awarding {applied_exp} exp to user {user_id} for FIRST TIME passing lesson {lesson_id}")
 			award_result = _award_experience(request, user_id, applied_exp)
 			if award_result and award_result.get('status_code') == 200:
 				logger.info(f"Experience award response: status={award_result.get('status_code')}, body={award_result.get('body')}")
 				experience = _experience_payload(applied_exp, award_result)
 			else:
-				logger.error(f"Failed to award experience to user {user_id} - user-service unreachable or returned error")
-				exp_award_failed = True
+				logger.error(f"❌ Failed to award experience to user {user_id} - user-service unreachable or returned error")
 				# Return exp info without actual award so FE can retry
 				experience = {
 					"gained_exp": applied_exp,
@@ -1493,17 +1491,38 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 					"award_failed": True,  # Signal to FE that exp wasn't saved
 				}
 		elif passed and not is_newly_completed:
-			logger.info(f"Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")
+			logger.info(f"⚠️ Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")
 			# Still fetch current user stats so frontend knows current level/exp
 			award_result = _award_experience(request, user_id, 0)  # 0 exp = just fetch current stats
-			experience = _experience_payload(0, award_result)
+			if award_result and award_result.get('status_code') == 200:
+				experience = _experience_payload(0, award_result)
+			else:
+				# Even if user-service fails, return basic structure
+				experience = {
+					"gained_exp": 0,
+					"new_level": None,
+					"new_exp": None,
+					"require_exp": None,
+					"exp_needed_for_next": None,
+					"rank": None,
+				}
 		elif passed:
-			logger.info(f"Passed but no exp awarded: applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
+			logger.warning(f"⚠️ Passed but no exp awarded: applied_exp={applied_exp}, is_newly_completed={is_newly_completed}")
 			# Fetch current stats even if no exp awarded
 			award_result = _award_experience(request, user_id, 0)
-			experience = _experience_payload(0, award_result)
+			if award_result and award_result.get('status_code') == 200:
+				experience = _experience_payload(0, award_result)
+			else:
+				experience = {
+					"gained_exp": 0,
+					"new_level": None,
+					"new_exp": None,
+					"require_exp": None,
+					"exp_needed_for_next": None,
+					"rank": None,
+				}
 		else:
-			logger.info(f"Not passed - no exp awarded")
+			logger.info(f"❌ Not passed - no exp awarded")
 		_log_activity(request, user_id, "assessment_complete")
 		return AssessmentSubmitResponse(status=200, result=result, experience=cast(ExperienceSnapshot | None, experience))
 	except Exception as e:
