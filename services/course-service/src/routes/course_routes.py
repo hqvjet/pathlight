@@ -58,7 +58,7 @@ async def presign_upload(request: Request, body: PresignUploadRequest, _auth=Dep
 
 @router.delete("/delete")
 async def delete_course(request: Request, course_id: Optional[str] = Query(default=None), _auth=Depends(require_bearer)):
-    return delete_single_course(request, course_id)
+    return await delete_single_course(request, course_id)
 
 
 @router.delete("/delete/all")
