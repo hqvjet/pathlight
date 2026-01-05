@@ -10,7 +10,6 @@ class CreateCourseRequest(BaseModel):
     s3_keys: List[str] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: str = Field(default=None, description="Owner user id; will be overridden by token if present")
 
-    # Generation knobs (mapped to agentic-service payload)
     difficulty: str = Field(default="medium", description="easy | medium | hard")
     duration: int = Field(default=1200, description="Course duration (minutes)")
 
@@ -58,7 +57,7 @@ class CourseSummary(BaseModel):
     lesson_num: int
     finish_lesson_num: int
     created_at: str
-    updated_at: str  # Kept for backward compatibility
+    updated_at: str 
 
 
 class CourseListResponse(BaseModel):
@@ -211,7 +210,6 @@ class FinishLessonRequest(BaseModel):
 # ---- Chatbot schemas ----
 
 class ChatbotQuestionRequest(BaseModel):
-    """Request schema for chatbot questions."""
     message: str = Field(..., description="User's question")
     lesson_id: str = Field(..., description="Current lesson ID for context")
     course_id: str = Field(..., description="Current course ID")
@@ -220,21 +218,18 @@ class ChatbotQuestionRequest(BaseModel):
 
 
 class ChatbotQuestionResponse(BaseModel):
-    """Response schema for chatbot question submission."""
     status: int
     chat_id: str = Field(..., description="Chat session ID for tracking")
     message: str = Field(..., description="Status message")
 
 
 class ChatContextChunk(BaseModel):
-    """Context chunk from retrieval."""
     chunk_text: str
     document_source: str
     score: float
 
 
 class ChatbotAnswerDetail(BaseModel):
-    """Chatbot answer with full details."""
     chat_id: str
     message: str
     answer: str
@@ -242,13 +237,13 @@ class ChatbotAnswerDetail(BaseModel):
     course_id: str
     user_id: str
     status: str
+    error_message: str | None = None
     context_chunks: List[ChatContextChunk] = []
     created_at: str
     updated_at: str
 
 
 class ChatbotAnswerResponse(BaseModel):
-    """Response schema for getting chatbot answer."""
     status: int
     chat: Optional[ChatbotAnswerDetail] = None
     message: Optional[str] = None
