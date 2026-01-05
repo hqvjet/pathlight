@@ -177,49 +177,6 @@ def _user_service_base_url() -> str | None:
 	return getattr(config, "USER_SERVICE_URL", None) or os.getenv("USER_SERVICE_URL")
 
 
-def _fetch_user_names(user_ids: list[str]) -> dict[str, str]:
-	"""
-	Fetch user names from user-service in batch.
-	Returns dict mapping user_id -> user_name
-	"""
-	if not user_ids:
-		logger.info("📋 No user IDs to fetch names for")
-		return {}
-	
-	base_url = _user_service_base_url()
-	if not base_url:
-		logger.warning("⚠️ USER_SERVICE_URL not configured, cannot fetch user names")
-		return {}
-	
-	try:
-		url = f"{base_url.rstrip('/')}/user/users/batch"
-		logger.info(f"🔍 Fetching names for {len(user_ids)} users from {url}")
-		logger.info(f"📝 User IDs: {user_ids}")
-		
-		# Use httpx.post directly instead of persistent client (better for Lambda)
-		resp = httpx.post(
-			url,
-			json=user_ids,
-			timeout=5.0,
-		)
-		
-		logger.info(f"📡 User service response status: {resp.status_code}")
-		
-		if resp.status_code == 200:
-			data = resp.json()
-			logger.info(f"Received user data: {data}")
-			# data is {user_id: {id, name, avatar_url, level, initials}}
-			result = {uid: info.get("name", "") for uid, info in data.items()}
-			logger.info(f"📦 Mapped names: {result}")
-			return result
-		else:
-			logger.warning(f"Failed to fetch user names: status={resp.status_code}, body={resp.text}")
-			return {}
-	except Exception as e:
-		logger.error(f"Error fetching user names: {e}")
-		return {}
-
-
 def _award_experience(request: Request, user_id: str, exp_amount: int) -> dict | None:
 	base_url = _user_service_base_url()
 	if not base_url:
@@ -804,10 +761,6 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 			for (cid,) in lessons:
 				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
 		
-		# Fetch owner names from user-service BEFORE creating summaries
-		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
-		owner_names = _fetch_user_names(unique_owner_ids)
-		
 		summaries = [
 			CourseSummary(
 				course_id=r.course_id,
@@ -818,7 +771,7 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 				finish=False,
 				publish=bool(getattr(r, "publish", False)),
 				user_id=r.user_id or "",
-				owner_name=owner_names.get(r.user_id, ""),  # Owner name from user-service
+				owner_name="",  # Empty - frontend will fetch from user-service
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=0,
 				created_at=r.created_at.isoformat() if r.created_at else "",
@@ -1041,12 +994,6 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				finish_counts[p.course_id] = finished
 				finish_map[p.course_id] = (total > 0) and (finished >= total)
 		
-		# Fetch owner names from user-service BEFORE creating summaries
-		unique_owner_ids = list(set(r.user_id for r in rows if r.user_id))
-		logger.info(f"🎯 Fetching owner names for course list. Unique owner IDs: {unique_owner_ids}")
-		owner_names = _fetch_user_names(unique_owner_ids)
-		logger.info(f"📋 Owner names fetched: {owner_names}")
-		
 		summaries = [
 			CourseSummary(
 				course_id=r.course_id,
@@ -1056,8 +1003,8 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 				duration=r.duration or 0,
 				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
-				user_id=getattr(r, "user_id", user_id),  # Owner ID from database
-				owner_name=owner_names.get(getattr(r, "user_id", ""), ""),  # Owner name from user-service
+				user_id=getattr(r, "user_id", user_id),  # Owner ID - frontend will fetch owner name
+				owner_name="",  # Empty - frontend will fetch from user-service
 				lesson_num=lesson_counts.get(r.course_id, 0),
 				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				created_at=r.created_at.isoformat() if r.created_at else "",
@@ -1065,10 +1012,6 @@ def get_all_courses_controller(request: Request) -> CourseListResponse:
 			)
 			for r in rows
 		]
-		
-		logger.info(f"✅ Created {len(summaries)} course summaries")
-		if summaries:
-			logger.info(f"📊 Sample summary - course_id: {summaries[0].course_id}, owner_name: '{summaries[0].owner_name}'")
 		
 		return CourseListResponse(status=200, courses=summaries)
 	finally:
