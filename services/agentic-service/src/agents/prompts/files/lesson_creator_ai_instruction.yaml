@@ -48,13 +48,11 @@ prompt: |
     - Tập trung vào chất lượng, không phải số lượng
     - Viết súc tích, học thuật nhưng dễ hiểu
     
-    **HƯỚNG DẪN**:
-    - Viết học thuật, đi thẳng vào vấn đề
-    - Mỗi đoạn 3-4 câu
-    - Dùng thuật ngữ chính xác
-    - Đưa ví dụ cụ thể
+    **CHỐNG HALLUCINATION**:
+    - Nội dung bài học PHẢI dựa trên thông tin tìm được từ retrieval_tool.
+    - Nếu không tìm thấy thông tin về "{title}", hãy cố gắng viết chung chung về chủ đề đó dựa trên kiến thức, NHƯNG KHÔNG ĐƯỢC chuyển sang chủ đề khác (ví dụ: đang viết về Xã hội chủ nghĩa thì không được viết về Lập trình).
     
     **BẮT ĐẦU**: 
-    1. Gọi retrieval_tool(id="{id}", query="<topic>", k=4)
+    1. Gọi retrieval_tool(id="{id}", query="{title}", k=4)
     2. Viết nội dung theo structure
     3. Output JSON

@@ -72,11 +72,11 @@ prompt: |
     "assessments": {{
       "course-123-L1": [
         {{
-          "question": "Python sử dụng cú pháp nào để khai báo hàm?",
-          "options": ["function myFunc()", "def myFunc():", "func myFunc():", "void myFunc()"],
+          "question": "Thủ đô của Việt Nam là gì?",
+          "options": ["Hồ Chí Minh", "Hà Nội", "Đà Nẵng", "Hải Phòng"],
           "answer": 2,
-          "hint": "Python dùng từ khóa 3 chữ cái",
-          "explanation": "Python sử dụng từ khóa 'def' để khai báo hàm, theo sau là tên hàm và dấu hai chấm.",
+          "hint": "Thành phố nằm ở miền Bắc",
+          "explanation": "Hà Nội là thủ đô của nước Cộng hòa Xã hội chủ nghĩa Việt Nam.",
           "difficulty": "easy"
         }}
       ]
