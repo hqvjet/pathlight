@@ -30,7 +30,7 @@ class ChatbotResponse(BaseModel):
     """Response from chatbot service."""
     answer: str
     context_chunks: List[ContextChunk]
-    model: str = "gpt-4o-mini-mini"
+    model: str = "gpt-4o-mini"
 
 
 class ChatbotService:
