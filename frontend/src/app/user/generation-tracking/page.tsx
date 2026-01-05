@@ -19,16 +19,36 @@ export default function GenerationTrackingPage() {
     try {
       const resp = await courseApi.listMyGenerations();
       if (resp.status === 200 && Array.isArray(resp.data?.items)) {
-        const mapped = (resp.data.items as unknown as Array<Record<string, unknown>>).map((r) => ({
-          course_id: String(r.course_id ?? ""),
-          user_id: r.user_id ? String(r.user_id) : undefined,
-          progress: r.progress ? String(r.progress) : undefined,
-          title_ready: Boolean(r.title_ready),
-          lessons_ready: Boolean(r.lessons_ready),
-          final_ready: Boolean(r.final_ready),
-          vectorized: Boolean(r.vectorized),
-          updated_at: r.updated_at ? String(r.updated_at) : undefined,
-        })) as GenerationItem[];
+        // Parse DynamoDB format: { "field": { "S": "value" }, "field": { "N": "123" }, "field": { "BOOL": true } }
+        const mapped = (resp.data.items as unknown as Array<Record<string, Record<string, string | number | boolean>>>).map((r) => {
+          // Helper to extract DynamoDB value
+          const getDynamoValue = (field: Record<string, string | number | boolean> | undefined): string | number | boolean | undefined => {
+            if (!field) return undefined;
+            if (typeof field !== 'object') return undefined;
+            if ('S' in field) return field.S;
+            if ('N' in field) return Number(field.N);
+            if ('BOOL' in field) return field.BOOL;
+            if ('M' in field) return field.M as string | number | boolean;
+            if ('L' in field) return field.L as string | number | boolean;
+            return undefined;
+          };
+
+          return {
+            course_id: getDynamoValue(r.course_id) || "",
+            user_id: getDynamoValue(r.user_id),
+            title: getDynamoValue(r.title),
+            description: getDynamoValue(r.description),
+            progress: getDynamoValue(r.progress),
+            title_ready: getDynamoValue(r.title_ready) || false,
+            lessons_ready: getDynamoValue(r.lessons_ready) || false,
+            final_ready: getDynamoValue(r.final_ready) || false,
+            vectorized: getDynamoValue(r.vectorized) || false,
+            lessons_count: getDynamoValue(r.lessons_count),
+            lessons_planned: getDynamoValue(r.lessons_planned),
+            roadmap_count: getDynamoValue(r.roadmap_count),
+            updated_at: getDynamoValue(r.updated_at),
+          } as GenerationItem;
+        });
         
         // Sort by updated_at descending (newest first)
         mapped.sort((a, b) => {

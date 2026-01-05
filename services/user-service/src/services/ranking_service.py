@@ -74,10 +74,18 @@ def get_users_by_ids(user_ids: list[str], db: Session) -> dict:
         data: Dict[str, dict] = {}
         for user in users:
             avatar_url = _build_avatar_url(user)
+            # Build full name properly
+            name_parts = []
+            if user.family_name:
+                name_parts.append(user.family_name)
+            if user.given_name:
+                name_parts.append(user.given_name)
+            full_name = ' '.join(name_parts) if name_parts else user.email.split('@')[0]
+            
             initials = ''.join([name[0].upper() for name in [user.family_name or '', user.given_name or ''] if name])[:2] or user.email[0].upper()
             data[str(user.id)] = {
                 "id": str(user.id),
-                "name": f"{user.family_name or ''} {user.given_name or ''}".strip() or user.email.split('@')[0],
+                "name": full_name,
                 "avatar_url": avatar_url,
                 "level": user.level or 1,
                 "initials": initials

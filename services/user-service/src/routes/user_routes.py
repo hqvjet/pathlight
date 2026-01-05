@@ -50,6 +50,7 @@ from controllers.user_controller import (
     admin_adjust_experience_step,
     list_admin_accounts,
     svc_add_experience,
+    get_users_by_ids,
 )
 from fastapi.responses import JSONResponse
 from services.user_service_auth import get_current_user, get_current_admin_user, security
@@ -153,6 +154,17 @@ async def list_activity(
     db: Session = Depends(get_db)
 ):
     return await get_learning_activity(current_user, db, days)
+
+
+# 2.9. Lấy bảng xếp hạng
+@router.get("/ranking")
+async def get_ranking(
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    from services.ranking_service import get_leaderboard_data
+    return get_leaderboard_data(db, limit=limit)
+
 
 # 6.5. Admin update user email
 @router.put("/admin/user", response_model=MessageResponse)
@@ -261,3 +273,12 @@ async def list_admins_endpoint(
     db: Session = Depends(get_db)
 ):
     return await list_admin_accounts(credentials, db)
+
+
+@router.post("/users/batch")
+async def get_users_by_ids_endpoint(
+    user_ids: list[str],
+    db: Session = Depends(get_db)
+):
+    """Batch fetch user information by IDs"""
+    return await get_users_by_ids(user_ids, db)

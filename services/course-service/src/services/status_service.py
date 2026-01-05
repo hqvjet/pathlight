@@ -110,11 +110,16 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 {
                     "course_id": it.get("course_id"),
                     "user_id": it.get("user_id"),
+                    "title": it.get("title"),
+                    "description": it.get("description"),
                     "progress": it.get("progress"),
                     "title_ready": bool(it.get("title_ready", False)),
                     "lessons_ready": bool(it.get("lessons_ready", False)),
                     "final_ready": bool(it.get("final_ready", False)),
                     "vectorized": bool(it.get("vectorized", False)),
+                    "lessons_count": it.get("lessons_count"),
+                    "lessons_planned": it.get("lessons_planned"),
+                    "roadmap_count": it.get("roadmap_count"),
                     "updated_at": it.get("updated_at"),
                 }
             )

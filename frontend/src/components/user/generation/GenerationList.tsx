@@ -4,7 +4,7 @@ import GenerationCard, { GenerationItem } from "./GenerationCard";
 import GenerationDetailModal from "./GenerationDetailModal";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List } from "lucide-react";
 
 export type { GenerationItem };
 
@@ -113,6 +113,7 @@ export default function GenerationList({
 }) {
   const [selectedItem, setSelectedItem] = useState<GenerationItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
   const handleItemClick = (item: GenerationItem) => {
     setSelectedItem(item);
@@ -154,8 +155,37 @@ export default function GenerationList({
 
   return (
     <div className="space-y-6">
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6">
+      {/* View Mode Toggle */}
+      <div className="flex items-center justify-end gap-2 px-6">
+        <span className="text-sm text-gray-600 font-medium">Hiển thị:</span>
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Danh sách"
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Lưới"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* List or Grid */}
+      <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6' : 'space-y-4 p-6'}>
         {currentItems.map((item) => (
           <GenerationCard
             key={item.course_id}

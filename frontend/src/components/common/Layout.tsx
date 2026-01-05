@@ -13,6 +13,7 @@ import {
   ClipboardListIcon,
   LogoutIcon,
   MenuIcon,
+  TrophyIcon,
 } from '@/components/icons';
 
 interface LayoutProps {
@@ -39,6 +40,7 @@ const menuItems = [
   { label: 'Trang Chủ', icon: HomeIcon, href: '/user/dashboard' },
   { label: 'Khóa Học Của Tôi', icon: BookOpenIcon, href: '/user/my-courses' },
   { label: 'Quiz Của Tôi', icon: ClipboardListIcon, href: '/user/my-quizzes' },
+  { label: 'Bảng Xếp Hạng', icon: TrophyIcon, href: '/user/ranking' },
 ];
 
 export default function Layout({ children, title, user }: LayoutProps) {

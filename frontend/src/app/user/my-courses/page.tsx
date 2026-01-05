@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { courseApi } from '@/lib/api/course';
+import { userApi } from '@/lib/api/user';
 import { CourseCard, CourseCardData } from '@/components/user/courses/CourseCard';
 import { CourseHero, CourseHeroData } from '@/components/user/courses/CourseHero';
 import { Badge } from '@/components/ui/badge';
@@ -21,9 +22,12 @@ interface ApiCourseSummary {
   duration: number;
   lesson_num: number;
   finish_lesson_num: number;
+  created_at: string;
   updated_at: string;
   publish?: boolean;
+  user_id?: string;
   owner_id?: string;
+  owner_name?: string;
 }
 
 interface ApiCourseListResponse {
@@ -44,10 +48,21 @@ const minutesToWeeksLabel = (minutes: number) => {
 const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
   const progress = c.lesson_num > 0 ? Math.floor((c.finish_lesson_num / c.lesson_num) * 100) : 0;
   const badge = c.finish || progress >= 100 ? 'Hoàn thành' : progress === 0 ? 'Bản nháp' : 'Đang học';
+  const ownerName = c.owner_name || '';
+  const ownerId = c.user_id || c.owner_id || '';
+  
+  // If course has owner info and owner_name is available, show it; otherwise show "do bạn tạo"
+  let subtitle = 'Khóa học do bạn tạo';
+  if (c.publish && ownerName) {
+    subtitle = ownerName;
+  } else if (c.publish && ownerId) {
+    subtitle = ownerId.includes('@') ? ownerId.split('@')[0] : ownerId.substring(0, 8) + '...';
+  }
+  
   return {
     id: c.course_id,
     title: c.title || 'Khóa học không tên',
-    subtitle: c.owner_id ? `Chủ sở hữu: ${c.owner_id}` : 'Khoá học do bạn tạo',
+    subtitle,
     description: c.overview || 'Cập nhật mô tả khóa học để học viên hiểu rõ mục tiêu.',
     level: c.level || 'Không xác định',
     durationLabel: minutesToWeeksLabel(c.duration),
@@ -57,28 +72,33 @@ const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
     totalLessons: c.lesson_num || 0,
     badge,
     color: '#fb923c',
+    createdAt: c.created_at,
     updatedAt: c.updated_at,
+    lastAccessed: progress > 0 ? c.updated_at : undefined, // Show last accessed only if has progress
     isPublic: !!c.publish,
-    ownerId: c.owner_id || '',
+    ownerId,
+    ownerName,
   };
 };
 
 function MyCoursesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, loading: authLoading } = useAuthContext();
+  const { isAuthenticated, loading: authLoading, user } = useAuthContext();
   const [activeTab, setActiveTab] = useState<TabType>('my');
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('latest');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [ownerFilter, setOwnerFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
   const [publicCourses, setPublicCourses] = useState<Array<CourseCardData & CourseHeroData>>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Chào buổi sáng';
@@ -95,7 +115,14 @@ function MyCoursesContent() {
   
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, search, sort, levelFilter, statusFilter]);
+  }, [activeTab, search, sort, levelFilter, statusFilter, ownerFilter]);
+  
+  useEffect(() => {
+    // Clear owner filter when switching tabs or searching
+    if (activeTab === 'my' || search) {
+      setOwnerFilter('');
+    }
+  }, [activeTab, search]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -112,7 +139,26 @@ function MyCoursesContent() {
       try {
         const resp = await courseApi.getAll();
         const data = resp.data as ApiCourseListResponse | undefined;
-        const list = (data?.courses || []).map(mapApiToCard);
+        let list = (data?.courses || []).map(mapApiToCard);
+        
+        // Fetch owner names for all courses
+        const uniqueOwnerIds = Array.from(new Set(list.map(c => c.ownerId).filter(Boolean)));
+        if (uniqueOwnerIds.length > 0) {
+          try {
+            const usersResp = await userApi.batchUsers(uniqueOwnerIds);
+            const usersData = usersResp.data as Record<string, { name: string }>;
+            // Update owner names
+            list = list.map(course => ({
+              ...course,
+              ownerName: course.ownerId && usersData[course.ownerId] 
+                ? usersData[course.ownerId].name 
+                : course.ownerName
+            }));
+          } catch (err) {
+            console.warn('Failed to fetch user names:', err);
+          }
+        }
+        
         if (!cancelled) {
           setCourses(list);
           if (list.length > 0 && !selectedId) {
@@ -129,15 +175,36 @@ function MyCoursesContent() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated, selectedId]);
+  }, [authLoading, isAuthenticated]); // Removed selectedId to prevent infinite loop
 
+  // Load public courses immediately on mount
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
     let cancelled = false;
     const loadPublic = async () => {
       try {
         const resp = await courseApi.listPublic();
         const data = resp.data as ApiCourseListResponse | undefined;
-        const list = (data?.courses || []).map(mapApiToCard);
+        let list = (data?.courses || []).map(mapApiToCard);
+        
+        // Fetch owner names for public courses
+        const uniqueOwnerIds = Array.from(new Set(list.map(c => c.ownerId).filter(Boolean)));
+        if (uniqueOwnerIds.length > 0) {
+          try {
+            const usersResp = await userApi.batchUsers(uniqueOwnerIds);
+            const usersData = usersResp.data as Record<string, { name: string }>;
+            // Update owner names
+            list = list.map(course => ({
+              ...course,
+              ownerName: course.ownerId && usersData[course.ownerId] 
+                ? usersData[course.ownerId].name 
+                : course.ownerName
+            }));
+          } catch (err) {
+            console.warn('Failed to fetch user names for public courses:', err);
+          }
+        }
+        
         if (!cancelled) setPublicCourses(list);
       } catch {
         if (!cancelled) setPublicCourses([]);
@@ -145,7 +212,7 @@ function MyCoursesContent() {
     };
     loadPublic();
     return () => { cancelled = true; };
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   const updateCourseVisibility = async (courseId: string, isPublic: boolean) => {
     setSavingId(courseId);
@@ -164,8 +231,10 @@ function MyCoursesContent() {
     try {
       await courseApi.deleteCourse(courseId);
       setCourses((prev) => prev.filter((c) => c.id !== courseId));
+      setPublicCourses((prev) => prev.filter((c) => c.id !== courseId)); // Also remove from public list
       if (selectedId === courseId) setSelectedId(null);
-    } catch {
+    } catch (err) {
+      console.error('Delete course error:', err);
       setError('Không thể xóa khóa học.');
     } finally {
       setSavingId(null);
@@ -175,6 +244,11 @@ function MyCoursesContent() {
   const filtered = useMemo(() => {
     const source = activeTab === 'my' ? courses : publicCourses;
     let list = source.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
+    
+    // Filter by owner (only in public tab)
+    if (ownerFilter && activeTab === 'public') {
+      list = list.filter((c) => c.ownerId === ownerFilter);
+    }
     
     if (levelFilter !== 'all') {
       list = list.filter((c) => c.level === levelFilter);
@@ -203,7 +277,7 @@ function MyCoursesContent() {
         );
     }
     return list;
-  }, [courses, publicCourses, activeTab, search, sort, levelFilter, statusFilter]);
+  }, [courses, publicCourses, activeTab, search, sort, levelFilter, statusFilter, ownerFilter]);
 
   const paginatedCourses = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -227,7 +301,13 @@ function MyCoursesContent() {
   };
 
   const handleOwnerClick = (ownerId: string) => {
-    setSearch(ownerId);
+    if (activeTab === 'public') {
+      setOwnerFilter(ownerId);
+      setSearch(''); // Clear search when filtering by owner
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
   };
 
   if (!authLoading && !isAuthenticated) return null;
@@ -308,6 +388,58 @@ function MyCoursesContent() {
           </svg>
         </div>
         
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Hiển thị lưới"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Hiển thị danh sách"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+        
+        {ownerFilter && activeTab === 'public' && (() => {
+          const ownerCourse = publicCourses.find(c => c.ownerId === ownerFilter);
+          const displayName = ownerCourse?.ownerName || ownerFilter.substring(0, 8) + '...';
+          return (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-blue-50 border border-blue-200 text-sm">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-blue-700 font-medium">{displayName}</span>
+              <button
+                onClick={() => setOwnerFilter('')}
+                className="ml-1 w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center text-blue-600"
+                title="Xóa bộ lọc"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          );
+        })()}
+        
         <div className="flex gap-2 flex-wrap">
           <div className="relative">
             <select
@@ -358,37 +490,55 @@ function MyCoursesContent() {
         </div>
       </div>
 
-      {heroCourse && filtered.length > 0 && (
-        <div className="transition-all duration-500 ease-out" key={heroCourse.id}>
-          <CourseHero
-            course={heroCourse}
-            actions={(
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/user/my-courses/${heroCourse.id}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
-                >
-                  Xem chi tiết →
-                </Link>
-                <button
-                  onClick={() => updateCourseVisibility(heroCourse.id, !heroCourse.isPublic)}
-                  disabled={savingId === heroCourse.id}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-800 font-semibold shadow-sm hover:shadow disabled:opacity-60"
-                >
-                  {heroCourse.isPublic ? 'Chuyển Private' : 'Công khai'}
-                </button>
-                <button
-                  onClick={() => deleteCourse(heroCourse.id)}
-                  disabled={savingId === heroCourse.id}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 font-semibold border border-red-200 hover:bg-red-100 disabled:opacity-60"
-                >
-                  Xóa
-                </button>
-              </div>
-            )}
-          />
-        </div>
-      )}
+      {heroCourse && filtered.length > 0 && (() => {
+        // Check if current user is the owner of the course
+        const isOwner = activeTab === 'my' || (user?.id && heroCourse.ownerId === user.id);
+        
+        return (
+          <div className="transition-all duration-500 ease-out relative" key={heroCourse.id}>
+            <button
+              onClick={() => setSelectedId(null)}
+              className="absolute -top-4 -right-4 z-50 w-10 h-10 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900 shadow-md flex items-center justify-center transition-all hover:scale-110 cursor-pointer"
+              title="Đóng chi tiết"
+            >
+              <svg className="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <CourseHero
+              course={heroCourse}
+              actions={(
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/user/my-courses/${heroCourse.id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold shadow-sm hover:bg-orange-600"
+                  >
+                    Xem chi tiết →
+                  </Link>
+                  {isOwner && (
+                    <>
+                      <button
+                        onClick={() => updateCourseVisibility(heroCourse.id, !heroCourse.isPublic)}
+                        disabled={savingId === heroCourse.id}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-800 font-semibold shadow-sm hover:shadow disabled:opacity-60"
+                      >
+                        {heroCourse.isPublic ? 'Chuyển Private' : 'Công khai'}
+                      </button>
+                      <button
+                        onClick={() => deleteCourse(heroCourse.id)}
+                        disabled={savingId === heroCourse.id}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 font-semibold border border-red-200 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        Xóa
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            />
+          </div>
+        );
+      })()}
 
       <section className="space-y-4">
         {loading && (
@@ -403,7 +553,7 @@ function MyCoursesContent() {
         )}
 
         {!loading && !error && (
-          <div className="grid gap-5 md:grid-cols-2 auto-rows-fr">
+          <div className={viewMode === 'grid' ? 'grid gap-5 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr' : 'space-y-4'}>
             {remaining.map((course) => (
               <div
                 key={course.id}

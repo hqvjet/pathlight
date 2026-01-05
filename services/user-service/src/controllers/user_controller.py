@@ -11,6 +11,7 @@ from models import User, UserProfile
 from services.experience_service import get_exp_for_level
 from schemas.user_schemas import *
 from config import config
+from services.external.course_client import get_course_stats
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
 from services.admin_service import create_admin, get_admin_by_username, list_admins
@@ -156,6 +157,13 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         avatar_id = getattr(target_user, 'avatar_url', None)
         avatar_url = f"{config.BASE_URL}/user/avatar?user-id={target_user.id}" if avatar_id else None
+        
+        # Calculate rank
+        rank_data = calculate_user_rank(target_user, db)
+        
+        # Fetch course statistics from course-service
+        course_stats = get_course_stats(str(target_user.id), getattr(target_user, 'email', None))
+        
         user_info = {
             "id": getattr(target_user, 'id', None),
             "email": getattr(target_user, 'email', None),
@@ -168,10 +176,16 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             "current_exp": getattr(target_user, 'current_exp', 0),
             "require_exp": getattr(target_user, 'require_exp', None) or get_exp_for_level((getattr(target_user, 'level', 1) or 1) + 1),
             "subscription": getattr(target_user, 'subscription', 0),
+            "streak": getattr(target_user, 'streak', 0),
             "sex": getattr(target_user, 'sex', None),
             "bio": getattr(target_user, 'bio', None),
             "remind_time": getattr(target_user, 'remind_time', None),
-            "created_at": getattr(target_user, 'created_at', None)
+            "created_at": getattr(target_user, 'created_at', None),
+            "rank": rank_data.get("rank"),
+            "total_users": rank_data.get("total_users"),
+            "course_num": course_stats.get("total_courses", 0),
+            "lesson_num": course_stats.get("total_lessons", 0),
+            "completed_courses": course_stats.get("completed_courses", 0)
         }
         return UserInfoResponse(status=200, Info=user_info)
     except Exception as e:  # pragma: no cover
@@ -425,6 +439,11 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
         dob_formatted = dob_value.strftime("%d/%m/%Y") if dob_value else None
         rank_data = calculate_user_rank(current_user, db)
         leaderboard = get_leaderboard_data(db)
+        
+        # Calculate current streak
+        from services.activity_service import get_current_streak
+        current_streak = get_current_streak(str(current_user.id), db)
+        
         dashboard_info = {
             "id": current_user.id,
             "email": current_user.email,
@@ -439,6 +458,7 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
             "remind_time": getattr(current_user, 'remind_time', None),
             "bio": getattr(current_user, 'bio', None),
             "sex": getattr(current_user, 'sex', None),
+            "streak": current_streak,
             # Ranking
             "rank": rank_data["rank"],
             "total_users": rank_data["total_users"],
@@ -454,10 +474,6 @@ async def get_user_dashboard(current_user: User, db: Session) -> DashboardRespon
 
 # ---------- Experience ----------
 async def add_experience(request: ExperienceAddRequest, current_user: User, db: Session) -> TestStatsResponse:
-    # Accept positive and negative experience adjustments. Internal services
-    # (course/quiz) may send negative values to apply penalties (e.g. hint usage).
-    # Zero is a no-op and will be forwarded to the service which will handle it.
-    # Ensure we operate on a user object attached to the same DB session `db`.
     try:
         target_user = db.query(User).filter(User.id == getattr(current_user, 'id')).first()
         if not target_user:
@@ -533,9 +549,30 @@ async def admin_delete_user(user_id: str, credentials: HTTPAuthorizationCredenti
     if guard:
         return guard
     try:
+        from jose import jwt
+        
         target_user = db.query(User).filter(User.id == user_id).first()
         if not target_user:
             return _send_result(MessageResponse(status=404, message="Người dùng không tồn tại"))
+        
+        # Get admin email for audit logging
+        token = credentials.credentials
+        decoded = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+        admin_email = decoded.get("email", "admin")
+        
+        # Delete all courses owned by the user (cascade delete)
+        try:
+            from services.external.course_client import delete_user_courses
+            courses_deleted = delete_user_courses(user_id, admin_email)
+            if not courses_deleted:
+                logger.warning(f"Failed to delete courses for user {user_id}, continuing with user deletion")
+            else:
+                logger.info(f"Successfully deleted all courses for user {user_id}")
+        except Exception as course_delete_error:
+            logger.error(f"Error deleting courses for user {user_id}: {course_delete_error}")
+            logger.warning(f"Continuing with user deletion despite course deletion error")
+        
+        # Delete user profile and account
         profile = getattr(target_user, 'profile', None)
         if profile:
             db.delete(profile)

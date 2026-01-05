@@ -251,6 +251,93 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
+                {/* Streak Section */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="h-4 w-4 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C12 2 8 6 8 10c0 2.21 1.79 4 4 4s4-1.79 4-4c0-4-4-8-4-8zm0 18c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.5 9.5C4.56 11.13 4 13 4 15c0 4.42 3.58 8 8 8s8-3.58 8-8c0-2-.56-3.87-1.5-5.5l-1.2 1.7c.45.83.7 1.79.7 2.8 0 3.31-2.69 6-6 6z"/>
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-900">Chuỗi học liên tục</span>
+                  </div>
+                  
+                  {(() => {
+                    const currentStreak = user?.streak ?? 0;
+                    // Calculate fire size based on streak (min 32px, max 96px)
+                    const minSize = 32;
+                    const maxSize = 96;
+                    const fireSize = Math.min(maxSize, minSize + Math.floor(currentStreak * 2));
+                    
+                    return (
+                      <>
+                        <div className="rounded-xl border-2 border-orange-200 bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 p-6 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-orange-100/40 rounded-full -mr-12 -mt-12"></div>
+                          <div className="absolute bottom-0 left-0 w-20 h-20 bg-red-100/30 rounded-full -ml-10 -mb-10"></div>
+                          
+                          <div className="relative flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="text-xs uppercase tracking-wide text-orange-600 font-semibold mb-2">Streak hiện tại</div>
+                              <div className="flex items-baseline gap-2 mb-3">
+                                <span className="text-4xl font-bold text-orange-600">{currentStreak}</span>
+                                <span className="text-lg text-orange-500 font-semibold">ngày</span>
+                              </div>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {currentStreak > 0 && [...Array(Math.min(currentStreak, 15))].map((_, i) => (
+                                  <div 
+                                    key={i} 
+                                    className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"
+                                    style={{ animationDelay: `${i * 0.1}s` }}
+                                  ></div>
+                                ))}
+                                {currentStreak > 15 && (
+                                  <span className="text-xs text-orange-500 font-bold ml-1">+{currentStreak - 15}</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-center ml-4">
+                              <svg 
+                                viewBox="0 0 24 24" 
+                                fill="currentColor"
+                                className="text-orange-500 transition-all duration-300 drop-shadow-lg"
+                                style={{ 
+                                  width: `${fireSize}px`, 
+                                  height: `${fireSize}px`,
+                                  filter: currentStreak > 20 ? 'drop-shadow(0 0 12px rgba(249, 115, 22, 0.6))' : 'drop-shadow(0 0 6px rgba(249, 115, 22, 0.4))'
+                                }}
+                              >
+                                <path d="M12 2C12 2 8 6 8 10c0 2.21 1.79 4 4 4s4-1.79 4-4c0-4-4-8-4-8zm0 18c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.5 9.5C4.56 11.13 4 13 4 15c0 4.42 3.58 8 8 8s8-3.58 8-8c0-2-.56-3.87-1.5-5.5l-1.2 1.7c.45.83.7 1.79.7 2.8 0 3.31-2.69 6-6 6z"/>
+                                {currentStreak > 10 && (
+                                  <circle cx="12" cy="12" r="2" className="text-yellow-400 animate-ping" opacity="0.6"/>
+                                )}
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10"/>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2"/>
+                            </svg>
+                            <div className="text-[11px] leading-relaxed text-blue-700">
+                              {currentStreak > 0 ? (
+                                <>
+                                  <span className="font-semibold">Học hôm nay để giữ streak!</span> Bạn đang có chuỗi {currentStreak} ngày học liên tục. {currentStreak >= 30 ? '🏆 Tuyệt vời!' : currentStreak >= 14 ? '💪 Tiếp tục phát huy!' : 'Tiếp tục nhé! 🔥'}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-semibold">Bắt đầu streak của bạn!</span> Học mỗi ngày để xây dựng thói quen học tập tốt. 💪
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
                 {/* Notification time picker - compact version */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <div className="flex items-center gap-2 mb-3">

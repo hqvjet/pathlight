@@ -12,7 +12,7 @@ def create_access_token(user_id: str, email: str | None = None, expires_minutes:
     """Generate short-lived access token for service-to-service communication."""
     try:
         expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
-        payload = {"sub": user_id, "exp": expire, "type": "access"}
+        payload = {"sub": user_id, "exp": int(expire.timestamp()), "type": "access"}
         if email:
             payload["email"] = email
         return jwt.encode(payload, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)

@@ -10,7 +10,6 @@ class CreateCourseRequest(BaseModel):
     s3_keys: List[str] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: str = Field(default=None, description="Owner user id; will be overridden by token if present")
 
-    # Generation knobs (mapped to agentic-service payload)
     difficulty: str = Field(default="medium", description="easy | medium | hard")
     duration: int = Field(default=1200, description="Course duration (minutes)")
 
@@ -54,9 +53,11 @@ class CourseSummary(BaseModel):
     finish: bool
     publish: bool = False
     user_id: str
+    owner_name: str = ""
     lesson_num: int
     finish_lesson_num: int
-    updated_at: str
+    created_at: str
+    updated_at: str 
 
 
 class CourseListResponse(BaseModel):
@@ -204,3 +205,45 @@ class FinishCourseRequest(BaseModel):
 class FinishLessonRequest(BaseModel):
     course_id: str
     lesson_id: str
+
+
+# ---- Chatbot schemas ----
+
+class ChatbotQuestionRequest(BaseModel):
+    message: str = Field(..., description="User's question")
+    lesson_id: str = Field(..., description="Current lesson ID for context")
+    course_id: str = Field(..., description="Current course ID")
+    chat_id: Optional[str] = Field(default=None, description="Chat session ID; auto-generated if omitted")
+    chat_history: Optional[List[dict]] = Field(default=None, description="Previous conversation messages")
+
+
+class ChatbotQuestionResponse(BaseModel):
+    status: int
+    chat_id: str = Field(..., description="Chat session ID for tracking")
+    message: str = Field(..., description="Status message")
+
+
+class ChatContextChunk(BaseModel):
+    chunk_text: str
+    document_source: str
+    score: float
+
+
+class ChatbotAnswerDetail(BaseModel):
+    chat_id: str
+    message: str
+    answer: str
+    lesson_id: str
+    course_id: str
+    user_id: str
+    status: str
+    error_message: str | None = None
+    context_chunks: List[ChatContextChunk] = []
+    created_at: str
+    updated_at: str
+
+
+class ChatbotAnswerResponse(BaseModel):
+    status: int
+    chat: Optional[ChatbotAnswerDetail] = None
+    message: Optional[str] = None

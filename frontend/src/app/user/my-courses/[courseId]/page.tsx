@@ -56,6 +56,11 @@ const minutesToWeeksLabel = (minutes: number) => {
   return `${weeks} tuần`;
 };
 
+const getShortLessonId = (lessonId: string) => {
+  // Return the lesson ID as-is, or implement custom shortening logic if needed
+  return lessonId;
+};
+
 export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   const { courseId } = use(params);
   const [hero, setHero] = useState<CourseHeroData | null>(null);
@@ -190,7 +195,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       showToast.info('Hoàn thành bài trước để mở khóa bài này');
       return;
     }
-    router.push(`/user/my-courses/${courseId}/lessons/${lessonId}`);
+    const shortLessonId = getShortLessonId(lessonId);
+    router.push(`/user/my-courses/${courseId}/lessons/${shortLessonId}`);
   };
 
   if (loading) {
@@ -243,17 +249,78 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
         <div className="space-y-6 lg:col-span-1">
           <Card className="shadow-sm border-gray-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gray-900">Nội dung chi tiết</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-gray-900">Tổng quan khóa học</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm text-gray-700">
-              <p>Chọn một bài học trong mục lục để mở trang nội dung và bài test toàn màn hình.</p>
+            <CardContent className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                  <p className="text-xs text-orange-600 font-semibold uppercase">Hoàn thành</p>
+                  <p className="text-2xl font-bold text-orange-700 mt-1">{hero.completedLessons}/{hero.totalLessons}</p>
+                  <p className="text-xs text-gray-600 mt-1">bài học</p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-600 font-semibold uppercase">Thời lượng</p>
+                  <p className="text-2xl font-bold text-blue-700 mt-1">{hero.durationLabel}</p>
+                  <p className="text-xs text-gray-600 mt-1">học tập</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-800">Vị trí hiện tại</p>
+                <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  {continueLessonId ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                        <span className="text-xs font-semibold text-orange-600 uppercase">Đang học</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {modules[0]?.lessons.find(l => l.id === continueLessonId)?.title || 'Bài học'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-600">Chưa bắt đầu khóa học</p>
+                  )}
+                </div>
+              </div>
+
               <Link
-                href={continueLessonId ? `/user/my-courses/${courseId}/lessons/${continueLessonId}` : '#'}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-orange-500 text-white font-semibold hover:bg-orange-600 disabled:opacity-50"
+                href={continueLessonId ? `/user/my-courses/${courseId}/lessons/${getShortLessonId(continueLessonId)}` : '#'}
+                className="block w-full text-center px-4 py-3 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold hover:from-orange-600 hover:to-orange-700 shadow-md transition-all disabled:opacity-50"
               >
-                Tiếp tục học bài hiện tại
+                {hero.progress === 0 ? 'Bắt đầu học ngay →' : 'Tiếp tục học →'}
               </Link>
+
+              <div className="pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-2">Lộ trình học tập ({hero.completedLessons}/{hero.totalLessons})</p>
+                <div className="space-y-1.5">
+                  {modules[0]?.lessons.slice(0, 5).map((lesson, idx) => (
+                    <div key={lesson.id} className="flex items-center gap-2 text-xs">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        lesson.status === 'completed' 
+                          ? 'bg-emerald-500 text-white' 
+                          : lesson.status === 'in-progress'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-200 text-gray-500'
+                      }`}>
+                        {lesson.status === 'completed' ? '✓' : idx + 1}
+                      </div>
+                      <span className={`flex-1 truncate ${
+                        lesson.status === 'in-progress' 
+                          ? 'text-gray-900 font-semibold' 
+                          : 'text-gray-600'
+                      }`}>
+                        {lesson.title}
+                      </span>
+                      {lesson.status === 'locked' && <span className="text-gray-400">🔒</span>}
+                    </div>
+                  ))}
+                  {modules[0]?.lessons.length > 5 && (
+                    <p className="text-xs text-gray-400 italic pl-7">... và {modules[0].lessons.length - 5} bài nữa</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

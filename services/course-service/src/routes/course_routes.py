@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, UploadFile, File, Depends, Query
+from fastapi import APIRouter, Request, UploadFile, File, Depends, Query, HTTPException
 from typing import List, Optional
 from src.controllers.course_controller import (
     upload_files_docs,
@@ -19,6 +19,7 @@ from src.controllers.course_controller import (
     create_course_controller,
     list_all_courses_admin_controller,
     delete_course_admin_controller,
+    delete_all_courses_by_user_admin_controller,
     toggle_course_visibility_admin_controller,
 )
 from src.services.course_auth import require_bearer
@@ -37,7 +38,11 @@ from src.schemas.course_schemas import (
     PresignUploadRequest,
     PresignUploadResponse,
     CourseVisibilityUpdate,
+    ChatbotQuestionRequest,
+    ChatbotQuestionResponse,
+    ChatbotAnswerResponse,
 )
+from src.controllers.chatbot_controller import ChatbotController
 
 router = APIRouter(prefix="", tags=["Course"])
 
@@ -102,8 +107,8 @@ async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
 
 
 @router.get("/public", response_model=CourseListResponse)
-async def list_public_courses(search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
-    return list_public_courses_controller(search, user_id)
+async def list_public_courses(request: Request, search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
+    return list_public_courses_controller(request, search, user_id)
 
 
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)
@@ -175,12 +180,7 @@ async def list_all_courses_admin(
     search: Optional[str] = Query(default=None),
     _auth=Depends(require_bearer)
 ):
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"Admin courses endpoint called: page={page}, limit={limit}, search={search}")
-    logger.info(f"Request headers: {dict(request.headers)}")
     result = list_all_courses_admin_controller(request, page, limit, search)
-    logger.info(f"Admin courses result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
     return result
 
 
@@ -188,6 +188,12 @@ async def list_all_courses_admin(
 async def delete_course_admin(course_id: str, request: Request, _auth=Depends(require_bearer)):
     """Admin endpoint to delete any course."""
     return await delete_course_admin_controller(course_id, request)
+
+
+@router.delete("/admin/courses/user/{user_id}")
+async def delete_user_courses_admin(user_id: str, request: Request, _auth=Depends(require_bearer)):
+    """Admin endpoint to delete all courses owned by a specific user."""
+    return await delete_all_courses_by_user_admin_controller(user_id, request)
 
 
 @router.put("/admin/courses/{course_id}/visibility")
@@ -199,3 +205,53 @@ async def toggle_course_visibility_admin(
 ):
     """Admin endpoint to change course visibility."""
     return await toggle_course_visibility_admin_controller(course_id, request, body)
+
+
+# ---- Chatbot endpoints ----
+
+@router.post("/chatbot/question")
+async def submit_chatbot_question(
+    req: Request,
+    request_body: ChatbotQuestionRequest,
+    _auth=Depends(require_bearer)
+):
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(req)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        controller = ChatbotController()
+        return controller.submit_question(request=request_body, user_id=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chatbot/answer/{chat_id}")
+async def get_chatbot_answer(
+    req: Request,
+    chat_id: str,
+    _auth=Depends(require_bearer)
+):
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(req)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        controller = ChatbotController()
+        response = controller.get_answer(chat_id=chat_id, user_id=user_id)
+        if response.status == 404:
+            raise HTTPException(status_code=404, detail=response.message)
+        elif response.status == 403:
+            raise HTTPException(status_code=403, detail=response.message)
+        elif response.status == 500:
+            raise HTTPException(status_code=500, detail=response.message)
+        elif response.status == 202:
+            return response
+        return response
+        
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -30,7 +30,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, 
             ))}
           </div>
           <div className="relative">
-            <div className="grid grid-rows-7 gap-[3px]" style={{ gridTemplateColumns: 'repeat(53, 1fr)' }}>
+            <div className="grid gap-[3px]" style={{ gridTemplateRows: 'repeat(7, 1fr)', gridAutoFlow: 'column', gridAutoColumns: '1fr' }}>
               {(() => {
                 const yearActivityData = generateYearActivityData(selectedYear);
                 const colors = ['#e0f2fe','#7dd3fc','#38bdf8','#0284c7','#0369a1']; // cyan shades
