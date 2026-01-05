@@ -22,7 +22,8 @@ def _get_dynamodb_client():
 
 
 def _get_chat_table_name() -> str:
-    return os.getenv("CHAT_TABLE_NAME", "pathlight-chat-dev")
+    """Get chatbot DynamoDB table name from environment."""
+    return os.getenv("CHATBOT_DDB_TABLE_NAME", "chatbot_table")
 
 
 class ChatbotController:
