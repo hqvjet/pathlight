@@ -206,3 +206,49 @@ class FinishCourseRequest(BaseModel):
 class FinishLessonRequest(BaseModel):
     course_id: str
     lesson_id: str
+
+
+# ---- Chatbot schemas ----
+
+class ChatbotQuestionRequest(BaseModel):
+    """Request schema for chatbot questions."""
+    message: str = Field(..., description="User's question")
+    lesson_id: str = Field(..., description="Current lesson ID for context")
+    course_id: str = Field(..., description="Current course ID")
+    chat_id: Optional[str] = Field(default=None, description="Chat session ID; auto-generated if omitted")
+    chat_history: Optional[List[dict]] = Field(default=None, description="Previous conversation messages")
+
+
+class ChatbotQuestionResponse(BaseModel):
+    """Response schema for chatbot question submission."""
+    status: int
+    chat_id: str = Field(..., description="Chat session ID for tracking")
+    message: str = Field(..., description="Status message")
+
+
+class ChatContextChunk(BaseModel):
+    """Context chunk from retrieval."""
+    chunk_text: str
+    document_source: str
+    score: float
+
+
+class ChatbotAnswerDetail(BaseModel):
+    """Chatbot answer with full details."""
+    chat_id: str
+    message: str
+    answer: str
+    lesson_id: str
+    course_id: str
+    user_id: str
+    status: str
+    context_chunks: List[ChatContextChunk] = []
+    created_at: str
+    updated_at: str
+
+
+class ChatbotAnswerResponse(BaseModel):
+    """Response schema for getting chatbot answer."""
+    status: int
+    chat: Optional[ChatbotAnswerDetail] = None
+    message: Optional[str] = None

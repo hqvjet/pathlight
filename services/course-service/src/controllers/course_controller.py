@@ -731,9 +731,16 @@ def update_course_visibility_controller(request: Request, body: CourseVisibility
 		session.close()
 
 
-def list_public_courses_controller(search: str | None = None, user_id: str | None = None) -> CourseListResponse:
+def list_public_courses_controller(request: Request, search: str | None = None, user_id: str | None = None) -> CourseListResponse:
 	from src.database import SessionLocal
-	from src.models import Course, Lesson
+	from src.models import Course, Lesson, LearningProgress
+
+	# Try to get logged-in user for progress tracking (optional)
+	logged_in_user = None
+	try:
+		logged_in_user = _verify_token(request)
+	except:
+		pass  # User not logged in, that's OK
 
 	session = SessionLocal()
 	try:
@@ -756,10 +763,25 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 		rows = query.all()
 		course_ids = [r.course_id for r in rows]
 		lesson_counts = {cid: 0 for cid in course_ids}
+		finish_counts = {cid: 0 for cid in course_ids}
+		finish_map = {cid: False for cid in course_ids}
+		
 		if course_ids:
 			lessons = session.query(Lesson.course_id).filter(Lesson.course_id.in_(course_ids)).all()
 			for (cid,) in lessons:
 				lesson_counts[cid] = lesson_counts.get(cid, 0) + 1
+			
+			# If user is logged in, fetch their progress
+			if logged_in_user:
+				progress_rows = session.query(LearningProgress).filter(
+					LearningProgress.course_id.in_(course_ids),
+					LearningProgress.user_id == logged_in_user,
+				).all()
+				for p in progress_rows:
+					total = cast(int, getattr(p, "num_total_lesson") or lesson_counts.get(p.course_id, 0))
+					finished = min(cast(int, getattr(p, "num_finished_lesson") or 0), total)
+					finish_counts[p.course_id] = finished
+					finish_map[p.course_id] = (total > 0) and (finished >= total)
 		
 		summaries = [
 			CourseSummary(
@@ -768,12 +790,12 @@ def list_public_courses_controller(search: str | None = None, user_id: str | Non
 				overview=r.overview or "",
 				level=r.level or "",
 				duration=r.duration or 0,
-				finish=False,
+				finish=finish_map.get(r.course_id, False),
 				publish=bool(getattr(r, "publish", False)),
 				user_id=r.user_id or "",
 				owner_name="",  # Empty - frontend will fetch from user-service
 				lesson_num=lesson_counts.get(r.course_id, 0),
-				finish_lesson_num=0,
+				finish_lesson_num=finish_counts.get(r.course_id, 0),
 				created_at=r.created_at.isoformat() if r.created_at else "",
 				updated_at=r.created_at.isoformat() if r.created_at else "",
 			)

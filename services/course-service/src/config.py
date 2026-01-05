@@ -42,6 +42,9 @@ class CourseConfig:
     SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
     REGION: str = os.getenv("REGION", "ap-northeast-1")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
+    
+    # SQS Queue for async processing
+    SQS_QUEUE_URL: str = os.getenv("SQS_QUEUE_URL", "")
 
 config = CourseConfig()
 

@@ -10,6 +10,7 @@ import json
 from src.config import config
 from src.database import create_tables, engine
 from src.routes.course_routes import router as course_router
+from src.routes.chatbot_routes import router as chatbot_router
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(course_router, prefix="/course")
+app.include_router(chatbot_router, prefix="/api/v1")
 
 mangum_handler = Mangum(app, lifespan="off")
 

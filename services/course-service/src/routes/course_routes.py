@@ -103,8 +103,8 @@ async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
 
 
 @router.get("/public", response_model=CourseListResponse)
-async def list_public_courses(search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
-    return list_public_courses_controller(search, user_id)
+async def list_public_courses(request: Request, search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
+    return list_public_courses_controller(request, search, user_id)
 
 
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)
