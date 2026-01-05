@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, UploadFile, File, Depends, Query
+from fastapi import APIRouter, Request, UploadFile, File, Depends, Query, HTTPException
 from typing import List, Optional
 from src.controllers.course_controller import (
     upload_files_docs,
@@ -38,7 +38,11 @@ from src.schemas.course_schemas import (
     PresignUploadRequest,
     PresignUploadResponse,
     CourseVisibilityUpdate,
+    ChatbotQuestionRequest,
+    ChatbotQuestionResponse,
+    ChatbotAnswerResponse,
 )
+from src.controllers.chatbot_controller import ChatbotController
 
 router = APIRouter(prefix="", tags=["Course"])
 
@@ -201,3 +205,53 @@ async def toggle_course_visibility_admin(
 ):
     """Admin endpoint to change course visibility."""
     return await toggle_course_visibility_admin_controller(course_id, request, body)
+
+
+# ---- Chatbot endpoints ----
+
+@router.post("/chatbot/question")
+async def submit_chatbot_question(
+    req: Request,
+    request_body: ChatbotQuestionRequest,
+    _auth=Depends(require_bearer)
+):
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(req)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        controller = ChatbotController()
+        return controller.submit_question(request=request_body, user_id=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chatbot/answer/{chat_id}")
+async def get_chatbot_answer(
+    req: Request,
+    chat_id: str,
+    _auth=Depends(require_bearer)
+):
+    from src.controllers.course_controller import _verify_token
+    user_id = _verify_token(req)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        controller = ChatbotController()
+        response = controller.get_answer(chat_id=chat_id, user_id=user_id)
+        if response.status == 404:
+            raise HTTPException(status_code=404, detail=response.message)
+        elif response.status == 403:
+            raise HTTPException(status_code=403, detail=response.message)
+        elif response.status == 500:
+            raise HTTPException(status_code=500, detail=response.message)
+        elif response.status == 202:
+            return response
+        return response
+        
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
