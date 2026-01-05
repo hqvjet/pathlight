@@ -16,7 +16,7 @@ interface ChatbotProps {
 }
 
 export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showIdlePrompt, setShowIdlePrompt] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -195,6 +195,32 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
             </p>
           </div>
         </div>
+      )}
+
+      {/* Floating Chat Icon Button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-gradient-to-r from-gray-700 to-gray-800 text-white p-2 rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all duration-300 animate-scale-in"
+          aria-label="Mở trợ lý chat"
+        >
+          <svg className="w-12 h-12" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            {/* Robot head */}
+            <rect x="6" y="8" width="12" height="10" rx="3" />
+            {/* Eyes */}
+            <circle cx="9" cy="12" r="0.8" fill="currentColor" />
+            <circle cx="15" cy="12" r="0.8" fill="currentColor" />
+            {/* Mouth */}
+            <path d="M9 15h6" strokeLinecap="round" />
+            {/* Antennas */}
+            <line x1="8" y1="8" x2="8" y2="5" strokeLinecap="round" />
+            <line x1="16" y1="8" x2="16" y2="5" strokeLinecap="round" />
+            <circle cx="8" cy="4.5" r="1" />
+            <circle cx="16" cy="4.5" r="1" />
+            {/* Base */}
+            <line x1="10" y1="18" x2="14" y2="18" strokeLinecap="round" strokeWidth={2} />
+          </svg>
+        </button>
       )}
 
       {/* Chat Window */}
