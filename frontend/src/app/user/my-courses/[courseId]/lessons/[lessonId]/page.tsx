@@ -350,7 +350,7 @@ export default function LessonDetailPage({ params }: PageProps) {
       }
       
       const needsFallback = result.passed && awardedExp > 0 && (
-        (snapshot as any)?.award_failed ||
+        (snapshot as { award_failed?: boolean; new_exp?: number | null; new_level?: number | null })?.award_failed ||
         !snapshot ||
         snapshot.new_exp === null || 
         snapshot.new_level === null 
@@ -669,7 +669,6 @@ export default function LessonDetailPage({ params }: PageProps) {
 
   if (!lesson) return null;
 
-  const currentLessonIndex = lessons.findIndex((l) => l.lesson_id === lessonId);
   const completedCount = lessons.filter((l) => l.finish).length;
 
   return (

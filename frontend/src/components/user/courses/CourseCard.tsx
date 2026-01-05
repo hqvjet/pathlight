@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
 import { User, Calendar, BookOpen, Clock } from 'lucide-react';
 
 export interface CourseCardData {
@@ -69,7 +68,6 @@ function getUserDisplayName(ownerId?: string, ownerName?: string): string {
 export function CourseCard({ course, onSelect, onOwnerClick }: CourseCardProps) {
   const timeElapsed = getTimeElapsed(course.updatedAt);
   const creatorName = getUserDisplayName(course.ownerId, course.ownerName);
-  const isOwned = !course.isPublic || (course.ownerId && !course.ownerName); // Simple heuristic
   
   return (
     <Card

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 
 export interface CourseHeroData {
   id?: string;
@@ -43,29 +43,6 @@ function formatDate(dateStr?: string): string {
     });
   } catch {
     return 'Không rõ';
-  }
-}
-
-// Get relative time
-function getRelativeTime(dateStr?: string): string {
-  if (!dateStr) return 'Chưa học';
-  try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return "Vừa xong";
-    if (diffMins < 60) return `${diffMins} phút trước`;
-    if (diffHours < 24) return `${diffHours} giờ trước`;
-    if (diffDays < 7) return `${diffDays} ngày trước`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} tuần trước`;
-    
-    return formatDate(dateStr);
-  } catch {
-    return 'Chưa học';
   }
 }
 

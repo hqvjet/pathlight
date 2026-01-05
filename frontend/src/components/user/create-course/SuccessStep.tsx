@@ -253,7 +253,7 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
 
           {/* Detailed Steps */}
           <div className="space-y-3">
-            {status.steps.map((step, idx) => {
+            {status.steps.map((step) => {
               const Icon = step.icon;
               return (
                 <div 

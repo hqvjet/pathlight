@@ -7,8 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Clock, Zap, Calendar, User, Hash } from "lucide-react";
+import { CheckCircle, Clock, Zap, Calendar, Hash } from "lucide-react";
 import { GenerationItem } from "./GenerationCard";
 
 function getDetailedStatus(item: GenerationItem) {

@@ -20,16 +20,17 @@ export default function GenerationTrackingPage() {
       const resp = await courseApi.listMyGenerations();
       if (resp.status === 200 && Array.isArray(resp.data?.items)) {
         // Parse DynamoDB format: { "field": { "S": "value" }, "field": { "N": "123" }, "field": { "BOOL": true } }
-        const mapped = (resp.data.items as unknown as Array<Record<string, any>>).map((r) => {
+        const mapped = (resp.data.items as unknown as Array<Record<string, Record<string, string | number | boolean>>>).map((r) => {
           // Helper to extract DynamoDB value
-          const getDynamoValue = (field: any): any => {
-            if (!field || typeof field !== 'object') return field;
+          const getDynamoValue = (field: Record<string, string | number | boolean> | undefined): string | number | boolean | undefined => {
+            if (!field) return undefined;
+            if (typeof field !== 'object') return undefined;
             if ('S' in field) return field.S;
             if ('N' in field) return Number(field.N);
             if ('BOOL' in field) return field.BOOL;
-            if ('M' in field) return field.M;
-            if ('L' in field) return field.L;
-            return field;
+            if ('M' in field) return field.M as string | number | boolean;
+            if ('L' in field) return field.L as string | number | boolean;
+            return undefined;
           };
 
           return {

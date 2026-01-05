@@ -24,6 +24,7 @@ export interface UserProfile {
   remind_time?: string;
   rank?: number;
   avatarKey?: number;
+  streak?: number;
 }
 
 export interface ProfileFormData {

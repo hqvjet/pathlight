@@ -1,19 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useActivity, useDashboard } from './dashboard/hooks';
-import { StatsGrid } from './dashboard/StatsGrid';
 import { ProfileCard } from './dashboard/ProfileCard';
 import { ActivityHeatmap } from './dashboard/ActivityHeatmap';
 import { userApi } from '@/lib/api/user';
-import { showToast } from '@/utils/toast';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
 export default function Dashboard({ onLogout }: DashboardProps) {
-  const { user, dashboardData, loading } = useDashboard(onLogout);
+  const { user, loading } = useDashboard(onLogout);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const { generateYearActivityData } = useActivity();
 
@@ -39,30 +38,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       trackLoginActivity();
     }
   }, [user?.id]);
-
-  // Ensure current user is in leaderboard
-  const enhancedLeaderboard = () => {
-    const topUsers = dashboardData?.info?.user_top_rank || [];
-    if (!user?.id || !user?.rank) return topUsers;
-    
-    // Check if current user is already in the list
-    const isInList = topUsers.some(u => u.id === user.id);
-    if (isInList) return topUsers;
-    
-    // User not in top 10, inject them at their rank position
-    const currentUserEntry = {
-      rank: user.rank,
-      name: user.name,
-      level: user.level || 1,
-      experience: user.current_exp || 0,
-      avatar_url: user.avatar_url,
-      id: user.id,
-      initials: user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
-      avatarKey: user.avatarKey
-    };
-    
-    return [currentUserEntry, ...topUsers].slice(0, 10);
-  };
 
   if (loading) {
     return (
@@ -93,8 +68,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const completionRate = user.total_courses > 0 
     ? Math.round((user.completed_courses / user.total_courses) * 100) 
     : 0;
-
-  const expToNextRank = 500;
 
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50">
@@ -206,12 +179,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                       </div>
                     </div>
                   </div>
-                  <a 
+                  <Link 
                     href="/user/my-courses" 
                     className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors"
                   >
                     Xem khóa học của tôi →
-                  </a>
+                  </Link>
                 </div>
 
                 {/* Learning Progress Stats */}
@@ -237,7 +210,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 {/* Motivational Quote */}
                 <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-4 border-l-4 border-blue-500">
                   <p className="text-sm text-gray-700 italic">
-                    💡 "<span className="font-semibold">Học tập không bao giờ là lãng phí thời gian</span> - mỗi bài học đều mở ra cánh cửa tri thức mới!"
+                    💡 &ldquo;<span className="font-semibold">Học tập không bao giờ là lãng phí thời gian</span> - mỗi bài học đều mở ra cánh cửa tri thức mới!&rdquo;
                   </p>
                 </div>
               </div>
@@ -248,12 +221,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <p className="text-sm text-gray-600 mb-6">
                   Bạn chưa đăng ký khóa học nào. Hãy khám phá và bắt đầu hành trình học tập.
                 </p>
-                <a 
+                <Link 
                   href="/user/my-courses" 
                   className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"
                 >
                   Khám phá khóa học
-                </a>
+                </Link>
               </div>
             )}
           </div>

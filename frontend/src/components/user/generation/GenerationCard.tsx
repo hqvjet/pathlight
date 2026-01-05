@@ -1,8 +1,7 @@
 "use client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Clock, Zap, FileText, User, Calendar, CalendarClock } from "lucide-react";
+import { CheckCircle, Clock, Zap, FileText, User, CalendarClock } from "lucide-react";
 
 export type GenerationItem = {
   course_id: string;
