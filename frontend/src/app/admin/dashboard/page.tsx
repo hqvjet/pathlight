@@ -152,7 +152,7 @@ export default function AdminDashboard() {
 
       const anyRejected = [usersRes, coursesRes, quizzesRes, costsRes, logsRes, adminsRes].some((r) => r.status === 'rejected');
       if (anyRejected) {
-        showToast.error('Một số dữ liệu không tải được, vui lòng kiểm tra lại API');
+        // showToast.error('Một số dữ liệu không tải được, vui lòng kiểm tra lại API');
       }
     } catch (error) {
       console.error('Failed to load dashboard', error);
