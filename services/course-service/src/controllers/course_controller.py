@@ -1390,7 +1390,8 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 			if not qa:
 				continue
 			selected = int(ans.answer)
-			correct = cast(int, getattr(qa, "answer"))
+			db_answer = cast(int, getattr(qa, "answer"))
+			correct = (db_answer % 4) + 1
 			is_correct = selected == correct
 			if is_correct:
 				correct_count += 1
@@ -1416,7 +1417,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 					selected_answer=selected,
 					correct_answer=correct,
 					is_correct=is_correct,
-					# preserve original difficulty representation (string or None) for the result model
 					difficulty=cast(str | None, getattr(qa, "difficulty")),
 					gained_exp=gained,
 					penalty_exp=penalty,
@@ -1428,7 +1428,6 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 		applied_exp = max(0, earned_exp - penalty_exp)
 		passed = score >= PASS_THRESHOLD
 
-		# Track if this is a new completion (first time passing) for exp award
 		is_newly_completed = False
 		if passed:
 			finished_before, total_lessons, is_newly_completed = _update_learning_progress(session, cast(str, getattr(course, "course_id")), cast(str, getattr(lesson, "lesson_id")), user_id)
