@@ -8,9 +8,13 @@ export interface LeaderboardUser {
   id?: string;
   initials: string;
   avatarKey?: number; // cache busting key
+  streak?: number;
+  completed_courses?: number;
+  completed_quizzes?: number;
 }
 
 export interface UserProfile {
+  streak?: number;
   id?: string;
   email: string;
   name: string;

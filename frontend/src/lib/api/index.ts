@@ -5,6 +5,7 @@ export { userApi } from './user';
 export { courseApi } from './course';
 export { quizApi } from './quiz';
 export { agenticApi } from './agentic';
+export { chatbotApi } from './chatbot';
 
 // Unified api object (new preferred usage)
 import { authApi } from './auth';
@@ -12,6 +13,7 @@ import { userApi } from './user';
 import { courseApi } from './course';
 import { quizApi } from './quiz';
 import { agenticApi } from './agentic';
+import { chatbotApi } from './chatbot';
 import { apiClient } from './http';
 
 export const api = {
@@ -20,5 +22,6 @@ export const api = {
   course: courseApi,
   quiz: quizApi,
   agentic: agenticApi,
+  chatbot: chatbotApi,
   client: apiClient,
 };

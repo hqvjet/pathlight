@@ -73,3 +73,12 @@ export const ChevronLeftIcon = ({ className = '', size = 20 }: IconProps) => (
     <polyline strokeLinecap="round" strokeLinejoin="round" points="15,18 9,12 15,6" />
   </svg>
 );
+
+export const TrophyIcon = ({ className = '', size = 20 }: IconProps) => (
+  <svg width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15c3.314 0 6-1.343 6-3s-2.686-3-6-3-6 1.343-6 3 2.686 3 6 3z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12c0 1.657-2.686 3-6 3s-6-1.343-6-3" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 12c0 1.657 2.686 3 6 3s6-1.343 6-3" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 12v8c0 .564-.447 1-1 1H7v3h10v-3h-4c-.553 0-1-.436-1-1v-8" />
+  </svg>
+);

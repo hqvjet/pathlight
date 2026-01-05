@@ -11,6 +11,7 @@ from models import User, UserProfile
 from services.experience_service import get_exp_for_level
 from schemas.user_schemas import *
 from config import config
+from services.external.course_client import get_course_stats
 
 from services.avatar_service import update_avatar as avatar_update_service, get_avatar_redirect, get_avatar_bytes
 from services.admin_service import create_admin, get_admin_by_username, list_admins
@@ -160,6 +161,9 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
         # Calculate rank
         rank_data = calculate_user_rank(target_user, db)
         
+        # Fetch course statistics from course-service
+        course_stats = get_course_stats(str(target_user.id), getattr(target_user, 'email', None))
+        
         user_info = {
             "id": getattr(target_user, 'id', None),
             "email": getattr(target_user, 'email', None),
@@ -178,7 +182,10 @@ async def get_user_info(user_id: Optional[str], current_user: User, db: Session)
             "remind_time": getattr(target_user, 'remind_time', None),
             "created_at": getattr(target_user, 'created_at', None),
             "rank": rank_data.get("rank"),
-            "total_users": rank_data.get("total_users")
+            "total_users": rank_data.get("total_users"),
+            "course_num": course_stats.get("total_courses", 0),
+            "lesson_num": course_stats.get("total_lessons", 0),
+            "completed_courses": course_stats.get("completed_courses", 0)
         }
         return UserInfoResponse(status=200, Info=user_info)
     except Exception as e:  # pragma: no cover

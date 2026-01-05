@@ -1,7 +1,16 @@
 import React from 'react';
 import { LeaderboardUser } from './types';
 import Avatar from '@/components/common/Avatar';
-import { Trophy, Medal } from 'lucide-react';
+import { Trophy, Medal, Flame, Brain, Zap, Target } from 'lucide-react';
+
+const getBadges = (user: LeaderboardUser) => {
+  const badges = [];
+  if ((user.streak || 0) >= 7) badges.push({ icon: Flame, label: 'Streak Master', color: 'text-orange-500' });
+  if ((user.completed_quizzes || 0) >= 10) badges.push({ icon: Brain, label: 'Quiz Whiz', color: 'text-purple-500' });
+  if ((user.experience || 0) >= 1000) badges.push({ icon: Zap, label: 'EXP Hunter', color: 'text-yellow-500' });
+  if ((user.completed_courses || 0) >= 3) badges.push({ icon: Target, label: 'Course Master', color: 'text-green-500' });
+  return badges;
+};
 
 const pedestalGradients = ['from-sky-500 via-blue-500 to-indigo-600', 'from-indigo-500 via-violet-500 to-purple-600', 'from-emerald-500 via-teal-500 to-cyan-500'];
 
@@ -74,32 +83,64 @@ export const Leaderboard: React.FC<{ top: LeaderboardUser[] }> = ({ top }) => {
   );
 };
 
-export const LeaderboardTable: React.FC<{ users: LeaderboardUser[] }> = ({ users }) => {
-  // Only show users ranked 4 and below
-  const tableUsers = users.filter(u => (u.rank || 0) > 3).sort((a, b) => (a.rank || 999) - (b.rank || 999));
+export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserId?: string }> = ({ users, currentUserId }) => {
+  // Show all users
+  const tableUsers = [...users].sort((a, b) => (a.rank || 999) - (b.rank || 999));
   
   return (
-  <div className="rounded-xl border bg-white -mx-1 sm:mx-0 overflow-hidden">
+  <div className="rounded-xl border bg-white -mx-1 sm:mx-0 overflow-x-auto">
     <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-xs uppercase text-gray-600">
+      <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-xs uppercase text-gray-700">
         <tr>
-          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold w-16">Rank</th>
-          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold w-16">Ảnh</th>
-          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold">Người Dùng</th>
-          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold w-20">Level</th>
+          <th className="py-3 px-3 text-left font-semibold">Hạng</th>
+          <th className="py-3 px-3 text-left font-semibold w-12"></th>
+          <th className="py-3 px-3 text-left font-semibold">Người dùng</th>
+          <th className="py-3 px-3 text-left font-semibold">Cấp độ</th>
+          <th className="py-3 px-3 text-right font-semibold">Tổng EXP</th>
+          <th className="py-3 px-3 text-right font-semibold">Khóa học</th>
+          <th className="py-3 px-3 text-left font-semibold">Huy hiệu</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
-        {tableUsers.map(u => (
-          <tr key={u.rank} className="hover:bg-gray-50 transition-colors">
-            <td className="py-2 sm:py-3 px-2 sm:px-3 font-medium text-gray-700 w-16">#{u.rank}</td>
-            <td className="py-2 sm:py-3 px-2 sm:px-3"><Avatar user={u} size={32} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
-            <td className="py-2 sm:py-3 px-2 sm:px-3 font-medium text-gray-800 truncate max-w-[100px] sm:max-w-[140px]">{u.name}</td>
-            <td className="py-2 sm:py-3 px-2 sm:px-3 font-semibold text-violet-600">{u.level}</td>
+        {tableUsers.map(u => {
+          const badges = getBadges(u);
+          const isCurrentUser = currentUserId && u.id === currentUserId;
+          return (
+          <tr key={u.rank} className={`hover:bg-blue-50 transition-colors ${isCurrentUser ? 'bg-cyan-50 border-l-4 border-cyan-500' : ''}`}>
+            <td className="py-3 px-3 font-bold text-gray-900">#{u.rank}</td>
+            <td className="py-3 px-3"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
+            <td className="py-3 px-3">
+              <div className="font-semibold text-gray-900">{u.name}</div>
+              {isCurrentUser && <span className="text-xs text-cyan-600 font-medium">(Bạn)</span>}
+            </td>
+            <td className="py-3 px-3">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm">
+                Lv {u.level}
+              </span>
+            </td>
+            <td className="py-3 px-3 text-right">
+              <span className="font-semibold text-gray-900">{(u.experience || 0).toLocaleString()}</span>
+              <span className="text-xs text-gray-500 ml-1">EXP</span>
+            </td>
+            <td className="py-3 px-3 text-right">
+              <span className="font-semibold text-blue-600">{u.completed_courses || 0}</span>
+            </td>
+            <td className="py-3 px-3">
+              <div className="flex gap-1">
+                {badges.slice(0, 3).map((badge, idx) => (
+                  <div key={idx} className="group relative">
+                    <badge.icon className={`w-4 h-4 ${badge.color}`} />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      {badge.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </td>
           </tr>
-        ))}
+        )})}
         {tableUsers.length === 0 && (
-          <tr><td colSpan={4} className="py-6 text-center text-gray-400 text-sm">Không có xếp hạng khác</td></tr>
+          <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">Không có xếp hạng khác</td></tr>
         )}
       </tbody>
     </table>

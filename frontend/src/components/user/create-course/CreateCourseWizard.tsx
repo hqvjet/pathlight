@@ -223,7 +223,7 @@ export function CreateCourseWizard() {
         }
       } else if (data && isCourseResponse(data)) {
         setResult(data);
-        setDraft((d) => ({ ...d, step: 4 }));
+        setDraft((d) => ({ ...d, step: 4, courseId: payload.id }));
         showToast.success('Đã tạo khóa học thành công!');
       } else if (data && isQueuedCreateResponse(data)) {
         setResult(data);
@@ -231,7 +231,7 @@ export function CreateCourseWizard() {
         showToast.success(data.message || 'Đã tạo khóa học thành công!');
       } else {
         showToast.warning('Đã gửi yêu cầu nhưng không nhận được xác nhận.');
-        setDraft((d) => ({ ...d, step: 4 }));
+        setDraft((d) => ({ ...d, step: 4, courseId: payload.id }));
       }
     } catch (e: unknown) {
       if (e instanceof ApiErrorClass && e.status === 401) {

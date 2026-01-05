@@ -8,10 +8,12 @@ import { userApi } from '@/lib/api/user';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { showToast } from '@/utils/toast';
 import { Lightbulb } from 'lucide-react';
 import { JSX } from 'react/jsx-runtime';
 import { MathRenderer } from '@/components/common/MathRenderer';
+import LessonChatbot from '@/components/user/chatbot/LessonChatbot';
 
 interface LessonDetailApi {
   lesson_id: string;
@@ -132,7 +134,33 @@ type NormalizedQuestion = {
 };
 
 const HINT_COST = 50;
-const requiredExpForLevel = (level: number) => 200 + 75 * Math.max(0, level - 1);
+
+// Sync with backend LEVEL_EXP_THRESHOLDS in user-service
+const LEVEL_EXP_THRESHOLDS = [
+  0, 1000, 3000, 6000, 10000, 15000, 21000, 28000, 36000, 45000, 55000, 66000, 78000,
+  91000, 105000, 120000, 136000, 153000, 171000, 190000, 210000, 231000, 253000,
+  276000, 300000, 325000, 351000, 378000, 406000, 435000, 465000, 496000, 528000,
+  561000, 595000, 630000, 666000, 703000, 741000, 780000, 820000, 861000, 903000,
+  946000, 990000, 1035000, 1081000, 1128000, 1176000, 1225000, 1275000, 1326000,
+  1378000, 1431000, 1485000, 1540000, 1596000, 1653000, 1711000, 1770000, 1830000,
+  1891000, 1953000, 2016000, 2080000, 2145000, 2211000,
+];
+
+const getExpForLevel = (level: number): number => {
+  if (level <= 1) return 0;
+  const idx = level - 1;
+  if (idx < LEVEL_EXP_THRESHOLDS.length) {
+    return LEVEL_EXP_THRESHOLDS[idx];
+  }
+  const baseLevel = LEVEL_EXP_THRESHOLDS.length;
+  const baseExp = LEVEL_EXP_THRESHOLDS[LEVEL_EXP_THRESHOLDS.length - 1];
+  const growthFactor = 1.3;
+  const additionalLevels = level - baseLevel;
+  const additionalExp = baseExp * (Math.pow(growthFactor, additionalLevels)) - baseExp;
+  return Math.floor(baseExp + additionalExp);
+};
+
+const requiredExpForLevel = (level: number) => getExpForLevel(level + 1);
 
 export default function LessonDetailPage({ params }: PageProps) {
   const { courseId, lessonId } = use(params);
@@ -277,6 +305,10 @@ export default function LessonDetailPage({ params }: PageProps) {
   };
 
   const handleSubmit = async () => {
+    // Prevent multiple submissions
+    if (submitting) {
+      return;
+    }
     if (!questions.length) {
       showToast.info('Bài học này chưa có câu hỏi');
       return;
@@ -305,7 +337,36 @@ export default function LessonDetailPage({ params }: PageProps) {
       const adjustedExp = Math.max(0, awardedExp - hintSpent);
       setEarnedExp(adjustedExp);
       setReviewMode(true);
-      showToast.success(result.passed ? 'Đạt yêu cầu 80%. Bạn có thể sang bài tiếp theo.' : 'Chưa đạt 80%. Hãy thử lại.');
+      
+      // Show success message with exp gained
+      if (result.passed) {
+        if (adjustedExp > 0) {
+          showToast.success(`🎉 Đạt yêu cầu 80%! Bạn nhận được ${adjustedExp} EXP.`);
+        } else {
+          showToast.success('Đạt yêu cầu 80%. Bạn có thể sang bài tiếp theo.');
+        }
+      } else {
+        showToast.warning('Chưa đạt 80%. Hãy thử lại.');
+      }
+      
+      const needsFallback = result.passed && awardedExp > 0 && (
+        (snapshot as any)?.award_failed ||
+        !snapshot ||
+        snapshot.new_exp === null || 
+        snapshot.new_level === null 
+      );
+      
+      if (needsFallback) {
+        console.warn('⚠️ Backend did not fully award exp, attempting direct user-service call...');
+        try {
+          await userApi.addExperience({ exp: awardedExp });
+          console.log('✅ Successfully awarded exp via fallback mechanism');
+        } catch (fallbackError) {
+          console.error('❌ Fallback exp award also failed:', fallbackError);
+          showToast.error('Không thể cộng điểm kinh nghiệm. Vui lòng kiểm tra lại sau.');
+        }
+      }
+      
       if (result.passed) {
         try {
           await userApi.logActivity('complete_lesson');
@@ -328,18 +389,29 @@ export default function LessonDetailPage({ params }: PageProps) {
         setRequireExp(snapshot.require_exp);
       }
 
+      // Fallback: If server didn't provide exp info, calculate locally
       if (!serverHasNewExp) {
-        let expPool = playerExp + adjustedExp;
-        let nextLevel = playerLevel;
-        let nextRequireExp = requireExp;
-        while (expPool >= nextRequireExp) {
-          expPool -= nextRequireExp;
-          nextLevel += 1;
-          nextRequireExp = requiredExpForLevel(nextLevel);
+        // Calculate total exp (not just exp in current level)
+        const currentLevelBaseExp = getExpForLevel(playerLevel);
+        const totalExp = currentLevelBaseExp + playerExp + adjustedExp;
+        
+        // Find new level based on total exp
+        let newLevel = 1;
+        while (newLevel < 1000) { // safety cap
+          const nextLevelThreshold = getExpForLevel(newLevel + 1);
+          if (totalExp < nextLevelThreshold) {
+            break;
+          }
+          newLevel++;
         }
-        setPlayerExp(expPool);
-        setPlayerLevel(nextLevel);
-        setRequireExp(nextRequireExp);
+        
+        const currentLevelExp = getExpForLevel(newLevel);
+        const nextLevelExp = getExpForLevel(newLevel + 1);
+        const expInLevel = totalExp - currentLevelExp;
+        
+        setPlayerExp(expInLevel);
+        setPlayerLevel(newLevel);
+        setRequireExp(nextLevelExp);
       }
 
       if (result.passed) {
@@ -597,14 +669,115 @@ export default function LessonDetailPage({ params }: PageProps) {
 
   if (!lesson) return null;
 
+  const currentLessonIndex = lessons.findIndex((l) => l.lesson_id === lessonId);
+  const completedCount = lessons.filter((l) => l.finish).length;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex items-center gap-3 text-sm text-gray-600">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex items-center gap-3 text-sm text-gray-600 mb-6">
         <Link href={`/user/my-courses/${courseId}`} className="text-orange-600 font-semibold hover:text-orange-700">← Quay lại khóa học</Link>
         <span className="text-gray-400">/</span>
         <span className="font-semibold text-gray-800">{lesson.title}</span>
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-[240px,minmax(0,1fr)]">
+        {/* Roadmap Sidebar */}
+        <aside className="space-y-4">
+          <Card className="shadow-sm border-gray-100 sticky top-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-gray-900">Lộ trình khóa học</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center justify-between text-gray-600">
+                  <span>Tiến độ</span>
+                  <span className="font-semibold">{completedCount}/{lessons.length}</span>
+                </div>
+                <Progress value={(completedCount / lessons.length) * 100} className="h-1.5" />
+              </div>
+
+              <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
+                {lessons.map((l, idx) => {
+                  const isCurrent = l.lesson_id === lessonId;
+                  const isCompleted = l.finish;
+                  const isLocked = l.locked;
+                  
+                  return (
+                    <button
+                      key={l.lesson_id}
+                      type="button"
+                      onClick={() => {
+                        if (isLocked) {
+                          showToast.info('Hoàn thành bài trước để mở khóa');
+                          return;
+                        }
+                        router.push(`/user/my-courses/${courseId}/lessons/${l.lesson_id}`);
+                      }}
+                      disabled={isLocked}
+                      className={cn(
+                        'w-full text-left flex items-start gap-2 rounded-lg p-2.5 border transition-all',
+                        isCurrent 
+                          ? 'border-orange-300 bg-orange-50 shadow-sm' 
+                          : isCompleted
+                          ? 'border-emerald-200 bg-emerald-50 hover:border-emerald-300'
+                          : isLocked
+                          ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                          : 'border-gray-200 bg-white hover:border-orange-200'
+                      )}
+                    >
+                      <div className={cn(
+                        'flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold',
+                        isCurrent
+                          ? 'bg-orange-500 text-white ring-2 ring-orange-200'
+                          : isCompleted
+                          ? 'bg-emerald-500 text-white'
+                          : isLocked
+                          ? 'bg-gray-300 text-gray-500'
+                          : 'bg-gray-200 text-gray-600'
+                      )}>
+                        {isCompleted ? '✓' : idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          'text-xs leading-tight line-clamp-2',
+                          isCurrent 
+                            ? 'font-semibold text-orange-900' 
+                            : isCompleted
+                            ? 'text-emerald-900'
+                            : 'text-gray-700'
+                        )}>
+                          {l.title}
+                        </p>
+                        {isCurrent && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-orange-600 font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                            Đang học
+                          </span>
+                        )}
+                      </div>
+                      {isLocked && (
+                        <span className="text-gray-400 text-xs">🔒</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {nextLessonId && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/user/my-courses/${courseId}/lessons/${nextLessonId}`)}
+                  className="w-full px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold hover:from-orange-600 hover:to-orange-700 shadow-sm transition-all"
+                >
+                  Bài tiếp theo →
+                </button>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
+
+        {/* Main Content */}
+        <div className="space-y-6">
       <Card className="shadow-sm border-gray-100">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl text-gray-900">{lesson.title}</CardTitle>
@@ -926,16 +1099,18 @@ export default function LessonDetailPage({ params }: PageProps) {
                               'px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-orange-200 flex items-center gap-1',
                               (!questions[currentQuestion]?.hint || visibleHints[questions[currentQuestion]?.id || '']) && 'opacity-60 cursor-not-allowed'
                             )}
+                            title="Gợi ý"
                           >
                             <Lightbulb className="h-4 w-4" />
-                            Gợi ý
                           </button>
                           <button
                             type="button"
                             onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
-                            className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-orange-200"
+                            disabled={currentQuestion === 0}
+                            className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Trước"
                           >
-                            Trước
+                            ←
                           </button>
                           <button
                             type="button"
@@ -946,13 +1121,13 @@ export default function LessonDetailPage({ params }: PageProps) {
                                 setCurrentQuestion((prev) => Math.min(totalQuestions - 1, prev + 1));
                               }
                             }}
-                            className="px-3 py-1.5 rounded-md border border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300"
+                            className="px-3 py-1.5 rounded-md border border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300 font-semibold"
                           >
-                            {currentQuestion === totalQuestions - 1 ? 'Nộp bài' : 'Tiếp'}
+                            {currentQuestion === totalQuestions - 1 ? '→ Tiếp' : 'Tiếp →'}
                           </button>
                         </div>
                       </div>
-                      {questions[currentQuestion].explanation && (reviewMode || visibleHints[questions[currentQuestion].id]) && (
+                      {questions[currentQuestion].explanation && reviewMode && (
                         <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
                           <p className="font-semibold">Giải thích</p>
                           <p className="leading-6">{questions[currentQuestion].explanation}</p>
@@ -992,7 +1167,6 @@ export default function LessonDetailPage({ params }: PageProps) {
                   )}
                   <span className="text-blue-700">EXP sau gợi ý: {earnedExp ?? 0}</span>
                   {hintSpent > 0 && <span className="text-gray-500 font-normal">(-{hintSpent} EXP do mở gợi ý)</span>}
-                  <span className="text-gray-700">Lv {playerLevel} · Còn {requireExp - playerExp} EXP để lên Lv {playerLevel + 1}</span>
                 </div>
               )}
               {passed && nextLessonId && (
@@ -1011,6 +1185,11 @@ export default function LessonDetailPage({ params }: PageProps) {
           </div>
         </div>
       )}
+      
+      {/* Chatbot Component */}
+      <LessonChatbot lessonId={lessonId} courseId={courseId} />
+        </div>
+      </div>
     </div>
   );
 }

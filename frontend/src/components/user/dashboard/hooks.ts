@@ -133,6 +133,7 @@ export function useDashboard(onLogout: () => void) {
           level: (userInfo.level as number) || 1,
           current_exp: (userInfo.current_exp as number) || 0,
           require_exp: (userInfo.require_exp as number) || 100,
+          streak: (userInfo.streak as number) || 0,
           // Course stats from course-service
           total_courses: (courseStatsData.total_courses as number) || 0,
           completed_courses: (courseStatsData.completed_courses as number) || 0,
@@ -252,7 +253,11 @@ export function useActivity() {
     const targetDays = 53 * 7;
     for (let i = 0; i < targetDays; i++) {
       const date = new Date(firstSunday); date.setDate(firstSunday.getDate() + i);
-      const dateKey = date.toISOString().split('T')[0];
+      // Use local date format to match DB timezone (YYYY-MM-DD)
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const dateKey = `${y}-${m}-${d}`;
       const isCurrentYear = date.getFullYear() === year;
       const activityLevel = activityData[dateKey] || 0;
       const contributionCount = activityLevel * 3;
