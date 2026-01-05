@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 class MessageType(str, Enum):
   GENERATE_COURSE_WITH_VECTORIZE = "GENERATE_COURSE_WITH_VECTORIZE"
+  CHATBOT_QUESTION = "CHATBOT_QUESTION"
 
 
 class BaseMessage(BaseModel):
@@ -49,6 +50,18 @@ class GenerateCourseWithVectorizePayload(BaseModel):
 
 class GenerateCourseWithVectorizeMessage(BaseMessage):
   payload: GenerateCourseWithVectorizePayload
+
+
+class ChatbotQuestionPayload(BaseModel):
+  chat_id: str
+  message: str
+  lesson_id: str
+  course_id: str
+  user_id: str
+
+
+class ChatbotQuestionMessage(BaseMessage):
+  payload: ChatbotQuestionPayload
 
 
 class SQSBatchResponse(BaseModel):

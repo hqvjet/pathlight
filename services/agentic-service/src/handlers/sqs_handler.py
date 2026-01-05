@@ -16,6 +16,7 @@ from core.exceptions import AgenticServiceError
 from contracts.sqs_contracts import (
     MessageType,
     GenerateCourseWithVectorizeMessage,
+    ChatbotQuestionMessage,
     SQSBatchResponse,
     SQSEvent,
 )
@@ -39,6 +40,32 @@ def _handle_generate_course_with_vectorize(msg: GenerateCourseWithVectorizeMessa
         user_id=msg.payload.user_id,
     )
 
+
+def _handle_chatbot_question(msg: ChatbotQuestionMessage) -> None:
+    """Handle chatbot Q&A message."""
+    # Validate required fields
+    if not msg.payload.chat_id:
+        raise ValueError("chat_id is required")
+    if not msg.payload.message:
+        raise ValueError("message is required")
+    if not msg.payload.lesson_id:
+        raise ValueError("lesson_id is required")
+    if not msg.payload.course_id:
+        raise ValueError("course_id is required")
+    if not msg.payload.user_id:
+        raise ValueError("user_id is required")
+    
+    from controllers.chatbot_controller import ChatbotController
+    controller = ChatbotController()
+    controller.answer_question(
+        chat_id=msg.payload.chat_id,
+        message=msg.payload.message,
+        lesson_id=msg.payload.lesson_id,
+        course_id=msg.payload.course_id,
+        user_id=msg.payload.user_id,
+    )
+
+
 def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
     """Process AWS SQS batch event and return batchItemFailures on error per record."""
     failures: List[dict] = []
@@ -55,6 +82,12 @@ def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
                     f"Processing GENERATE_COURSE_WITH_VECTORIZE: id={msg.payload.id}, files={len(msg.payload.s3_keys)}, duration={msg.payload.duration}, difficulty={msg.payload.difficulty}"
                 )
                 _handle_generate_course_with_vectorize(msg)
+            elif msg_type == MessageType.CHATBOT_QUESTION:
+                msg = ChatbotQuestionMessage(**data)
+                logger.info(
+                    f"Processing CHATBOT_QUESTION: chat_id={msg.payload.chat_id}, lesson_id={msg.payload.lesson_id}, course_id={msg.payload.course_id}"
+                )
+                _handle_chatbot_question(msg)
             else:
                 raise ValueError(f"Unsupported message type: {data.get('type')}")
         except Exception as e:

@@ -136,3 +136,38 @@ def _insert_assessment(db: Session, lesson_id: str, qa: TestQA) -> None:
         answer=answer_int,
     )
     db.add(item)
+
+
+def get_lesson_content(lesson_id: str) -> dict:
+    """Retrieve lesson content from database.
+    
+    Args:
+        lesson_id: Lesson identifier
+        
+    Returns:
+        Dictionary with lesson details or empty dict if not found
+    """
+    # If DATABASE_URL is not set, return empty
+    if not (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or os.getenv("PG_DSN")):
+        logger.warning("DATABASE_URL not set; cannot retrieve lesson %s", lesson_id)
+        return {}
+    
+    try:
+        init_database()
+        with next(get_db()) as db:  # type: ignore[misc]
+            lesson = db.get(m.Lesson, lesson_id)
+            if not lesson:
+                logger.warning("Lesson %s not found in database", lesson_id)
+                return {}
+            
+            return {
+                "lesson_id": lesson.lesson_id,
+                "course_id": lesson.course_id,
+                "title": lesson.title,
+                "overview": lesson.overview,
+                "content": lesson.content,
+                "duration": lesson.duration,
+            }
+    except Exception as e:
+        logger.exception("Failed to retrieve lesson %s: %s", lesson_id, e)
+        return {}

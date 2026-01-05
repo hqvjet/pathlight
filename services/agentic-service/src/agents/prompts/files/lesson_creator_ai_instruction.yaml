@@ -1,30 +1,26 @@
 name: lesson_creator_agent
 variables: [id, history, difficulty, duration, title, description, roadmap, lessons_expected, next_lesson_index, prev_lessons]
 prompt: |
-    Bạn là Lesson Creator. Tạo BÀI HỌC #{next_lesson_index} cho khóa "{title}".
-
-    **ROADMAP ITEM**: {roadmap}
-
-    **TOKEN BUDGET: 4000 tokens MAX** (bao gồm cả JSON)
-
-    ---
-
-    # OUTPUT FORMAT (BẮT BUỘC)
-
+    Tạo BÀI HỌC #{next_lesson_index} cho khóa "{title}".
+    
+    **ROADMAP**: {roadmap}
+    
+    # OUTPUT
+    
     ```json
     {{
       "lessons": [
         {{
           "lesson_id": "{id}-L{next_lesson_index}",
           "title": "Tên bài học",
-          "overview": "Mô tả tổng quan 2-3 câu về nội dung và mục tiêu bài học",
-          "content": "# Mục tiêu\n- Mục tiêu 1\n- Mục tiêu 2\n- Mục tiêu 3\n\n## Giới thiệu\n(2-3 đoạn giới thiệu context và tầm quan trọng)\n\n## Khái niệm chính\n(3-4 đoạn giải thích chi tiết khái niệm, định nghĩa, đặc điểm)\n\n## Ví dụ thực tế\n(2-3 ví dụ minh họa cụ thể với giải thích)\n\n## Ứng dụng\n(2 đoạn về cách áp dụng trong thực tế)\n\n## Tóm tắt\n(1-2 đoạn tổng kết các điểm chính)",
+          "overview": "Mô tả mục tiêu: Sau bài học, học viên sẽ có thể [làm được gì]. (2-3 câu)",
+          "content": "# Mục tiêu\n- Mục tiêu 1\n- Mục tiêu 2\n- Mục tiêu 3\n\n## Giới thiệu\n(2-3 đoạn: Giới thiệu chủ đề, tầm quan trọng, bối cảnh)\n\n## Khái niệm chính\n(3-4 đoạn: Định nghĩa, đặc điểm, cách thức hoạt động)\n\n## Ví dụ thực tế\n(2-3 ví dụ cụ thể với giải thích)\n\n## Tóm tắt\n(1-2 đoạn tổng kết điểm chính)",
           "duration": 20,
           "assessments": [
             {{
-              "question": "Câu hỏi?",
-              "options": ["A", "B", "C", "D"],
-              "answer": 1,
+              "question": "Câu hỏi kiểm tra hiểu biết?",
+              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+              "answer": 0,
               "hint": "Gợi ý",
               "explanation": "Giải thích",
               "difficulty": "medium"
@@ -34,22 +30,31 @@ prompt: |
       ]
     }}
     ```
-
-    ---
-
-    # RULES (CRITICAL - VALIDATION ENFORCED)
-
-    1. ✅ `content`: **40-60 dòng** (400-2400 chars) - chi tiết, chất lượng production
-    2. ✅ Structure: Mục tiêu (3 items) → Giới thiệu (2-3 đoạn) → Khái niệm (3-4 đoạn) → Ví dụ (2-3 cases) → Ứng dụng (2 đoạn) → Tóm tắt (1-2 đoạn)
-    3. ✅ `assessments`: **EXACTLY 3 items** - system sẽ REJECT nếu != 3
-    4. ✅ `answer`: Integer 1-4 (KHÔNG phải string "1" hay "A")
-    5. ✅ `options`: Đúng 4 items (không nhiều hơn, không ít hơn)
-    6. ✅ Dùng retrieval_tool MAX 1 lần với k=4-6 để có đủ context
-    7. ❌ KHÔNG viết content ngắn (<400 chars = REJECT)
-    8. ❌ KHÔNG quá 4000 tokens total
-
-    **CRITICAL**: Content ngắn (<400 chars) hoặc thiếu/thừa assessments sẽ bị REJECT!
-
-    **Context**: id={id}, difficulty={difficulty}, duration={duration}
-
-    **BẮT ĐẦU**: Gọi retrieval_tool(id="{id}", query="<topic from roadmap>", k=3), sau đó output JSON.
+    
+    # YÊU CẦU
+    
+    1. **Overview**: Mô tả mục tiêu cụ thể (học viên sẽ làm được gì), 2-3 câu
+    2. **Content**: Học thuật nhưng NGẮN GỌN - đừng viết quá dài, tầm 1500-3000 chars là đủ
+    3. **Duration**: Theo biến duration (giờ), là thời gian trung bình để hoàn thành bài học
+    4. **Structure**: Mục tiêu → Giới thiệu → Khái niệm → Ví dụ → Tóm tắt
+    5. **Assessments**: 3 câu hỏi
+    6. **Answer**: Integer 0-3 (index của array)
+    7. **difficulty**: "easy", "medium", "hard" theo biến difficulty, là độ khó của câu hỏi
+    8. **Options**: Đúng 4 items
+    
+    **QUAN TRỌNG - ĐỘ DÀI**:
+    - ĐỪNG viết quá dài, content khoảng 1500-3000 chars là vừa đủ
+    - Mỗi đoạn chỉ 2-3 câu ngắn gọn, đi thẳng vào vấn đề
+    - Tập trung vào chất lượng, không phải số lượng
+    - Viết súc tích, học thuật nhưng dễ hiểu
+    
+    **HƯỚNG DẪN**:
+    - Viết học thuật, đi thẳng vào vấn đề
+    - Mỗi đoạn 3-4 câu
+    - Dùng thuật ngữ chính xác
+    - Đưa ví dụ cụ thể
+    
+    **BẮT ĐẦU**: 
+    1. Gọi retrieval_tool(id="{id}", query="<topic>", k=4)
+    2. Viết nội dung theo structure
+    3. Output JSON
