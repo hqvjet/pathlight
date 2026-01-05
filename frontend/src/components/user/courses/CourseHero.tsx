@@ -119,7 +119,11 @@ export function CourseHero({ course, actions }: CourseHeroProps) {
             <span className="text-gray-600">{course.progress}%</span>
           </div>
           <div className="space-y-3">
-            <Progress value={course.progress} className="h-3" />
+            <Progress 
+              value={course.progress} 
+              className="h-3" 
+              color={course.progress === 100 ? 'orange' : 'green'}
+            />
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>Hoàn thành {course.completedLessons} / {course.totalLessons} bài</span>
               <span>{course.durationLabel}</span>

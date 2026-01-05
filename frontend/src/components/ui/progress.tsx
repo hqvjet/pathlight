@@ -4,11 +4,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const progressVariants = cva(
-  "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
+  "relative h-4 w-full overflow-hidden rounded-full",
   {
     variants: {
       variant: {
-        default: "bg-secondary",
+        default: "bg-orange-500",
         destructive: "bg-destructive/20",
       },
     },
@@ -24,18 +24,21 @@ const Progress = React.forwardRef<
     VariantProps<typeof progressVariants> & {
       value?: number
     }
->(({ className, value, variant, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(progressVariants({ variant }), className)}
-    {...props}
-  >
+>(({ className, value, variant, ...props }, ref) => {
+  // Always use green for completed portion, orange for remaining
+  return (
     <div
-      className="h-full w-full flex-1 bg-primary transition-all"
-      style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
-    />
-  </div>
-))
+      ref={ref}
+      className={cn(progressVariants({ variant }), className)}
+      {...props}
+    >
+      <div
+        className="h-full w-full flex-1 transition-all bg-green-500"
+        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+      />
+    </div>
+  )
+})
 Progress.displayName = "Progress"
 
 export { Progress }

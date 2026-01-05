@@ -241,7 +241,10 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                 <span className="text-gray-700 font-semibold">Tiến độ</span>
                 <span className="text-gray-600">{hero.progress}%</span>
               </div>
-              <Progress value={hero.progress} />
+              <Progress 
+                value={hero.progress} 
+                color={hero.progress === 100 ? 'orange' : 'green'}
+              />
               <LessonList modules={modules} selectedId={currentLessonId} onSelect={handleSelectLesson} />
             </CardContent>
           </Card>
@@ -250,24 +253,10 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         <div className="space-y-6 lg:col-span-1">
           <Card className="shadow-sm border-gray-100">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-gray-900">Tổng quan khóa học</CardTitle>
+              <CardTitle className="text-lg text-gray-900">Bài học hiện tại</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
-                  <p className="text-xs text-orange-600 font-semibold uppercase">Hoàn thành</p>
-                  <p className="text-2xl font-bold text-orange-700 mt-1">{hero.completedLessons}/{hero.totalLessons}</p>
-                  <p className="text-xs text-gray-600 mt-1">bài học</p>
-                </div>
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-600 font-semibold uppercase">Thời lượng</p>
-                  <p className="text-2xl font-bold text-blue-700 mt-1">{hero.durationLabel}</p>
-                  <p className="text-xs text-gray-600 mt-1">học tập</p>
-                </div>
-              </div>
-              
+            <CardContent className="space-y-4">            
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-800">Vị trí hiện tại</p>
                 <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
                   {continueLessonId ? (
                     <>
@@ -291,36 +280,6 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               >
                 {hero.progress === 0 ? 'Bắt đầu học ngay →' : 'Tiếp tục học →'}
               </Link>
-
-              <div className="pt-3 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-2">Lộ trình học tập ({hero.completedLessons}/{hero.totalLessons})</p>
-                <div className="space-y-1.5">
-                  {modules[0]?.lessons.slice(0, 5).map((lesson, idx) => (
-                    <div key={lesson.id} className="flex items-center gap-2 text-xs">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        lesson.status === 'completed' 
-                          ? 'bg-emerald-500 text-white' 
-                          : lesson.status === 'in-progress'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-200 text-gray-500'
-                      }`}>
-                        {lesson.status === 'completed' ? '✓' : idx + 1}
-                      </div>
-                      <span className={`flex-1 truncate ${
-                        lesson.status === 'in-progress' 
-                          ? 'text-gray-900 font-semibold' 
-                          : 'text-gray-600'
-                      }`}>
-                        {lesson.title}
-                      </span>
-                      {lesson.status === 'locked' && <span className="text-gray-400">🔒</span>}
-                    </div>
-                  ))}
-                  {modules[0]?.lessons.length > 5 && (
-                    <p className="text-xs text-gray-400 italic pl-7">... và {modules[0].lessons.length - 5} bài nữa</p>
-                  )}
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>

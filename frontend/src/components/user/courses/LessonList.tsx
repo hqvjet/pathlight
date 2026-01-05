@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export type LessonStatus = 'completed' | 'in-progress' | 'locked';
@@ -89,9 +89,6 @@ interface LessonListProps {
 export function LessonList({ modules, selectedId, onSelect }: LessonListProps) {
   return (
     <Card className="shadow-sm border-gray-100">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg text-gray-900">Lộ trình học</CardTitle>
-      </CardHeader>
       <CardContent className="space-y-6">
         {modules.map((module) => (
           <div key={module.id} className="space-y-3">
