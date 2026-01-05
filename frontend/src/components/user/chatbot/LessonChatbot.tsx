@@ -16,7 +16,7 @@ interface ChatbotProps {
 }
 
 export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showIdlePrompt, setShowIdlePrompt] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -285,7 +285,7 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
                 disabled={!inputValue.trim() || isLoading}
                 className="bg-gray-600 text-white p-2 rounded-full hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
@@ -293,48 +293,6 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
           </div>
         </div>
       )}
-
-      {/* Chatbot Icon Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-gradient-to-r from-gray-700 to-gray-800 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 flex items-center justify-center"
-        title="Trợ lý Pathlight"
-      >
-        {isOpen ? (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-10 h-10" fill="none" viewBox="0 0 64 64">
-            {/* Main head circle */}
-            <circle cx="32" cy="34" r="16" fill="white" stroke="white" strokeWidth="2"/>
-            
-            {/* Eyes */}
-            <circle cx="26" cy="32" r="3" fill="#374151"/>
-            <circle cx="38" cy="32" r="3" fill="#374151"/>
-            
-            {/* Happy smile */}
-            <path d="M 24 38 Q 32 43 40 38" stroke="#374151" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-            
-            {/* Antenna */}
-            <line x1="32" y1="14" x2="32" y2="18" stroke="white" strokeWidth="2.5"/>
-            <circle cx="32" cy="12" r="2.5" fill="white"/>
-            
-            {/* Left ear/headphone */}
-            <circle cx="14" cy="34" r="6" fill="white"/>
-            
-            {/* Right ear/headphone */}
-            <circle cx="50" cy="34" r="6" fill="white"/>
-            
-            {/* Headband */}
-            <path d="M 14 28 Q 32 20 50 28" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round"/>
-            
-            {/* Mic */}
-            <circle cx="32" cy="50" r="3" fill="white"/>
-            <line x1="32" y1="47" x2="32" y2="50" stroke="white" strokeWidth="2"/>
-          </svg>
-        )}
-      </button>
 
       <style jsx>{`
         @keyframes fade-in {

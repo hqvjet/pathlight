@@ -132,7 +132,11 @@ export function CourseCard({ course, onSelect, onOwnerClick }: CourseCardProps) 
         
         {/* Progress Bar */}
         <div className="space-y-2">
-          <Progress value={course.progress} className="h-2.5" />
+          <Progress 
+            value={course.progress} 
+            className="h-2.5" 
+            color={course.progress === 100 ? 'orange' : 'green'}
+          />
           <div className="flex justify-between items-center text-xs text-gray-600">
             <span className="font-medium">
               {course.completedLessons < course.totalLessons 
