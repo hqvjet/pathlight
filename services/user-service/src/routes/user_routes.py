@@ -137,6 +137,17 @@ async def add_experience_endpoint(
 ):
     return await add_experience(request, current_user, db)
 
+@router.post("/experience/deduct", response_model=TestStatsResponse)
+async def deduct_experience_endpoint(
+    request: ExperienceAddRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Deduct EXP from user (for power-ups in quiz)"""
+    # Deduct by passing negative exp
+    deduct_request = ExperienceAddRequest(exp=-abs(request.exp))
+    return await add_experience(deduct_request, current_user, db)
+
 # 2.8. Lưu cột mốc hoạt động của USER
 @router.post("/activity")
 async def save_activity(
