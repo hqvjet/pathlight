@@ -37,11 +37,11 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
 # Experience rewards
 DIFFICULTY_EXP = {
-    "easy": 5,
-    "medium": 10,
-    "hard": 15,
+    "easy": 25,
+    "medium": 500,
+    "hard": 100,
 }
-QUIZ_COMPLETION_EXP = 50  # Bonus for completing entire quiz
+QUIZ_COMPLETION_EXP = 150
 
 
 def _get_db() -> Session:
@@ -211,10 +211,6 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
     if not queue_url:
         raise HTTPException(status_code=500, detail="SQS_QUEUE_URL is not configured")
 
-    short_prompt = (body.short_prompt or body.short_user_prompt or "").strip()
-    if not short_prompt or not short_prompt.strip():
-        raise HTTPException(status_code=400, detail="short_prompt is required")
-
     job_type = body.type or "generate_quiz"
     allowed_job_types = {"generate_course", "generate_quiz"}
     if job_type not in allowed_job_types:
@@ -222,6 +218,9 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
 
     quiz_id = body.quiz_id or f"quiz-{uuid4()}"
     s3_keys = (body.documents or []) + (body.s3_key or [])
+    
+    if not s3_keys:
+        raise HTTPException(status_code=400, detail="At least one document is required")
 
     user_id = _verify_token(request)
     if not user_id:
@@ -264,15 +263,16 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
             queue_url=queue_url,
             course_id=quiz_id,
             s3_keys=s3_keys,
-            short_prompt=short_prompt,
-            user_role=body.user_role or body.user_position or "",
-            course_level=body.course_level,
-            course_constraint=body.course_constraint,
-            course_duration=body.course_duration,
+            short_prompt="Auto-generated quiz",
+            user_role="student",
+            course_level=body.level,
+            course_constraint="professional",
+            course_duration=body.duration,
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),
             job_type=job_type,
+            num_questions=body.num_questions or 10,
         )
         _log_activity(request, user_id, "create_quiz")
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "quiz_id": quiz_id}
@@ -576,9 +576,13 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
         total = len(cards)
         score = round((correct_count / total) * 100, 2)
         
-        # Calculate experience based on difficulty and performance
+        # Award experience only on first attempt for AI-generated quizzes
+        is_first_attempt = quiz.previous_score is None
+        is_ai_quiz = getattr(quiz, 'creation_type', 'ai') == 'ai'
         gained_exp = 0
-        if score >= 70:  # Only award exp if passed (70% or higher)
+        
+        if is_first_attempt and is_ai_quiz and score >= 70:
+            # Award exp based on difficulty of correctly answered questions
             for result in results:
                 if result.is_correct:
                     difficulty = result.difficulty.lower() if result.difficulty else "medium"
@@ -655,11 +659,14 @@ def finish_quiz_controller(request: Request, body: FinishQuizRequest):
         session.commit()
         
         # Award completion bonus if quiz passed and not already finished
-        # IMPORTANT: Do NOT award EXP for manual quizzes (to prevent spam)
+        # IMPORTANT: Only award EXP for AI quizzes, not manual (to prevent spam)
+        # Only award on first finish
         exp_amount = 0
         is_manual = getattr(quiz, 'creation_type', 'ai') == 'manual'
         prev_score = quiz.previous_score
-        if not already_finished and not is_manual and prev_score is not None and prev_score >= 70:  # type: ignore[arg-type]
+        is_first_finish = not already_finished
+        
+        if is_first_finish and not is_manual and prev_score is not None and prev_score >= 70:  # type: ignore[arg-type]
             exp_amount = QUIZ_COMPLETION_EXP
         
         award_result = _award_experience(request, user_id, exp_amount) if exp_amount > 0 else None

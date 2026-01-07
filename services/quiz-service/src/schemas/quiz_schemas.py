@@ -4,20 +4,13 @@ from typing import Optional, List
 
 class CreateQuizRequest(BaseModel):
     type: str = Field(default="generate_quiz", description="Job type required by SQS")
-    short_prompt: str = Field(..., alias="short_prompt", description="Short prompt guiding quiz generation")
-    user_role: Optional[str] = Field(default=None, alias="user_role", description="User role/position")
-    course_duration: int = Field(..., description="Desired quiz duration in days")
-    course_level: str = Field(..., description="overview | intermediate | advance")
-    course_constraint: str = Field(..., description="professional | academic | friendly | humorous")
+    duration: int = Field(..., description="Desired quiz duration in minutes")
+    level: str = Field(..., description="easy | medium | hard")
     quiz_id: Optional[str] = Field(default=None, description="Quiz ID to create; auto-generated if omitted")
     documents: Optional[List[str]] = Field(default=None, alias="documents", description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
-    # legacy/compat fields (still honored)
+    num_questions: Optional[int] = Field(default=10, description="Number of quiz questions to generate")
     s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
-    user_position: Optional[str] = Field(default=None, description="Legacy: user position / role")
-    short_user_prompt: Optional[str] = Field(default=None, description="Legacy short prompt")
-    difficulty: str = Field(default="medium")
-    duration: int = Field(default=1200)
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -125,7 +118,7 @@ class QuizSubmitResponse(BaseModel):
     status: int
     result: Optional[QuizSubmitResult] = None
     message: Optional[str] = None
-    experience: Optional[dict] = None  # Rewards from completing quiz
+    experience: Optional[dict] = None
 
 
 class QuizVisibilityUpdate(BaseModel):

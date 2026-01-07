@@ -37,6 +37,7 @@ def send_generate_with_vectorize(
     region: Optional[str] = None,
     group_id: Optional[str] = None,
     job_type: str = "generate_course",
+    num_questions: Optional[int] = None,
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
     session = _session(region)
@@ -54,6 +55,10 @@ def send_generate_with_vectorize(
         # Backward compatibility
         "s3_keys": s3_keys or [],
     }
+    
+    # Add num_questions if provided (for quiz generation)
+    if num_questions is not None:
+        payload["num_questions"] = num_questions
 
     body = json.dumps(
         {
