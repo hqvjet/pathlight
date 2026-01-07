@@ -27,6 +27,7 @@ class OAuthSigninRequest(BaseModel):
     given_name: str
     family_name: Optional[str] = None
     avatar_id: str
+    credential: Optional[str] = None  # Google ID token for verification
 
 class AdminSigninRequest(BaseModel):
     username: str

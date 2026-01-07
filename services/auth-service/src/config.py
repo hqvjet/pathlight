@@ -61,6 +61,9 @@ class AuthConfig:
 
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 10
 
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://www.pathlight.io.vn")
 
     ADMIN_USERNAME: str = ""

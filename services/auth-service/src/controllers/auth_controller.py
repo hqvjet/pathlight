@@ -48,9 +48,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive")
         logger.info(f"Authentication successful for user: {user.email}")
         return user
-    except InvalidTokenError as e:
-        logger.error(f"JWT Error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token expired or invalid: {str(e)}")
+    except InvalidTokenError:
+        logger.error(f"JWT Error: Invalid token or token expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired or invalid")
     except HTTPException:
         raise
     except Exception as e:
@@ -288,6 +288,39 @@ async def oauth_signin_user(request: OAuthSigninRequest, db: Session) -> AuthRes
     """Handle OAuth signin"""
     try:
         logger.info(f"OAuth signin attempt for email: {request.email}")
+        
+        # Verify Google token if credential is provided
+        google_verified_info = None
+        if hasattr(request, 'credential') and request.credential:
+            from services.auth_service import verify_google_token
+            google_verified_info = verify_google_token(request.credential)
+            
+            if not google_verified_info:
+                logger.error(f"Google token verification failed for email: {request.email}")
+                return AuthResponse(
+                    status=401,
+                    message="Xác thực Google thất bại. Token không hợp lệ.",
+                    access_token=None
+                )
+            
+            # Verify that the token matches the request data
+            if google_verified_info['email'] != request.email:
+                logger.error(f"Email mismatch: token={google_verified_info['email']}, request={request.email}")
+                return AuthResponse(
+                    status=401,
+                    message="Thông tin Google không khớp.",
+                    access_token=None
+                )
+            
+            if google_verified_info['sub'] != request.google_id:
+                logger.error(f"Google ID mismatch: token={google_verified_info['sub']}, request={request.google_id}")
+                return AuthResponse(
+                    status=401,
+                    message="Thông tin Google không khớp.",
+                    access_token=None
+                )
+            
+            logger.info(f"Google token verified successfully for: {request.email}")
         
         user = db.query(User).filter(
             (User.email == request.email) | (User.google_id == request.google_id)
