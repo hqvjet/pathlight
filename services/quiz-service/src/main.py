@@ -114,6 +114,9 @@ if __name__ == "__main__":
     port = int(os.getenv("QUIZ_SERVICE_PORT", str(config.SERVICE_PORT)))
     logger.info("Starting Pathlight Quiz Service...")
     uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=True)
+elif not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    # Prevent uvicorn auto-start in non-Lambda environments when imported as module
+    pass
 
 
 @app.get("/redoc", include_in_schema=False)
