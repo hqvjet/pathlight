@@ -1,0 +1,116 @@
+name: CICD For Quiz Service
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/quiz-service/**'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/quiz-service/**'
+
+jobs:
+  # Build Docker Image
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Build Docker Image
+        run: |
+          docker build -t pathlight/quiz_service services/quiz-service
+          docker save pathlight/quiz_service -o quiz-service.tar
+          echo "Docker image 'pathlight/quiz_service' built successfully."
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-quiz-service
+          path: quiz-service.tar
+
+  # Run Tests
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: pip install -r services/quiz-service/requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Load Environment Variables
+        run: |
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> services/quiz-service/.env
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/quiz-service/.env
+          echo "ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/quiz-service/.env
+          echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/quiz-service/.env
+
+      - name: Run Tests
+        run: |
+          cd services/quiz-service
+          echo "🧪 Running unit tests..."
+          pytest -v
+    
+  # Push Image to ECR and Deploy to Lambda
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Use Artifact from Build
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-quiz-service
+
+      - name: Load Docker Image Artifact
+        run: |
+          docker load -i quiz-service.tar
+          echo "Docker image 'pathlight/quiz_service' loaded successfully."
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+      - name: Push Quiz Service Image into AWS ECR
+        run: |
+          aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+          docker tag pathlight/quiz_service:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/quiz_service:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/quiz_service:latest
+          echo "✅ Docker image 'pathlight/quiz_service' pushed to ECR successfully."
+          sleep 10 # Wait for ECR to process the image
+
+      - name: Update Lambda Function Code from ECR
+        run: |
+          aws lambda update-function-code --function-name pathlight-quiz-service --image-uri ${{ secrets.ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/pathlight/quiz_service:latest
+          echo "✅ Lambda function code updated successfully."
+
+      - name: Update Lambda Environment Variables (Non-AWS secrets only)
+        run: |
+          sleep 20 # Wait for the Lambda function to be updated
+          aws lambda update-function-configuration --function-name pathlight-quiz-service --environment \
+          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}}"
+          echo "✅ Lambda environment variables updated successfully."
+
+      - name: Notify Deployment Success
+        run: echo "Deployment of Quiz Service completed successfully."
