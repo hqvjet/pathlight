@@ -6,9 +6,14 @@ import jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
+import logging
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from config import config
 from models import User, UserProfile, Admin, TokenBlacklist
+
+logger = logging.getLogger(__name__)
 
 def hash_password(password: str, *, rounds: int = 10) -> str:
     salt = bcrypt.gensalt(rounds=rounds)
@@ -132,3 +137,49 @@ def blacklist_token(db: Session, jti: str) -> None:
 
 def is_token_blacklisted(db: Session, jti: str) -> bool:
     return db.query(TokenBlacklist).filter(TokenBlacklist.token == jti).first() is not None
+
+
+def verify_google_token(token: str) -> Optional[dict]:
+    """
+    Verify Google ID token and return user information
+    
+    Args:
+        token: Google ID token (JWT) received from frontend
+        
+    Returns:
+        dict with user info (sub, email, given_name, family_name, picture) or None if invalid
+    """
+    try:
+        if not config.GOOGLE_CLIENT_ID:
+            logger.error("GOOGLE_CLIENT_ID not configured, cannot verify Google token")
+            return None
+            
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(
+            token, 
+            requests.Request(), 
+            config.GOOGLE_CLIENT_ID
+        )
+        
+        # Verify the issuer
+        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+            logger.error(f"Invalid token issuer: {idinfo['iss']}")
+            return None
+        
+        logger.info(f"Successfully verified Google token for user: {idinfo.get('email')}")
+        return {
+            'sub': idinfo['sub'],  # Google user ID
+            'email': idinfo['email'],
+            'email_verified': idinfo.get('email_verified', False),
+            'given_name': idinfo.get('given_name', ''),
+            'family_name': idinfo.get('family_name', ''),
+            'picture': idinfo.get('picture', ''),
+        }
+        
+    except ValueError as e:
+        logger.error(f"Google token verification failed: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error verifying Google token: {str(e)}")
+        return None
+
