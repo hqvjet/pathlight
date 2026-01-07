@@ -185,7 +185,7 @@ class TestEmailService:
             # Verify message contains both plain text and HTML parts
             assert "Content-Type: text/plain" in message_content
             assert "Content-Type: text/html" in message_content
-            assert "PathLight <noreply@pathlight.com>" in message_content
+            assert "PathLight <test@example.com>" in message_content  # Now uses SMTP_USERNAME
             assert "Subject: Test Subject" in message_content
 
     @patch('services.email_service.smtplib.SMTP')
