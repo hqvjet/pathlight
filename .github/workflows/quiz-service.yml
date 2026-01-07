@@ -63,6 +63,8 @@ jobs:
           echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> services/quiz-service/.env
           echo "ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}" >> services/quiz-service/.env
           echo "SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}" >> services/quiz-service/.env
+          echo "REGION=ap-northeast-1" >> services/quiz-service/.env
+          echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> services/quiz-service/.env
 
       - name: Run Tests
         run: |
@@ -109,7 +111,11 @@ jobs:
         run: |
           sleep 20 # Wait for the Lambda function to be updated
           aws lambda update-function-configuration --function-name pathlight-quiz-service --environment \
-          "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}}"
+            "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}, \
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}, ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }}, \
+            SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }}, REGION=${{ secrets.REGION }}, \
+            S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}, DDB_TABLE_NAME=${{ secrets.DDB_QUIZ_TABLE_NAME }}, \
+            SQS_QUEUE_URL=${{ secrets.SQS_QUEUE_URL }}}"
           echo "✅ Lambda environment variables updated successfully."
 
       - name: Notify Deployment Success
