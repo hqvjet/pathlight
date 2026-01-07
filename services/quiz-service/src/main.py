@@ -1,11 +1,12 @@
 
-from mangum import Mangum
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 import json
+from contextlib import asynccontextmanager
+from mangum import Mangum
 
 from .config import config
 from .database import get_engine, Base
@@ -14,7 +15,45 @@ from src.routes.quiz_routes import router as quiz_router
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Quiz Service", version="1.0.0", docs_url=None, redoc_url=None)
+def _env_flag(name: str) -> bool:
+    return str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Quiz Service starting up")
+
+    skip_db = (
+        bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+        or not config.DATABASE_URL
+        or bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or _env_flag("QUIZ_SERVICE_SKIP_DB")
+    )
+    if skip_db:
+        logger.info(
+            "Skipping database setup | AWS_LAMBDA_FUNCTION_NAME=%s, DATABASE_URL_set=%s, PYTEST=%s, QUIZ_SERVICE_SKIP_DB=%s",
+            bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")), bool(config.DATABASE_URL), bool(os.getenv("PYTEST_CURRENT_TEST")), _env_flag("QUIZ_SERVICE_SKIP_DB"),
+        )
+    else:
+        try:
+            engine = get_engine()
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables ensured for quiz service")
+        except Exception as e:
+            logger.error(f"Error during startup: {e}")
+            raise
+
+    yield
+
+    logger.info("Quiz Service shutting down")
+
+app = FastAPI(
+    title="Pathlight Quiz Service",
+    description="Standalone Quiz Service for Pathlight Platform",
+    version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,17 +65,6 @@ app.add_middleware(
 
 # Mount quiz routes under /quiz
 app.include_router(quiz_router, prefix="/quiz")
-
-
-@app.on_event("startup")
-async def startup_event():
-    try:
-        engine = get_engine()
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables ensured for quiz service")
-    except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        raise
 
 @app.get("/")
 async def root():
