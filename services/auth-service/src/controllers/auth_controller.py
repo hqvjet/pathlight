@@ -3,12 +3,13 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
 import jwt
+import uuid
 from jwt import InvalidTokenError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config import config
 from database import get_db
-from models import User, TokenBlacklist
+from models import User, TokenBlacklist, UserProfile
 from schemas.auth_schemas import *
 from services.auth_service import *
 from services.email_service import send_verification_email, send_password_reset_email
@@ -86,7 +87,7 @@ async def signup_user(user_data: SignupRequest, db: Session) -> MessageResponse:
                         streak=0,
                         level=1,
                         current_exp=0,
-                        require_exp=10,
+                        require_exp=1000,
                     )
                     db.add(profile)
                     setattr(existing_user, 'profile_id', profile.profile_id)
@@ -329,35 +330,71 @@ async def oauth_signin_user(request: OAuthSigninRequest, db: Session) -> AuthRes
         if user:
             logger.info(f"Found existing user for OAuth signin: {user.email}")
             
+            # Update User table fields
             if not getattr(user, 'google_id', None):
                 setattr(user, 'google_id', request.google_id)
-            
-            if not getattr(user, 'given_name', None):
-                setattr(user, 'given_name', request.given_name)
-            
-            if not getattr(user, 'family_name', None):
-                setattr(user, 'family_name', request.family_name)
-            
-            current_avatar = getattr(user, 'avatar_url', None)
-            if not current_avatar or (current_avatar and 'googleusercontent.com' in current_avatar):
-                setattr(user, 'avatar_url', request.avatar_id)
             
             setattr(user, 'is_email_verified', True)
             setattr(user, 'is_active', True)
             
             if not getattr(user, 'password', None):
                 setattr(user, 'password', hash_password(request.google_id))
+            
+            # Ensure profile exists
+            profile = None
+            if getattr(user, 'profile_id', None):
+                profile = db.query(UserProfile).filter(UserProfile.profile_id == user.profile_id).first()
+            
+            if not profile:
+                profile = UserProfile(
+                    profile_id=str(uuid.uuid4()),
+                    subscription=0,
+                    streak=0,
+                    level=1,
+                    current_exp=0,
+                    require_exp=1000,
+                )
+                db.add(profile)
+                db.flush()
+                setattr(user, 'profile_id', profile.profile_id)
+            
+            # Update UserProfile fields
+            if not getattr(profile, 'given_name', None):
+                setattr(profile, 'given_name', request.given_name)
+            
+            if not getattr(profile, 'family_name', None):
+                setattr(profile, 'family_name', request.family_name)
+            
+            current_avatar = getattr(profile, 'avatar_url', None)
+            if not current_avatar or (current_avatar and 'googleusercontent.com' in current_avatar):
+                setattr(profile, 'avatar_url', request.avatar_id)
+                
         else:
             logger.info(f"Creating new user for OAuth signin: {request.email}")
-            user = User(
-                email=request.email,
-                google_id=request.google_id,
+            
+            # Create profile first
+            profile = UserProfile(
+                profile_id=str(uuid.uuid4()),
+                subscription=0,
+                streak=0,
+                level=1,
+                current_exp=0,
+                require_exp=1000,
                 given_name=request.given_name,
                 family_name=request.family_name,
                 avatar_url=request.avatar_id,
+            )
+            db.add(profile)
+            db.flush()
+            
+            # Create user with profile reference
+            user = User(
+                email=request.email,
+                google_id=request.google_id,
                 is_email_verified=True,
                 is_active=True,
-                password=hash_password(request.google_id)
+                password=hash_password(request.google_id),
+                profile_id=profile.profile_id,
             )
             db.add(user)
         
