@@ -38,7 +38,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 # Experience rewards
 DIFFICULTY_EXP = {
     "easy": 25,
-    "medium": 500,
+    "medium": 50,
     "hard": 100,
 }
 QUIZ_COMPLETION_EXP = 150
@@ -441,12 +441,12 @@ def get_quiz_detail_controller(
         _ensure_owner_or_public(quiz, user_id)
         cards = session.query(QuizCard).filter(QuizCard.quiz_id == quiz.quiz_id).order_by(QuizCard.created_at.asc()).all()
         card_models = [
-            QuizCardItem(  # type: ignore[arg-type]
+            QuizCardItem(
                 card_id=c.card_id,
                 quiz_id=c.quiz_id,
                 question=c.question,
-				hint=c.hint if include_hints else None,
-				explanation=c.explanation if include_explanations else None,
+                hint=c.hint if include_hints else None,
+                explanation=c.explanation if include_explanations else None,
                 difficulty=c.difficulty,
                 option1=c.option1,
                 option2=c.option2,

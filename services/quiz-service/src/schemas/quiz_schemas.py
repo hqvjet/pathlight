@@ -41,8 +41,8 @@ class QuizCardItem(BaseModel):
     card_id: str
     quiz_id: str
     question: str
-    hint: Optional[str] = None
-    explanation: str
+    hint: Optional[str] = Field(default=None)
+    explanation: Optional[str] = Field(default=None)
     difficulty: str
     option1: str
     option2: str
