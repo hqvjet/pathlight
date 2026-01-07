@@ -12,11 +12,13 @@ from .config import config
 from .database import get_engine, Base
 from src.routes.quiz_routes import router as quiz_router
 
-logging.basicConfig(level=getattr(logging, config.LOG_LEVEL))
+logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
+
 
 def _env_flag(name: str) -> bool:
     return str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "y", "on"}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +48,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Quiz Service shutting down")
 
+
 app = FastAPI(
     title="Pathlight Quiz Service",
     description="Standalone Quiz Service for Pathlight Platform",
@@ -66,24 +69,8 @@ app.add_middleware(
 # Mount quiz routes under /quiz
 app.include_router(quiz_router, prefix="/quiz")
 
-@app.get("/")
-async def root():
-    return {"message": "Quiz Service is running"}
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "quiz-service"}
-
-@app.get("/debug/config")
-async def debug_config():
-    return {
-        "DATABASE_URL": config.DATABASE_URL[:50] + "..." if config.DATABASE_URL else None,
-        "JWT_SECRET_KEY": config.JWT_SECRET_KEY[:10] + "..." if config.JWT_SECRET_KEY else None,
-        "ALLOWED_ORIGINS": config.ALLOWED_ORIGINS,
-        "SERVICE_PORT": config.SERVICE_PORT,
-    }
-
 mangum_handler = Mangum(app, lifespan="off")
+
 
 def handler(event, context):
     """
@@ -92,8 +79,7 @@ def handler(event, context):
     # Log the complete event for debugging
     logger.info("Lambda Event:")
     logger.info(json.dumps(event))
-    
-    # Check if path contains "docs" and modify the path
+
     # Only expose ReDoc (no Swagger) - normalize any redoc path variant
     if "path" in event and "redoc" in event["path"]:
         logger.info(f"ReDoc path detected: {event['path']} -> /redoc")
@@ -103,7 +89,7 @@ def handler(event, context):
     if "path" in event and "openapi.json" in event["path"]:
         logger.info(f"OpenAPI path detected: {event['path']} -> /openapi.json")
         event["path"] = "/openapi.json"
-    
+
     try:
         # Process the request through Mangum
         response = mangum_handler(event, context)
@@ -118,21 +104,22 @@ def handler(event, context):
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization"
-            }
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            },
         }
-    
+
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("SERVICE_PORT", str(config.SERVICE_PORT)))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    port = int(os.getenv("QUIZ_SERVICE_PORT", str(config.SERVICE_PORT)))
+    logger.info("Starting Pathlight Quiz Service...")
+    uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=True)
 
 
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc():
     return get_redoc_html(
-        openapi_url="openapi.json", 
+        openapi_url="openapi.json",
         title="Quiz Service - API Docs",
-        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js",
     )
