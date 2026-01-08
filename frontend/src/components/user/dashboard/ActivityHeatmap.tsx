@@ -10,21 +10,21 @@ interface ActivityHeatmapProps {
 export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ selectedYear, setSelectedYear, generateYearActivityData }) => {
   return (
     <Card className="md:col-span-2 bg-cyan-50 border border-cyan-200 overflow-hidden">
-      <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between">
-        <CardTitle className="text-base text-gray-800">Hoạt động {selectedYear}</CardTitle>
+      <CardHeader className="p-3 sm:p-4 pb-2 flex flex-row items-start justify-between">
+        <CardTitle className="text-sm sm:text-base text-gray-800">Hoạt động {selectedYear}</CardTitle>
         <select
           value={selectedYear}
           onChange={(e) => setSelectedYear(+e.target.value)}
-          className="text-[11px] rounded-full border border-cyan-300 bg-white/80 text-gray-700 px-3 py-1 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+          className="text-[10px] sm:text-[11px] rounded-full border border-cyan-300 bg-white/80 text-gray-700 px-2 sm:px-3 py-1 focus:outline-none focus:ring-2 focus:ring-cyan-400"
         >
           {[new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map((y) => (
             <option key={y}>{y}</option>
           ))}
         </select>
       </CardHeader>
-      <CardContent className="px-4 pt-0 pb-4">
-        <div className="space-y-2">
-          <div className="flex text-[10px] text-gray-600 mb-1 px-px select-none">
+      <CardContent className="px-3 sm:px-4 pt-0 pb-3 sm:pb-4">
+        <div className="space-y-1.5 sm:space-y-2">
+          <div className="flex text-[9px] sm:text-[10px] text-gray-600 mb-1 px-px select-none">
             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(m => (
               <div key={m} className="flex-1 text-center font-medium tracking-wide">{m}</div>
             ))}

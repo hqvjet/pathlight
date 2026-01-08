@@ -89,15 +89,15 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserI
   
   return (
   <div className="rounded-xl border bg-white -mx-1 sm:mx-0 overflow-x-auto">
-    <table className="w-full text-sm">
-      <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-xs uppercase text-gray-700">
+    <table className="w-full text-xs sm:text-sm">
+      <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-[10px] sm:text-xs uppercase text-gray-700">
         <tr>
-          <th className="py-3 px-3 text-left font-semibold">Hạng</th>
-          <th className="py-3 px-3 text-left font-semibold w-12"></th>
-          <th className="py-3 px-3 text-left font-semibold">Người dùng</th>
-          <th className="py-3 px-3 text-left font-semibold">Cấp độ</th>
-          <th className="py-3 px-3 text-right font-semibold">Tổng EXP</th>
-          <th className="py-3 px-3 text-center font-semibold">Huy hiệu</th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold">Hạng</th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold w-10 sm:w-12 hidden sm:table-cell"></th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold">Người dùng</th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-left font-semibold">Level</th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-right font-semibold">EXP</th>
+          <th className="py-2 sm:py-3 px-2 sm:px-3 text-center font-semibold hidden md:table-cell">Huy hiệu</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -105,23 +105,23 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserI
           const badges = getBadges(u);
           const isCurrentUser = currentUserId && u.id === currentUserId;
           return (
-          <tr key={u.rank} className={`hover:bg-blue-50 transition-colors ${isCurrentUser ? 'bg-cyan-50 border-l-4 border-cyan-500' : ''}`}>
-            <td className="py-3 px-3 font-bold text-gray-900">#{u.rank}</td>
-            <td className="py-3 px-3"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
-            <td className="py-3 px-3">
-              <div className="font-semibold text-gray-900">{u.name}</div>
-              {isCurrentUser && <span className="text-xs text-cyan-600 font-medium">(Bạn)</span>}
+          <tr key={u.rank} className={`hover:bg-blue-50 transition-colors ${isCurrentUser ? 'bg-cyan-50 border-l-2 sm:border-l-4 border-cyan-500' : ''}`}>
+            <td className="py-2 sm:py-3 px-2 sm:px-3 font-bold text-gray-900">#{u.rank}</td>
+            <td className="py-2 sm:py-3 px-2 sm:px-3 hidden sm:table-cell"><Avatar user={u} size={36} displayName={u.name} showInitialsFallback className="shadow-sm" cacheKey={u.avatarKey ?? u.id} /></td>
+            <td className="py-2 sm:py-3 px-2 sm:px-3">
+              <div className="font-semibold text-gray-900 truncate max-w-[120px] sm:max-w-none">{u.name}</div>
+              {isCurrentUser && <span className="text-[10px] sm:text-xs text-cyan-600 font-medium">(Bạn)</span>}
             </td>
-            <td className="py-3 px-3">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm">
+            <td className="py-2 sm:py-3 px-2 sm:px-3">
+              <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm">
                 Lv {u.level}
               </span>
             </td>
-            <td className="py-3 px-3 text-right">
+            <td className="py-2 sm:py-3 px-2 sm:px-3 text-right">
               <span className="font-semibold text-gray-900">{(u.experience || 0).toLocaleString()}</span>
-              <span className="text-xs text-gray-500 ml-1">EXP</span>
+              <span className="text-[10px] sm:text-xs text-gray-500 ml-0.5 sm:ml-1 hidden sm:inline">EXP</span>
             </td>
-            <td className="py-3 px-3">
+            <td className="py-2 sm:py-3 px-2 sm:px-3 hidden md:table-cell">
               <div className="flex gap-1 justify-center">
                 {badges.slice(0, 3).map((badge, idx) => (
                   <div key={idx} className="group relative">

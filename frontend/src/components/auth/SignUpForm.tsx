@@ -124,23 +124,23 @@ export default function SignUpForm() {
       imageAlt="Signup illustration"
       headerVariant="auth"
     >
-      <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-3">
+          <label htmlFor="email" className="block text-sm sm:text-base font-medium text-gray-700 mb-2 sm:mb-3">
             Email
           </label>
           <input
             type="email"
             id="email"
             required
-            className="w-full border-b-2 border-gray-200 py-3 sm:py-4 bg-transparent focus:outline-none focus:border-[#F97316] transition-colors text-gray-900 placeholder-gray-400 text-base"
+            className="w-full border-b-2 border-gray-200 py-2.5 sm:py-3 bg-transparent focus:outline-none focus:border-[#F97316] transition-colors text-gray-900 placeholder-gray-400 text-sm sm:text-base"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder="Nhập Email"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           <div>
             <label htmlFor="password" className="block text-base font-medium text-gray-700 mb-3">
               Mật Khẩu

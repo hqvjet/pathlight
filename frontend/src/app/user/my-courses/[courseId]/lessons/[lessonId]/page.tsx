@@ -761,16 +761,6 @@ export default function LessonDetailPage({ params }: PageProps) {
                   );
                 })}
               </div>
-
-              {nextLessonId && (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/user/my-courses/${courseId}/lessons/${nextLessonId}`)}
-                  className="w-full px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold hover:from-orange-600 hover:to-orange-700 shadow-sm transition-all"
-                >
-                  Bài tiếp theo →
-                </button>
-              )}
             </CardContent>
           </Card>
         </aside>

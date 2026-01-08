@@ -13,19 +13,19 @@ export const ProfileCard: React.FC<{ user: UserProfile }> = ({ user }) => {
   
   return (
     <Card className="bg-white border border-gray-200 shadow-lg">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col items-center text-center">
           <Avatar 
             user={user} 
             size={80} 
             displayName={user.name} 
             showInitialsFallback 
-            className="ring-4 ring-blue-400/30 mb-4" 
+            className="ring-4 ring-blue-400/30 mb-3 sm:mb-4" 
             cacheKey={user.avatarKey} 
             priority 
           />
-          <h2 className="text-xl font-bold text-gray-900 mb-1">{user.name}</h2>
-          <p className="text-sm text-gray-600 mb-4">{user.email}</p>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">{user.name}</h2>
+          <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 truncate max-w-full">{user.email}</p>
           
           {/* Level Badge */}
           <div className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-full px-4 py-2 mb-4 shadow-md">

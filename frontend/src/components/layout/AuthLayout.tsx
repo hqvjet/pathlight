@@ -39,8 +39,8 @@ export default function AuthLayout({
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex justify-center items-start px-4 sm:px-6 lg:px-10 pb-8 pt-4 sm:pt-16 lg:pt-20">
-        <div className="w-full max-w-6xl flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-12">
+      <div className="flex-1 flex justify-center items-start px-4 sm:px-6 lg:px-10 pb-8 pt-2 sm:pt-8 lg:pt-20">
+        <div className="w-full max-w-6xl flex flex-col lg:flex-row items-start lg:items-center gap-4 sm:gap-6 lg:gap-12">
           {/* Left side - Image */}
           <div className="hidden lg:flex lg:w-[48%] items-center justify-center bg-gray-50 rounded-2xl p-4 xl:p-6">
             <div className="w-full max-w-2xl">
@@ -57,19 +57,19 @@ export default function AuthLayout({
 
           {/* Right side - Content */}
           <div className="w-full lg:w-[52%] flex items-start lg:items-center justify-center">
-            <div className="w-full max-w-lg space-y-6 sm:space-y-8">
+            <div className="w-full max-w-lg space-y-4 sm:space-y-6">
               {/* Title and Subtitle */}
-            <div className="text-center space-y-2 sm:space-y-3">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
+            <div className="text-center space-y-1.5 sm:space-y-2">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight">
                 {title}
               </h1>
-              <p className="text-gray-600 text-base sm:text-lg lg:text-xl leading-relaxed">
+              <p className="text-gray-600 text-sm sm:text-base lg:text-lg leading-relaxed">
                 {subtitle}
               </p>
             </div>
 
               {/* Children content (forms, buttons, etc.) */}
-              <div className="space-y-8">
+              <div className="space-y-6 sm:space-y-8">
                 {children}
               </div>
             </div>

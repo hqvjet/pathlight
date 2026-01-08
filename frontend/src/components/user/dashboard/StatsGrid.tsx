@@ -28,15 +28,15 @@ export const StatsGrid: React.FC<{ user: UserProfile }> = ({ user }) => {
     { label: 'Tổng Số Người Dùng', value: totalUsers, color: 'bg-slate-100 text-slate-700', icon: (<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M13 7a4 4 0 11-8 0 4 4 0 018 0M21 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>) },
   ];
   return (
-    <div className="grid gap-4 md:gap-5 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-3 md:gap-4 lg:gap-5 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
       {stats.map(stat => (
-        <div key={stat.label} className="bg-white rounded-lg border flex items-center gap-4 p-4 shadow-sm hover:shadow transition">
-          <div className={`w-12 h-12 rounded-md flex items-center justify-center ${stat.color}/10 ${stat.color.split(' ')[1]} font-medium`}>
+        <div key={stat.label} className="bg-white rounded-lg border flex items-center gap-2 sm:gap-3 md:gap-4 p-3 sm:p-4 shadow-sm hover:shadow transition">
+          <div className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-md flex items-center justify-center ${stat.color}/10 ${stat.color.split(' ')[1]} font-medium shrink-0`}>
             <span className={stat.color}>{stat.icon}</span>
           </div>
-          <div className="min-w-0">
-            <div className="text-xl font-semibold leading-none tracking-tight truncate">{stat.value}</div>
-            <p className="mt-1 text-[11px] font-medium text-gray-500 uppercase tracking-wide">{stat.label}</p>
+          <div className="min-w-0 flex-1">
+            <div className="text-base sm:text-lg md:text-xl font-semibold leading-none tracking-tight truncate">{stat.value}</div>
+            <p className="mt-1 text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wide line-clamp-2">{stat.label}</p>
           </div>
         </div>
       ))}

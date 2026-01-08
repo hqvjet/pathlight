@@ -30,7 +30,7 @@ export function Stepper({ current, onStepChange }: StepperProps) {
   const progress = (current - 1) / (steps.length - 1) * 100;
   return (
     <div className="relative">
-      <ol className="flex items-center text-sm font-medium">
+      <ol className="flex items-center text-xs sm:text-sm font-medium">
         {steps.map((s, i) => {
           const active = current === s.id;
             const complete = current > s.id;
@@ -40,12 +40,12 @@ export function Stepper({ current, onStepChange }: StepperProps) {
                   type="button"
                   disabled={!complete}
                   onClick={() => complete && onStepChange?.(s.id)}
-                  className={cn('flex items-center gap-2 py-4 px-4 transition-colors w-full justify-center select-none', active && 'text-orange-600', complete && 'text-green-600 hover:text-green-700', !complete && !active && 'text-gray-500')}
+                  className={cn('flex items-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-2 sm:px-4 transition-colors w-full justify-center select-none', active && 'text-orange-600', complete && 'text-green-600 hover:text-green-700', !complete && !active && 'text-gray-500')}
                   aria-current={active ? 'step' : undefined}
                 >
-                  <div className={cn('w-8 h-8 rounded-full flex items-center justify-center border text-gray-500', active && 'border-orange-500 bg-orange-50 text-orange-600', complete && 'border-green-500 bg-green-50 text-green-600') }>
+                  <div className={cn('w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border text-gray-500', active && 'border-orange-500 bg-orange-50 text-orange-600', complete && 'border-green-500 bg-green-50 text-green-600') }>
                     {complete ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     ) : (
                       <Icon name={s.icon} />
                     )}
