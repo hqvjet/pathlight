@@ -211,13 +211,13 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
     if not queue_url:
         raise HTTPException(status_code=500, detail="SQS_QUEUE_URL is not configured")
 
-    job_type = body.type or "generate_quiz"
-    allowed_job_types = {"generate_course", "generate_quiz"}
+    job_type = body.type or "GENERATE_QUIZ_WITH_VECTORIZE"
+    allowed_job_types = {"GENERATE_COURSE_WITH_VECTORIZE", "GENERATE_QUIZ_WITH_VECTORIZE"}
     if job_type not in allowed_job_types:
-        raise HTTPException(status_code=400, detail="type must be one of generate_course, generate_quiz")
+        raise HTTPException(status_code=400, detail="type must be GENERATE_COURSE_WITH_VECTORIZE or GENERATE_QUIZ_WITH_VECTORIZE")
 
     quiz_id = body.quiz_id or f"quiz-{uuid4()}"
-    s3_keys = (body.documents or []) + (body.s3_key or [])
+    s3_keys = body.s3_keys or []
     
     if not s3_keys:
         raise HTTPException(status_code=400, detail="At least one document is required")
@@ -263,11 +263,8 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
             queue_url=queue_url,
             course_id=quiz_id,
             s3_keys=s3_keys,
-            short_prompt="Auto-generated quiz",
-            user_role="student",
-            course_level=body.level,
-            course_constraint="professional",
-            course_duration=body.duration,
+            difficulty=body.difficulty,
+            duration=body.duration,
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),

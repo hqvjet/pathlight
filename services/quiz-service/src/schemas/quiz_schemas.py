@@ -3,14 +3,13 @@ from typing import Optional, List
 
 
 class CreateQuizRequest(BaseModel):
-    type: str = Field(default="generate_quiz", description="Job type required by SQS")
+    type: str = Field(default="GENERATE_QUIZ_WITH_VECTORIZE", description="Job type required by SQS")
     duration: int = Field(..., description="Desired quiz duration in minutes")
-    level: str = Field(..., description="easy | medium | hard")
+    difficulty: str = Field(..., description="easy | medium | hard")
     quiz_id: Optional[str] = Field(default=None, description="Quiz ID to create; auto-generated if omitted")
-    documents: Optional[List[str]] = Field(default=None, alias="documents", description="Array of S3 object keys (users/<user_id>/<file>)")
+    s3_keys: Optional[List[str]] = Field(default=None, description="Array of S3 object keys (users/<user_id>/<file>)")
     user_id: Optional[str] = Field(default=None, description="Owner user id; will be overridden by token if present")
     num_questions: Optional[int] = Field(default=10, description="Number of quiz questions to generate")
-    s3_key: Optional[List[str]] = Field(default=None, description="Array of S3 object keys to vectorize (optional)")
 
     model_config = ConfigDict(populate_by_name=True)
 
