@@ -53,38 +53,36 @@ prompt: |
 
   ---
 
-  # CHIẾN LƯỢC RETRIEVAL (BẮT BUỘC)
+  # CHIẾN LƯỢC QUÉT CẤU TRÚC (UNIVERSAL STRUCTURE SCAN)
 
-  Bạn PHẢI thực hiện retrieval để hiểu nội dung tài liệu trước khi tạo roadmap.
+  Bạn PHẢI tuân thủ chiến lược tìm kiếm 2 bước để "moi" được cấu trúc tài liệu.
 
-  **Lượt 1 - Khám phá chủ đề**:
-  - Query: `chủ đề chính mục lục tóm tắt introduction main_topic table_of_contents`
-  - k = 6
-  - Mục đích: Xác định chính xác tài liệu nói về cái gì (Tiêu đề, Mục lục).
+  **BƯỚC 1: LƯỚI QUÉT CẤU TRÚC (MANDATORY FIRST QUERY)**
+  - BẮT BUỘC query đầu tiên phải là string sau:
+  - **Query**: `"table of contents" "mục lục" "syllabus" "outline" "chương" "chapter" "phần" "part" "module" "lesson" "bài học" "tóm tắt" "summary" "introduction" "overview"`
+  - **k**: 6
+  - **LÝ DO**: Query này chứa keyword của mọi định dạng tài liệu (Sách, Slide, Giáo trình, Báo cáo). Nó sẽ tìm ra trang Mục lục hoặc Phần giới thiệu.
 
-  **Lượt 2 - Chi tiết cấu trúc (Nếu Lượt 1 chưa đủ thông tin về structure)**:
-  - Query: `cấu trúc nội dung phần chính sections chapters modules`
-  - k = 6
-  - Mục đích: Hiểu cấu trúc chi tiết để tạo roadmap
+  **BƯỚC 2: PHÂN TÍCH VÀ ĐIỀU HƯỚNG (ADAPTIVE)**
+  - **Kịch bản A (Tìm thấy Mục lục/Cấu trúc)**: Tuyệt vời. Dùng nó để tạo course_roadmap ngay. KHÔNG cần search tiếp.
+  - **Kịch bản B (Tài liệu dạng văn xuôi/Essay)**: Tìm thấy các heading, bold text hoặc các đoạn mở đầu đoạn văn -> Dùng chúng làm Module.
+  - **Kịch bản C (Slide rời rạc)**: Tìm thấy các tiêu đề slide -> Gom nhóm các slide cùng chủ đề thành 1 Module.
+  - **Kịch bản D (Không có cấu trúc rõ ràng)**:
+    - Nhìn vào các từ khóa xuất hiện nhiều nhất trong kết quả Bước 1.
+    - Tạo Query 2: `[Keyword 1] [Keyword 2] "main concepts" "ý chính" "quy trình"`
+    - Tự tạo cấu trúc logic dựa trên các cụm chủ đề tìm được.
 
-  **Lượt 3 - Bổ sung context (CHỈ khi cần thiết)**:
-  - Nếu vẫn thiếu thông tin về các phần cụ thể
-  - Query: `<từ khóa cụ thể từ lượt 1 và 2>`
-  - k = 5
+  **QUY TẮC SINH TỒN**:
+  1. **KHÔNG BAO GIỜ** dùng query chung chung kiểu "tài liệu này nói gì".
+  2. **KHÔNG BAO GIỜ** bỏ cuộc. Nếu không có Mục lục, hãy tìm Ý Chính (Key Concepts).
+  3. **Tên Module phải "Ngon"**: Đừng đặt tên "Chương 1". Hãy đặt "Chương 1: [Tên Nội Dung Cụ Thể]".
+  4. **Tối thiểu 2 lượt search** nếu lượt 1 chưa đủ thông tin, nhưng tối đa là 3.
 
-  **QUAN TRỌNG**: 
-  - SAU TỐI ĐA 2 LƯỢT retrieval, BẠN PHẢI TẠO ROADMAP với context hiện có
-  - TUYỆT ĐỐI KHÔNG được gọi retrieval với cùng 1 query 2 lần
-  - TUYỆT ĐỐI KHÔNG được gọi retrieval quá 3 lần
-  - Nếu không tìm được thông tin rõ ràng sau 2 lượt, hãy tạo roadmap TỔNG QUÁT dựa trên THÔNG TIN ĐÃ THU THẬP được.
-
-  **XỬ LÝ KHI KHÔNG CÓ THÔNG TIN**:
-  - Nếu retrieval trả về "No relevant information found" hoặc nội dung không rõ ràng:
-    - Hãy thử query khác MỘT LẦN: `nội dung slide bài học chương parts content`
-  - Nếu vẫn không có thông tin SAU 2 LƯỢT: 
-    - Tạo roadmap TỔNG QUÁT với 3-4 modules dựa trên bất kỳ context nào bạn có
-    - HOẶC trả về course_name là "Khóa học từ tài liệu" với roadmap tổng quát 3 modules
-    - KHÔNG BAO GIỜ trả về "Không xác định" - luôn tạo ít nhất 1 roadmap tổng quát
+  **XỬ LÝ ĐƯỜNG CÙNG (FALLBACK)**:
+  - Nếu SAU 2 LƯỢT vẫn "mù tịt":
+    - Nhìn vào bất kỳ đoạn text nào trích xuất được.
+    - Tạo 1 lộ trình 3 bước kinh điển: "1. Khái quát về [Chủ đề X]", "2. Các nội dung cốt lõi của [Chủ đề X]", "3. Ứng dụng/Kết luận về [Chủ đề X]".
+    - Thay [Chủ đề X] bằng từ khóa xuất hiện nhiều nhất. DO NOT FAIL.
 
   ---
 

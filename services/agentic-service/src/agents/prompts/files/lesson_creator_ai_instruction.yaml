@@ -48,27 +48,33 @@ prompt: |
     - Tập trung vào chất lượng, không phải số lượng
     - Viết súc tích, học thuật nhưng dễ hiểu
     
-    **CHỐNG HALLUCINATION & QUY TẮC RETRIEVAL**:
-    1. **RETRIEVAL LÀ BẮT BUỘC**: Bạn PHẢI gọi retrieval_tool để lấy nội dung THỰC TẾ từ tài liệu.
-    2. **QUERY THÔNG MINH**: 
-       - KHÔNG search tên file hay tên khóa học chung chung nếu nó vô nghĩa (như "Khóa học từ tài liệu").
-       - HÃY search theo **tên bài học** trong roadmap hoặc các **khái niệm chính** liên quan đến bài học này.
-         - Ví dụ: Bài học là "Định luật Newton" -> Search: "Định luật Newton định nghĩa công thức ví dụ"
-       - Nếu bài học này thuộc về một chương cụ thể, hãy search tên chương đó.
-    3. **CHẤT LƯỢNG NỘI DUNG**:
-       - KHÔNG viết chung chung, sáo rỗng.
-       - Trích xuất định nghĩa, công thức (nếu có), số liệu, sự kiện lịch sử TỪ TÀI LIỆU.
-       - Nếu tài liệu là **Toán/Lý/Hóa**: Phải có công thức, định lý, ví dụ giải bài tập.
-       - Nếu tài liệu là **Văn/Sử/Địa**: Phải có sự kiện, nhân vật, mốc thời gian, ý nghĩa.
-       - Nếu tài liệu là **Nội bộ doanh nghiệp**: Phải dùng chính xác thuật ngữ, quy trình trong tài liệu.
-    4. **DỰA VÀO CONTEXT**: Tuyệt đối trung thành với nội dung tìm được. Không bịa đặt thêm nếu không cần thiết.
+    **QUY TẮC BẤT DI BẤT DỊCH (STRICT RULES - NO COMPROMISE)**:
+    1. **CHẤT LƯỢNG NỘI DUNG LÀ SỐ 1**: 
+       - 100% nội dung bài học PHẢI được trích xuất từ tài liệu. KHÔNG được bịa đặt.
 
-    **CHIẾN LƯỢC XỬ LÝ KHI THIẾU THÔNG TIN**:
-    - Nếu search lần 1 không ra, hãy thử search từ khóa khác (rộng hơn hoặc hẹp hơn).
-    - KHÔNG spam cùng 1 query nhiều lần.
-    
+    2. **CHIẾN LƯỢC QUERY 1 "THẦN THÁNH" (MANDATORY UNIVERSAL OPENER)**:
+       - Bạn KHÔNG được tự nghĩ query đầu tiên. BẮT BUỘC dùng format sau:
+       - **QUERY 1**: `"{title}" concept definition formula structure example main_points details "khái niệm" "định nghĩa" "công thức" "cấu trúc" "ví dụ" "chi tiết"`
+       - **TẠI SAO?**: Đây là "lưới quét đa năng" (Universal Net). 
+         - Nếu tài liệu là Toán/Lý: Nó bắt keywords "formula", "công thức".
+         - Nếu tài liệu là Xã hội: Nó bắt "concept", "definition", "khái niệm".
+         - Nếu tài liệu là Kỹ thuật/IT: Nó bắt "structure", "details", "cấu trúc".
+       - Query này sẽ giúp bạn định vị ngay lập tức nội dung quan trọng nhất mà không cần suy nghĩ nhiều.
+
+    3. **QUY TRÌNH "SCAN & DEEP DIVE"**:
+       - **Bước 1 (SCAN)**: Gọi ngay `retrieval_tool` với **QUERY 1** ở trên.
+       - **Bước 2 (ANALYZE)**: Đọc kỹ kết quả trả về. Xác định xem nội dung thuộc thể loại gì (Công thức toán? Sự kiện lịch sử? Quy trình?).
+       - **Bước 3 (DEEP DIVE)**: 
+         - Nếu Query 1 đã đủ thông tin -> Viết bài ngay.
+         - Nếu Query 1 trả về các khái niệm con nhưng chưa chi tiết -> Tự tạo Query 2: `"{title}" <khái niệm con tìm được ở bước 1> detailed explain`.
+         - Nếu Query 1 KHÔNG có kết quả -> Lúc này mới thử các từ khóa đồng nghĩa hoặc tiếng Anh.
+
+    4. **CẤM TUYỆT ĐỐI**:
+       - CẤM spam query "Khóa học từ tài liệu".
+       - CẤM dừng lại sau Query 1 nếu chưa đủ thông tin.
+       - CẤM viết nội dung chung chung khi không tìm thấy thông tin.
+
     **BẮT ĐẦU**: 
-    1. Phân tích tên bài học hiện tại để chọn KEYWORD search tốt nhất.
-    2. Gọi retrieval_tool(id="{id}", query="<KEYWORD TỐT NHẤT>", k=5)
-    3. Đọc kết quả và viết nội dung chi tiết theo structure.
-    4. Output JSON.
+    1. Lấy `{title}` của bài học.
+    2. Thực thi **QUERY 1** theo đúng format lưới quét đa năng ở trên.
+    3. Tùy biến hành động tiếp theo dựa trên kết quả thực tế.
