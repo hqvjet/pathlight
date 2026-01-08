@@ -1634,11 +1634,11 @@ def get_recommended_courses_controller(request: Request, topk: int = 20):
 				num_lessons = len(course.lessons)
 			
 			items.append({
-				"id": course.id,
+				"id": getattr(course, 'id', course.course_id),
 				"course_id": course.course_id,
 				"title": course.title,
-				"description": course.description,
-				"difficulty": course.difficulty,
+				"description": getattr(course, 'overview', getattr(course, 'description', '')),
+				"difficulty": getattr(course, 'level', 'medium'),
 				"duration": course.duration,
 				"publish": course.publish,
 				"user_id": course.user_id,

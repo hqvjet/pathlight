@@ -739,23 +739,16 @@ def get_recommended_quizzes_controller(request: Request, topk: int = 20):
             score = rec["score"]
             
             items.append({
-                "id": quiz.id,
-                "quiz_id": quiz.quiz_id,
-                "title": quiz.title,
-                "description": quiz.description,
-                "difficulty": quiz.difficulty,
-                "duration": quiz.duration,
-                "publish": quiz.publish,
-                "user_id": quiz.user_id,
-                "num_questions": len(quiz.cards) if quiz.cards else 0,
-                "previous_score": quiz.previous_score,
-                "recommendation_score": score,
-            })
-        
-        logger.info(f"Recommended {len(items)} quizzes for user {user_id}")
-        return {"status": 200, "items": items}
-        
-    except Exception as e:
+				"id": getattr(quiz, 'id', quiz.quiz_id),
+				"quiz_id": quiz.quiz_id,
+				"title": quiz.title,
+				"description": getattr(quiz, 'overview', getattr(quiz, 'description', '')),
+				"difficulty": getattr(quiz, 'level', 'medium'),
+				"duration": quiz.duration,
+				"publish": quiz.publish,
+				"user_id": quiz.user_id,
+				"num_questions": len(quiz.cards) if quiz.cards else getattr(quiz, 'num_questions', 0),
+				"previous_score": getattr(quiz, 'previous_score', None),
         logger.error(f"Failed to get quiz recommendations: {e}")
         # Return empty list on error rather than failing completely
         return {"status": 200, "items": []}
