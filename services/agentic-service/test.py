@@ -143,7 +143,7 @@ def send_message(queue_url: str, region: str, body: str, group_id: str | None = 
     sqs = session.client("sqs", region_name=region)
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
-        params["MessageGroupId"] = group_id or "agentic"
+        params["MessageGroupId"] = str(uuid.uuid4())
         # Using a random dedup id each time to ensure processing for tests
         params["MessageDeduplicationId"] = str(uuid.uuid4())
     resp = sqs.send_message(**params)

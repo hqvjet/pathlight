@@ -94,7 +94,6 @@ async def request_create_course(
 ):
     return await create_course_controller(request, body)
 
-
 @router.get("/stats")
 async def get_user_course_stats(request: Request, _auth=Depends(require_bearer)):
     """Get aggregated course statistics for current user."""

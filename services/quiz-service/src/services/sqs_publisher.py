@@ -71,7 +71,7 @@ def send_generate_with_vectorize(
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
-        params["MessageGroupId"] = group_id or "agentic"
+        params["MessageGroupId"] = str(uuid.uuid4())
         params["MessageDeduplicationId"] = str(uuid.uuid4())
     return sqs.send_message(**params)
 
@@ -123,6 +123,6 @@ def send_recommend_quizzes(
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
-        params["MessageGroupId"] = group_id or "agentic"
+        params["MessageGroupId"] = str(uuid.uuid4())
         params["MessageDeduplicationId"] = str(uuid.uuid4())
     return sqs.send_message(**params)
