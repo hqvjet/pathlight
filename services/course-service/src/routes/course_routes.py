@@ -21,6 +21,7 @@ from src.controllers.course_controller import (
     delete_course_admin_controller,
     delete_all_courses_by_user_admin_controller,
     toggle_course_visibility_admin_controller,
+    get_recommended_courses_controller,
 )
 from src.services.course_auth import require_bearer
 from src.services.status_service import fetch_generation_status, fetch_user_generations
@@ -109,6 +110,12 @@ async def get_all_user_courses(request: Request, _auth=Depends(require_bearer)):
 @router.get("/public", response_model=CourseListResponse)
 async def list_public_courses(request: Request, search: Optional[str] = Query(default=None), user_id: Optional[str] = Query(default=None)):
     return list_public_courses_controller(request, search, user_id)
+
+
+@router.get("/recommend")
+async def get_recommended_courses(request: Request, topk: int = Query(default=20, ge=1, le=100), _auth=Depends(require_bearer)):
+    """Get personalized course recommendations for current user."""
+    return get_recommended_courses_controller(request, topk)
 
 
 @router.get("/{course_id}", response_model=CourseFullInfoResponse)

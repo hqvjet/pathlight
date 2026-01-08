@@ -15,6 +15,7 @@ from src.controllers.quiz_controller import (
     list_all_quizzes_admin_controller,
     delete_quiz_admin_controller,
     toggle_quiz_visibility_admin_controller,
+    get_recommended_quizzes_controller,
     _verify_token,
 )
 from src.schemas.quiz_schemas import (
@@ -82,6 +83,12 @@ def list_my_quizzes(request: Request):
 @router.get("/public", response_model=QuizListResponse)
 def list_public_quizzes(search: Optional[str] = Query(default=None), owner_id: Optional[str] = Query(default=None)):
     return list_public_quizzes_controller(search, owner_id)
+
+
+@router.get("/recommend")
+def get_recommended_quizzes(request: Request, topk: int = Query(default=20, ge=1, le=100)):
+    """Get personalized quiz recommendations for current user."""
+    return get_recommended_quizzes_controller(request, topk)
 
 
 @router.get("/{quiz_id}", response_model=QuizDetailResponse)
