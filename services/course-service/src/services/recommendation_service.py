@@ -57,7 +57,7 @@ class RecommendationService:
         db: Session,
         topk: int = 20
     ) -> List[Dict]:
-        sim_id = f"sim-course-{uuid.uuid4().hex[:8]}"
+        sim_id = f"sim-course-{uuid.uuid4()}"
         course_ids = self.get_all_public_course_ids(db)
         
         if not course_ids:
@@ -80,15 +80,35 @@ class RecommendationService:
                 result = self.dynamo_client.get_search_result(sim_id)
                 
                 if result is not None:
-                    return self._fetch_course_details(result, db)
+                    recommendations = self._fetch_course_details(result, db)
+                    # If empty recommendations, use fallback
+                    if not recommendations:
+                        logger.info(f"Empty recommendations for user {user_id}, using fallback")
+                        return self._get_fallback_courses(db, topk)
+                    return recommendations
                     
                 time.sleep(self.poll_interval)
                 
             logger.warning(f"Timeout waiting for recommendations: sim_id={sim_id}")
-            return []
+            return self._get_fallback_courses(db, topk)
             
         except Exception as e:
             logger.error(f"Failed to get recommendations: {e}")
+            return self._get_fallback_courses(db, topk)
+            
+    def _get_fallback_courses(self, db: Session, topk: int) -> List[Dict]:
+        """Get random public courses as fallback when recommendations fail or return empty."""
+        try:
+            import random
+            courses = db.query(Course).filter(Course.publish == True).all()
+            if not courses:
+                return []
+            # Randomly sample up to topk courses
+            sample_size = min(topk, len(courses))
+            sampled = random.sample(courses, sample_size)
+            return [{"course": course, "score": 0.0} for course in sampled]
+        except Exception as e:
+            logger.error(f"Failed to get fallback courses: {e}")
             return []
             
     def _fetch_course_details(

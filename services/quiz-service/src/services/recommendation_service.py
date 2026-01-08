@@ -77,7 +77,7 @@ class RecommendationService:
             ]
         """
         # Generate unique sim_id
-        sim_id = f"sim-quiz-{uuid.uuid4().hex[:8]}"
+        sim_id = f"sim-quiz-{uuid.uuid4()}"
         
         # Get all public quiz IDs as candidates
         quiz_ids = self.get_all_public_quiz_ids(db)
@@ -105,17 +105,37 @@ class RecommendationService:
                 
                 if result is not None:
                     # Got results, fetch quiz details
-                    return self._fetch_quiz_details(result, db)
+                    recommendations = self._fetch_quiz_details(result, db)
+                    # If empty recommendations, use fallback
+                    if not recommendations:
+                        logger.info(f"Empty recommendations for user {user_id}, using fallback")
+                        return self._get_fallback_quizzes(db, topk)
+                    return recommendations
                     
                 # Wait before next poll
                 time.sleep(self.poll_interval)
                 
             # Timeout
             logger.warning(f"Timeout waiting for recommendations: sim_id={sim_id}")
-            return []
+            return self._get_fallback_quizzes(db, topk)
             
         except Exception as e:
             logger.error(f"Failed to get recommendations: {e}")
+            return self._get_fallback_quizzes(db, topk)
+            
+    def _get_fallback_quizzes(self, db: Session, topk: int) -> List[Dict]:
+        """Get random public quizzes as fallback when recommendations fail or return empty."""
+        try:
+            import random
+            quizzes = db.query(Quiz).filter(Quiz.publish == True).all()
+            if not quizzes:
+                return []
+            # Randomly sample up to topk quizzes
+            sample_size = min(topk, len(quizzes))
+            sampled = random.sample(quizzes, sample_size)
+            return [{"quiz": quiz, "score": 0.0} for quiz in sampled]
+        except Exception as e:
+            logger.error(f"Failed to get fallback quizzes: {e}")
             return []
             
     def _fetch_quiz_details(
