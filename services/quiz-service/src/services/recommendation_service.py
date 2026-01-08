@@ -43,10 +43,13 @@ class RecommendationService:
         self.max_poll_attempts = 30  # 30 seconds max wait
         self.poll_interval = 1  # 1 second between polls
         
-    def get_all_public_quiz_ids(self, db: Session) -> List[str]:
-        """Get all public quiz IDs from database."""
+    def get_all_public_quiz_ids(self, db: Session, exclude_user_id: Optional[str] = None) -> List[str]:
+        """Get all public quiz IDs from database, optionally excluding a specific user's quizzes."""
         try:
-            quizzes = db.query(Quiz.quiz_id).filter(Quiz.publish == True).all()
+            query = db.query(Quiz.quiz_id).filter(Quiz.publish == True)
+            if exclude_user_id:
+                query = query.filter(Quiz.user_id != exclude_user_id)
+            quizzes = query.all()
             return [quiz.quiz_id for quiz in quizzes]
         except Exception as e:
             logger.error(f"Failed to get public quiz IDs: {e}")
@@ -79,8 +82,8 @@ class RecommendationService:
         # Generate unique sim_id
         sim_id = f"sim-quiz-{uuid.uuid4()}"
         
-        # Get all public quiz IDs as candidates
-        quiz_ids = self.get_all_public_quiz_ids(db)
+        # Get all public quizzes as candidates (excluding user's own quizzes)
+        quiz_ids = self.get_all_public_quiz_ids(db, exclude_user_id=user_id)
         
         if not quiz_ids:
             logger.warning("No public quizzes found")
