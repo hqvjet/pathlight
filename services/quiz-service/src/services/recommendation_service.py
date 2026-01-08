@@ -46,8 +46,8 @@ class RecommendationService:
     def get_all_public_quiz_ids(self, db: Session) -> List[str]:
         """Get all public quiz IDs from database."""
         try:
-            quizzes = db.query(Quiz.id).filter(Quiz.publish == True).all()
-            return [quiz.id for quiz in quizzes]
+            quizzes = db.query(Quiz.quiz_id).filter(Quiz.publish == True).all()
+            return [quiz.quiz_id for quiz in quizzes]
         except Exception as e:
             logger.error(f"Failed to get public quiz IDs: {e}")
             return []
@@ -140,7 +140,7 @@ class RecommendationService:
             score = rec["score"]
             
             try:
-                quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+                quiz = db.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
                 if quiz:
                     result.append({
                         "quiz": quiz,

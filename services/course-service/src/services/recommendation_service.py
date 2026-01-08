@@ -103,7 +103,7 @@ class RecommendationService:
             score = rec["score"]
             
             try:
-                course = db.query(Course).filter(Course.id == course_id).first()
+                course = db.query(Course).filter(Course.course_id == course_id).first()
                 if course:
                     result.append({
                         "course": course,
