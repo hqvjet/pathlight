@@ -9,3 +9,9 @@ test_creator:
 
 final_test_creator:
   prompt_path: files/final_test_creator_instruction.yaml
+
+quiz_planner:
+  prompt_path: files/quiz_planner_ai_instruction.yaml
+
+questioner:
+  prompt_path: files/questioner_ai_instruction.yaml

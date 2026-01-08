@@ -113,3 +113,57 @@ class CombinedController:
                 user_id=user_id,
             )
         )
+
+    def run_quiz(self, quiz_id: str, s3_keys: List[str], difficulty: str, duration: int, num_questions: int, user_id: str) -> None:
+        """Run vectorization and quiz generation for a given quiz.
+        
+        Steps:
+        1) Fetch files from S3 and vectorize them under material_id=quiz_id
+        2) Invoke the multi-agent quiz generator
+        3) Mark DynamoDB flags
+        """
+        self.logger.info(
+            "CombinedController.run_quiz: quiz_id=%s user_id=%s files=%d num_questions=%d",
+            quiz_id,
+            user_id,
+            len(s3_keys or []),
+            num_questions,
+        )
+        
+        # 0) Initialize tracking
+        try:
+            status.start_quiz(quiz_id, user_id=user_id, strict=False)
+        except Exception as e:
+            self.logger.warning(f"DynamoDB quiz tracking unavailable: {e}")
+
+        # 1) Vectorize (uses same OpenSearch index as courses)
+        s3 = self.files.get_files_by_names(s3_keys)
+        vect_resp = self.files.vectorize_files(
+            s3.file_streams, material_id=quiz_id, category=0
+        )
+        
+        # Verify indexing based on environment
+        from core.environment import get_environment_type
+        env = get_environment_type()
+        
+        if env == 'lambda':
+            if getattr(vect_resp, "warnings", None):
+                raise InternalServerError(
+                    "Vectorization completed with warnings; OpenSearch indexing not fully successful"
+                )
+            self._assert_indexed(quiz_id, vect_resp.total_chunks)
+        else:
+            self.logger.info(f"Vectorization completed in {env} mode - skipping OpenSearch verification")
+            if getattr(vect_resp, "warnings", None):
+                self.logger.warning(f"Vectorization warnings (non-critical in {env}): {vect_resp.warnings}")
+
+        # 2) Generate quiz
+        from controllers.quiz_controller import QuizController
+        quiz_controller = QuizController()
+        quiz_controller.generate_quiz(
+            quiz_id=quiz_id,
+            difficulty=difficulty,
+            duration=duration,
+            num_questions=num_questions,
+            user_id=user_id,
+        )

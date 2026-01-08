@@ -17,6 +17,7 @@ from contracts.sqs_contracts import (
     MessageType,
     GenerateCourseWithVectorizeMessage,
     ChatbotQuestionMessage,
+    GenerateQuizWithVectorizeMessage,
     SQSBatchResponse,
     SQSEvent,
 )
@@ -66,6 +67,26 @@ def _handle_chatbot_question(msg: ChatbotQuestionMessage) -> None:
     )
 
 
+def _handle_generate_quiz_with_vectorize(msg: GenerateQuizWithVectorizeMessage) -> None:
+    """Handle quiz generation with vectorization."""
+    # Validate required fields
+    if not msg.payload.user_id:
+        raise ValueError(f"user_id is required for quiz {msg.payload.id}")
+    if not msg.payload.num_questions or msg.payload.num_questions <= 0:
+        raise ValueError(f"num_questions must be positive for quiz {msg.payload.id}")
+    
+    from controllers.combined_controller import CombinedController
+    controller = CombinedController()
+    controller.run_quiz(
+        quiz_id=msg.payload.id,
+        s3_keys=msg.payload.s3_keys,
+        difficulty=msg.payload.difficulty,
+        duration=msg.payload.duration,
+        num_questions=msg.payload.num_questions,
+        user_id=msg.payload.user_id,
+    )
+
+
 def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
     """Process AWS SQS batch event and return batchItemFailures on error per record."""
     failures: List[dict] = []
@@ -88,6 +109,12 @@ def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
                     f"Processing CHATBOT_QUESTION: chat_id={msg.payload.chat_id}, lesson_id={msg.payload.lesson_id}, course_id={msg.payload.course_id}"
                 )
                 _handle_chatbot_question(msg)
+            elif msg_type == MessageType.GENERATE_QUIZ_WITH_VECTORIZE:
+                msg = GenerateQuizWithVectorizeMessage(**data)
+                logger.info(
+                    f"Processing GENERATE_QUIZ_WITH_VECTORIZE: id={msg.payload.id}, files={len(msg.payload.s3_keys)}, num_questions={msg.payload.num_questions}, difficulty={msg.payload.difficulty}"
+                )
+                _handle_generate_quiz_with_vectorize(msg)
             else:
                 raise ValueError(f"Unsupported message type: {data.get('type')}")
         except Exception as e:
