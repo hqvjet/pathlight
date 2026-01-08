@@ -92,8 +92,19 @@ class PlannerAgent(BaseAgent):
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
         count = 1
+        previous_queries = []  # Track queries to detect loops
+        
         while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
+            
+            # CRITICAL: Detect if LLM is stuck in loop (calling same query repeatedly)
+            current_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            if len(previous_queries) >= 2 and all(q in previous_queries[-2:] for q in current_queries):
+                self.logger.warning(f"Planner stuck in loop at iteration {count}, forcing final output")
+                tracer.record("warn", "detected query loop", iteration=count, query=current_queries[0][:100])
+                break  # Exit loop to force final JSON output
+            previous_queries.extend(current_queries)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]
@@ -124,10 +135,21 @@ class PlannerAgent(BaseAgent):
                 )
             count += 1
 
-        # CRITICAL FIX: Force final JSON output after hitting max tool calls
-        if count > MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("warn", f"Hit max tool calls limit: {MAX_TOOL_CALLS_PER_AGENT}")
-            self.logger.warning(f"Planner hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
+        # CRITICAL FIX: Force final JSON output after hitting max tool calls OR detecting loop
+        if count > MAX_TOOL_CALLS_PER_AGENT or (ai.tool_calls and len(ai.tool_calls) > 0):
+            tracer.record("warn", f"Forcing final output (count={count}, max={MAX_TOOL_CALLS_PER_AGENT})")
+            self.logger.warning(f"Planner forcing final output: count={count}/{MAX_TOOL_CALLS_PER_AGENT}")
+            
+            # Add explicit instruction to force JSON output with available context
+            force_instruction = SystemMessage(
+                content=(
+                    "BẮT BUỘC: Bây giờ hãy tạo JSON output NGAY với thông tin đã có. "
+                    "Nếu chưa đủ thông tin chi tiết, hãy tạo roadmap TỔNG QUÁT dựa trên context hiện tại. "
+                    "KHÔNG được tiếp tục gọi tool. CHỈ output JSON theo format yêu cầu."
+                )
+            )
+            history.append(force_instruction)
+            
             # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
             # JSON mode is still enabled, so output will be JSON
             from langchain_openai import ChatOpenAI
@@ -145,7 +167,7 @@ class PlannerAgent(BaseAgent):
             try:
                 ai = final_chain.invoke({
                     "id": state.id,
-                    "history": history,  # Use existing history, no modification
+                    "history": history,
                     "difficulty": state.difficulty,
                     "duration": str(state.duration),
                 })

@@ -62,10 +62,20 @@ prompt: |
   - k = 6
   - Mục đích: Xác định chính xác tài liệu nói về cái gì (Tiêu đề, Mục lục).
 
-  **Lượt 2 - Chi tiết (Nếu cần)**:
-  - Nếu Lượt 1 chưa rõ, hãy tìm kiếm cụ thể hơn dựa trên các từ khóa tìm được.
-  - Query: `<keywords cụ thể từ lượt 1>`
+  **Lượt 2 - Chi tiết cấu trúc (Nếu Lượt 1 chưa đủ thông tin về structure)**:
+  - Query: `cấu trúc nội dung phần chính sections chapters modules`
+  - k = 6
+  - Mục đích: Hiểu cấu trúc chi tiết để tạo roadmap
+
+  **Lượt 3 - Bổ sung context (CHỈ khi cần thiết)**:
+  - Nếu vẫn thiếu thông tin về các phần cụ thể
+  - Query: `<từ khóa cụ thể từ lượt 1 và 2>`
   - k = 5
+
+  **QUAN TRỌNG**: 
+  - SAU 2-3 LƯỢT retrieval, BẠN PHẢI TẠO ROADMAP với context hiện có
+  - KHÔNG được gọi retrieval với cùng 1 query 2 lần
+  - Nếu không tìm được thông tin rõ ràng sau 3 lượt, hãy tạo roadmap TỔNG QUÁT với TOÀN BỘ THÔNG TIN hiện có.
 
   **XỬ LÝ KHI KHÔNG CÓ THÔNG TIN**:
   - Nếu retrieval trả về "No relevant information found" hoặc nội dung không rõ ràng:
@@ -80,7 +90,8 @@ prompt: |
   2. ✅ Mỗi description ≤ 2 câu
   3. ✅ course_name phải dựa trên tài liệu
   4. ❌ KHÔNG tạo khóa học Lập trình/Python/Java nếu tài liệu không nói về nó.
-  5. ❌ KHÔNG retrieval quá 3 lần.
+  5. ❌ KHÔNG gọi cùng 1 query retrieval 2 lần.
+  6. ✅ SAU TỐI ĐA 3 lượt retrieval, PHẢI output JSON kết quả.
 
   ---
 
