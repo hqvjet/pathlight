@@ -88,8 +88,42 @@ class QuizPlannerAgent(BaseAgent):
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
         count = 1
+        previous_queries_quiz = []
+        query_keywords_quiz = set()
+        
+        def normalize_quiz_query(q: str) -> str:
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_quiz_keywords(q: str) -> set:
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
+        
         while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
+            
+            # CRITICAL: Loop detection
+            curr_queries_quiz = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            is_quiz_loop = False
+            for cq in curr_queries_quiz:
+                cq_norm = normalize_quiz_query(cq)
+                cq_kw = get_quiz_keywords(cq)
+                for prev in previous_queries_quiz:
+                    if normalize_quiz_query(prev) == cq_norm:
+                        is_quiz_loop = True
+                        break
+                if not is_quiz_loop and query_keywords_quiz:
+                    overlap = len(cq_kw & query_keywords_quiz) / len(cq_kw) if cq_kw else 0
+                    if overlap > 0.7:
+                        is_quiz_loop = True
+                query_keywords_quiz.update(cq_kw)
+            
+            if is_quiz_loop:
+                self.logger.warning(f"QuizPlanner detected query loop at iteration {count}")
+                tracer.record("warn", "query loop detected - forcing output", iteration=count)
+                break
+            
+            previous_queries_quiz.extend(curr_queries_quiz)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]

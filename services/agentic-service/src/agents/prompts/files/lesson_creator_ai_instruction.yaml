@@ -71,8 +71,15 @@ prompt: |
 
     4. **CẤM TUYỆT ĐỐI**:
        - CẤM spam query "Khóa học từ tài liệu".
-       - CẤM dừng lại sau Query 1 nếu chưa đủ thông tin.
+       - CẤM gọi lại query đã gọi trước đó (hệ thống sẽ CHẶN và force output).
+       - CẤM gọi query có >70% keywords giống query trước (bị coi là LOOP).
        - CẤM viết nội dung chung chung khi không tìm thấy thông tin.
+       - **SAU 1 QUERY CÓ KẾT QUẢ → PHẢI VIẾT BÀI NGAY, KHÔNG GỌI THÊM QUERY**.
+
+    **CẢNH BÁO LOOP DETECTION**:
+    - Hệ thống TỰ ĐỘNG phát hiện query trùng lặp/tương tự
+    - Nếu bạn cố gọi query giống nhau → Bị FORCE OUTPUT ngay lập tức
+    - **CHỈ ĐƯỢC GỌI TỐI ĐA 2 QUERY KHÁC NHAU** cho mỗi bài học
 
     **BẮT ĐẦU**: 
     1. Lấy `{title}` của bài học.

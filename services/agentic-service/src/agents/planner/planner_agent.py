@@ -93,29 +93,61 @@ class PlannerAgent(BaseAgent):
 
         count = 1
         previous_queries = []  # Track queries to detect loops
-        consecutive_same_query = 0  # Track consecutive identical queries
+        query_keywords_seen = set()  # Track unique keywords across all queries
+        consecutive_same_query = 0  # Track consecutive identical/similar queries
+        
+        def normalize_query_for_comparison(q: str) -> str:
+            """Normalize query for comparison."""
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_query_keywords(q: str) -> set:
+            """Extract keywords from query."""
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
         
         while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
             
-            # CRITICAL: Detect if LLM is stuck in loop (calling same query repeatedly)
+            # CRITICAL: Smart loop detection with keyword similarity
             current_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
             
-            # Check if ANY current query has been seen in last 3 queries
-            if len(previous_queries) > 0:
-                last_queries_set = set(previous_queries[-3:] if len(previous_queries) >= 3 else previous_queries)
-                if any(q in last_queries_set for q in current_queries):
-                    consecutive_same_query += 1
-                    self.logger.warning(f"Planner repeating query (count={consecutive_same_query}) at iteration {count}")
-                    tracer.record("warn", "query repetition detected", iteration=count, repetition_count=consecutive_same_query, query=current_queries[0][:100])
-                    
-                    # Force stop after 2 consecutive repetitions
-                    if consecutive_same_query >= 2:
-                        self.logger.warning(f"Planner stuck in loop after {consecutive_same_query} repetitions, forcing final output")
-                        tracer.record("warn", "detected query loop - stopping", iteration=count)
-                        break  # Exit loop to force final JSON output
-                else:
-                    consecutive_same_query = 0
+            # Check for repetition using multiple methods
+            is_repetition = False
+            repetition_reason = ""
+            
+            for cq in current_queries:
+                cq_normalized = normalize_query_for_comparison(cq)
+                cq_keywords = get_query_keywords(cq)
+                
+                # Method 1: Exact normalized match
+                for prev in previous_queries:
+                    if normalize_query_for_comparison(prev) == cq_normalized:
+                        is_repetition = True
+                        repetition_reason = "exact_match"
+                        break
+                
+                # Method 2: High keyword overlap (>70%)
+                if not is_repetition and query_keywords_seen:
+                    overlap = len(cq_keywords & query_keywords_seen) / len(cq_keywords) if cq_keywords else 0
+                    if overlap > 0.7:
+                        is_repetition = True
+                        repetition_reason = f"keyword_overlap_{overlap:.0%}"
+                
+                # Update keyword tracking
+                query_keywords_seen.update(cq_keywords)
+            
+            if is_repetition:
+                consecutive_same_query += 1
+                self.logger.warning(f"Planner repeating query (count={consecutive_same_query}, reason={repetition_reason}) at iteration {count}")
+                tracer.record("warn", "query repetition detected", iteration=count, repetition_count=consecutive_same_query, reason=repetition_reason, query=current_queries[0][:100])
+                
+                # Force stop after 1 repetition (stricter than before)
+                if consecutive_same_query >= 1:
+                    self.logger.warning(f"Planner detected loop after {consecutive_same_query} repetitions, forcing final output")
+                    tracer.record("warn", "detected query loop - stopping immediately", iteration=count)
+                    break  # Exit loop to force final JSON output
+            else:
+                consecutive_same_query = 0
             
             previous_queries.extend(current_queries)
             

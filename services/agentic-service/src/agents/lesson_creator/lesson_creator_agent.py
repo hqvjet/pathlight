@@ -160,8 +160,46 @@ class LessonCreatorAgent(BaseAgent):
         tracer.record("llm", "batch initial response", content_preview=str(ai.content)[:200])
 
         iteration = 1
+        previous_queries_batch = []  # Track queries for loop detection
+        query_keywords_seen_batch = set()
+        
+        def normalize_query_batch(q: str) -> str:
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_query_keywords_batch(q: str) -> set:
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
+        
         while getattr(ai, "tool_calls", None) and iteration <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "batch llm requested tools", tool_calls=ai.tool_calls, iteration=iteration)
+            
+            # CRITICAL: Check for query loops before executing
+            current_queries_batch = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            is_loop = False
+            
+            for cq in current_queries_batch:
+                cq_norm = normalize_query_batch(cq)
+                cq_kw = get_query_keywords_batch(cq)
+                
+                for prev in previous_queries_batch:
+                    if normalize_query_batch(prev) == cq_norm:
+                        is_loop = True
+                        break
+                
+                if not is_loop and query_keywords_seen_batch:
+                    overlap = len(cq_kw & query_keywords_seen_batch) / len(cq_kw) if cq_kw else 0
+                    if overlap > 0.7:
+                        is_loop = True
+                
+                query_keywords_seen_batch.update(cq_kw)
+            
+            if is_loop:
+                self.logger.warning(f"Batch lesson creator detected query loop at iteration {iteration}")
+                tracer.record("warn", "batch query loop detected - forcing output", iteration=iteration)
+                break
+            
+            previous_queries_batch.extend(current_queries_batch)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]
@@ -342,8 +380,49 @@ class LessonCreatorAgent(BaseAgent):
         tracer.record("llm", "initial response", index=index, content_preview=str(ai.content)[:200])
 
         count = 1
+        previous_queries = []  # Track queries for loop detection
+        query_keywords_seen = set()  # Track keywords across all queries
+        
+        def normalize_query_for_comparison(q: str) -> str:
+            """Normalize query for comparison."""
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_query_keywords(q: str) -> set:
+            """Extract keywords from query."""
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
+        
         while getattr(ai, "tool_calls", None) and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", index=index, tool_calls=ai.tool_calls, iteration=count)
+            
+            # CRITICAL: Smart loop detection - check BEFORE executing tools
+            current_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            is_repetition = False
+            
+            for cq in current_queries:
+                cq_normalized = normalize_query_for_comparison(cq)
+                cq_keywords = get_query_keywords(cq)
+                
+                # Check exact match or high keyword overlap
+                for prev in previous_queries:
+                    if normalize_query_for_comparison(prev) == cq_normalized:
+                        is_repetition = True
+                        break
+                
+                if not is_repetition and query_keywords_seen:
+                    overlap = len(cq_keywords & query_keywords_seen) / len(cq_keywords) if cq_keywords else 0
+                    if overlap > 0.7:
+                        is_repetition = True
+                
+                query_keywords_seen.update(cq_keywords)
+            
+            if is_repetition:
+                self.logger.warning(f"Lesson Creator detected repeated query at iteration {count}, forcing output")
+                tracer.record("warn", "query repetition detected - forcing output", index=index, iteration=count)
+                break  # Exit immediately to force JSON output
+            
+            previous_queries.extend(current_queries)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]

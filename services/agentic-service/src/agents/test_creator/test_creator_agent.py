@@ -140,8 +140,42 @@ class TestCreatorAgent(BaseAgent):
         tracer.record("llm", "initial response", lesson_id=lesson.lesson_id, content_preview=str(ai.content)[:200])
 
         count = 1
+        previous_queries_test = []
+        query_keywords_test = set()
+        
+        def normalize_test_query(q: str) -> str:
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_test_keywords(q: str) -> set:
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
+        
         while getattr(ai, "tool_calls", None) and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", lesson_id=lesson.lesson_id, tool_calls=ai.tool_calls, iteration=count)
+            
+            # CRITICAL: Loop detection
+            curr_queries_test = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            is_test_loop = False
+            for cq in curr_queries_test:
+                cq_norm = normalize_test_query(cq)
+                cq_kw = get_test_keywords(cq)
+                for prev in previous_queries_test:
+                    if normalize_test_query(prev) == cq_norm:
+                        is_test_loop = True
+                        break
+                if not is_test_loop and query_keywords_test:
+                    overlap = len(cq_kw & query_keywords_test) / len(cq_kw) if cq_kw else 0
+                    if overlap > 0.7:
+                        is_test_loop = True
+                query_keywords_test.update(cq_kw)
+            
+            if is_test_loop:
+                self.logger.warning(f"TestCreator detected query loop at iteration {count}")
+                tracer.record("warn", "query loop detected - forcing output", lesson_id=lesson.lesson_id, iteration=count)
+                break
+            
+            previous_queries_test.extend(curr_queries_test)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]

@@ -76,7 +76,9 @@ prompt: |
   1. **KHÔNG BAO GIỜ** dùng query chung chung kiểu "tài liệu này nói gì".
   2. **KHÔNG BAO GIỜ** bỏ cuộc. Nếu không có Mục lục, hãy tìm Ý Chính (Key Concepts).
   3. **Tên Module phải "Ngon"**: Đừng đặt tên "Chương 1". Hãy đặt "Chương 1: [Tên Nội Dung Cụ Thể]".
-  4. **Tối thiểu 2 lượt search** nếu lượt 1 chưa đủ thông tin, nhưng tối đa là 3.
+  4. **TỐI ĐA 2 lượt search**: Query 1 là LƯỚI QUÉT, Query 2 (nếu cần) là DEEP DIVE vào chủ đề cụ thể.
+  5. **TUYỆT ĐỐI KHÔNG LẶP LẠI QUERY**: Nếu đã gọi 1 query, KHÔNG ĐƯỢC gọi query giống hoặc tương tự. Mỗi query phải KHÁC BIỆT hoàn toàn.
+  6. **SAU KHI NHẬN KẾT QUẢ**: Phân tích kết quả và TẠO OUTPUT ngay. KHÔNG gọi thêm retrieval_tool nếu đã có đủ thông tin về cấu trúc tài liệu.
 
   **XỬ LÝ ĐƯỜNG CÙNG (FALLBACK)**:
   - Nếu SAU 2 LƯỢT vẫn "mù tịt":
@@ -92,9 +94,19 @@ prompt: |
   2. ✅ Mỗi description ≤ 2 câu
   3. ✅ course_name phải dựa trên tài liệu (hoặc tổng quát nếu không rõ)
   4. ❌ KHÔNG tạo khóa học Lập trình/Python/Java nếu tài liệu không nói về nó.
-  5. ❌ TUYỆT ĐỐI KHÔNG gọi cùng 1 query retrieval 2 lần.
-  6. ✅ SAU TỐI ĐA 2 lượt retrieval, PHẢI output JSON ngay lập tức.
-  7. ✅ LUÔN LUÔN phải có ít nhất 2-3 items trong course_roadmap.
+  5. ❌ **TUYỆT ĐỐI KHÔNG GỌI CÙNG QUERY 2 LẦN** - Nếu đã query rồi, DỪNG LẠI và tạo output.
+  6. ✅ **SAU 1 lượt retrieval có kết quả → PHẢI output JSON ngay lập tức**.
+  7. ✅ Nếu kết quả retrieval chưa đủ chi tiết, tạo Query 2 với keyword KHÁC HOÀN TOÀN.
+  8. ✅ LUÔN LUÔN phải có ít nhất 2-3 items trong course_roadmap.
+
+  ---
+
+  # CẢNH BÁO LOOP DETECTION
+
+  Hệ thống sẽ TỰ ĐỘNG phát hiện nếu bạn gọi query trùng lặp hoặc tương tự:
+  - Nếu query mới có >70% keywords giống query cũ → BỊ CHẶN
+  - Nếu gọi cùng query 2 lần → BỊ FORCE OUTPUT ngay lập tức
+  - **CHỈ ĐƯỢC GỌI TỐI ĐA 2 QUERY KHÁC NHAU**
 
   ---
 
