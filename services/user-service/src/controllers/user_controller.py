@@ -294,7 +294,9 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             setattr(target_user, 'profile', profile)
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
-        setattr(target_user, 'subscription', request.subscription)
+        
+        # Set subscription directly on profile, not on user
+        setattr(profile, 'subscription', request.subscription)
         db.flush()
         db.commit()
         
