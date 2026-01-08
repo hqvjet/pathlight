@@ -103,6 +103,23 @@ def save_course_state(state: State) -> None:
 
             db.commit()
             logger.info("Persisted course %s with %d lessons", state.id, len(state.lessons or []))
+            
+            # Index course vector for recommendation system
+            try:
+                from services.recommendation_service import RecommendationService
+                rec_service = RecommendationService()
+                rec_service.index_course_vector(
+                    course_id=state.id,
+                    title=state.title or "Untitled Course",
+                    description=state.description or "",
+                    user_id=state.user_id,
+                    publish=False,  # Default to unpublished
+                    level=state.difficulty,
+                    duration=int(state.duration)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to index course vector for recommendations: {e}")
+                
         except SQLAlchemyError as e:
             db.rollback()
             logger.exception("DB error persisting course %s: %s", state.id, e)

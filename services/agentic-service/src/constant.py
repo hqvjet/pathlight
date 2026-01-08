@@ -35,3 +35,8 @@ MIN_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not 
 MAX_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not <=3)
 MIN_ROADMAP_ITEMS = 2         # Minimum roadmap items
 MAX_ROADMAP_ITEMS = 10        # Maximum roadmap items (prevent too many lessons)
+
+# Recommendation System - OpenSearch indices
+COURSE_VECTOR_INDEX = "pathlight-course-vectors"  # Store course embeddings (title + description)
+QUIZ_VECTOR_INDEX = "pathlight-quiz-vectors"      # Store quiz embeddings (title + overview)
+RECOMMENDATION_TOP_K = 10                         # Default top-k for recommendations

@@ -18,6 +18,8 @@ from contracts.sqs_contracts import (
     GenerateCourseWithVectorizeMessage,
     ChatbotQuestionMessage,
     GenerateQuizWithVectorizeMessage,
+    RecommendCoursesMessage,
+    RecommendQuizzesMessage,
     SQSBatchResponse,
     SQSEvent,
 )
@@ -87,6 +89,36 @@ def _handle_generate_quiz_with_vectorize(msg: GenerateQuizWithVectorizeMessage) 
     )
 
 
+def _handle_recommend_courses(msg: RecommendCoursesMessage) -> None:
+    """Handle course recommendation request."""
+    # Validate required fields
+    if not msg.payload.sim_id:
+        raise ValueError("sim_id is required for course recommendation")
+    if not msg.payload.user_id:
+        raise ValueError("user_id is required for course recommendation")
+    if not msg.payload.course_ids:
+        raise ValueError("course_ids is required for course recommendation")
+    
+    from handlers.recommendation_handler import RecommendationHandler
+    handler = RecommendationHandler()
+    handler.handle_recommend_courses(msg.payload.dict())
+
+
+def _handle_recommend_quizzes(msg: RecommendQuizzesMessage) -> None:
+    """Handle quiz recommendation request."""
+    # Validate required fields
+    if not msg.payload.sim_id:
+        raise ValueError("sim_id is required for quiz recommendation")
+    if not msg.payload.user_id:
+        raise ValueError("user_id is required for quiz recommendation")
+    if not msg.payload.quiz_ids:
+        raise ValueError("quiz_ids is required for quiz recommendation")
+    
+    from handlers.recommendation_handler import RecommendationHandler
+    handler = RecommendationHandler()
+    handler.handle_recommend_quizzes(msg.payload.dict())
+
+
 def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
     """Process AWS SQS batch event and return batchItemFailures on error per record."""
     failures: List[dict] = []
@@ -115,6 +147,18 @@ def process_sqs_event(event: SQSEvent) -> SQSBatchResponse:
                     f"Processing GENERATE_QUIZ_WITH_VECTORIZE: id={msg.payload.id}, files={len(msg.payload.s3_keys)}, num_questions={msg.payload.num_questions}, difficulty={msg.payload.difficulty}"
                 )
                 _handle_generate_quiz_with_vectorize(msg)
+            elif msg_type == MessageType.RECOMMEND_COURSES:
+                msg = RecommendCoursesMessage(**data)
+                logger.info(
+                    f"Processing RECOMMEND_COURSES: sim_id={msg.payload.sim_id}, user_id={msg.payload.user_id}, topk={msg.payload.topk}, candidates={len(msg.payload.course_ids)}"
+                )
+                _handle_recommend_courses(msg)
+            elif msg_type == MessageType.RECOMMEND_QUIZZES:
+                msg = RecommendQuizzesMessage(**data)
+                logger.info(
+                    f"Processing RECOMMEND_QUIZZES: sim_id={msg.payload.sim_id}, user_id={msg.payload.user_id}, topk={msg.payload.topk}, candidates={len(msg.payload.quiz_ids)}"
+                )
+                _handle_recommend_quizzes(msg)
             else:
                 raise ValueError(f"Unsupported message type: {data.get('type')}")
         except Exception as e:

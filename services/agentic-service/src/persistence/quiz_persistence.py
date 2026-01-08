@@ -74,6 +74,24 @@ def save_quiz_state(state: QuizState) -> None:
 
             db.commit()
             logger.info("Persisted quiz %s with %d cards", state.id, len(quiz_cards))
+            
+            # Index quiz vector for recommendation system
+            try:
+                from services.recommendation_service import RecommendationService
+                rec_service = RecommendationService()
+                rec_service.index_quiz_vector(
+                    quiz_id=state.id,
+                    title=state.title or "Untitled Quiz",
+                    overview=state.overview or "",
+                    user_id=state.user_id,
+                    publish=False,  # Default to unpublished
+                    level=state.difficulty,
+                    duration=int(state.duration),
+                    num_questions=state.num_questions
+                )
+            except Exception as e:
+                logger.warning(f"Failed to index quiz vector for recommendations: {e}")
+                
         except SQLAlchemyError as e:
             db.rollback()
             logger.exception("DB error persisting quiz %s: %s", state.id, e)
