@@ -45,8 +45,8 @@ class RecommendationService:
         
     def get_all_public_course_ids(self, db: Session) -> List[str]:
         try:
-            courses = db.query(Course.id).filter(Course.publish == True).all()
-            return [course.id for course in courses]
+            courses = db.query(Course.course_id).filter(Course.publish == True).all()
+            return [course.course_id for course in courses]
         except Exception as e:
             logger.error(f"Failed to get public course IDs: {e}")
             return []
