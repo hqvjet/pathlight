@@ -162,24 +162,6 @@ class PlannerAgent(BaseAgent):
                 history.append(
                     ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
                 )
-                
-                # CRITICAL: Inject strong guidance for weak LLM
-                remaining_calls = MAX_TOOL_CALLS_PER_AGENT - count
-                queries_done = ", ".join([f'"{q[:40]}..."' for q in previous_queries[-3:]]) if previous_queries else "(chưa có)"
-                
-                guidance_msg = SystemMessage(content=(
-                    f"\n=== TRẠNG THÁI HIỆN TẠI ==="
-                    f"\n• Đã thực hiện {count}/{MAX_TOOL_CALLS_PER_AGENT} lượt retrieval"
-                    f"\n• Còn lại: {remaining_calls} lượt"
-                    f"\n• Các query đã gọi: {queries_done}"
-                    f"\n\n=== HƯỚNG DẪN TIẾP THEO ==="
-                    f"\n• Nếu đã có thông tin về cấu trúc/mục lục → TẠO JSON NGAY"
-                    f"\n• Nếu cần thêm → Dùng query KHÁC HOÀN TOÀN (không trùng keyword)"
-                    f"\n• TUYỆT ĐỐI KHÔNG gọi lại query đã dùng"
-                    f"\n• Nếu còn 1 lượt → BẮT BUỘC tạo JSON sau lượt này"
-                ))
-                history.append(guidance_msg)
-                
                 # Token optimization: Trim history to prevent explosion
                 history = trim_history(history)
                 tracer.record(

@@ -90,40 +90,24 @@ class ToolManager:
             normalized = normalize_query(query)
             cache_key = (course_id, normalized)
             
-            # Count queries for this course
-            query_count = len(self.query_history.get(course_id, []))
-            
             # Check exact cache hit
             if cache_key in self.retrieval_cache:
-                logger.warning(f"DUPLICATE QUERY BLOCKED: {query[:50]}...")
+                logger.info(f"Cache HIT for query: {query[:50]}...")
+                # Return with explicit message to STOP calling same query
                 cached_result = self.retrieval_cache[cache_key]
-                # Return EMPTY to force LLM to use existing context
-                return (
-                    f"⚠️ QUERY ĐÃ ĐƯỢC THỰC HIỆN TRƯỚC ĐÓ - KHÔNG CẦN GỌI LẠI ⚠️\n\n"
-                    f"Bạn đã query '{query[:50]}...' rồi.\n"
-                    f"Số lượt query đã dùng: {query_count}\n\n"
-                    f"KẾT QUẢ TỪ CACHE (giống hệt lần trước):\n{cached_result[:500]}...\n\n"
-                    f"🚨 HÀNH ĐỘNG BẮT BUỘC: DỪNG GỌI RETRIEVAL, TẠO OUTPUT JSON NGAY 🚨"
-                )
+                return f"[ĐÃ TRUY VẤN TRƯỚC ĐÓ - KHÔNG GỌI LẠI] Kết quả được cache:\n\n{cached_result}\n\n[HÀNH ĐỘNG BẮT BUỘC: Sử dụng thông tin trên để tạo output JSON ngay. KHÔNG gọi retrieval_tool với query tương tự nữa.]"
             
             # Check similarity with previous queries
             similar_query = self._find_similar_cached_query(course_id, query)
             if similar_query:
                 similar_key = (course_id, normalize_query(similar_query))
                 if similar_key in self.retrieval_cache:
-                    logger.warning(f"SIMILAR QUERY BLOCKED: '{query[:40]}' ~ '{similar_query[:40]}'")
+                    logger.warning(f"Similar query detected! Original: '{similar_query[:50]}...' New: '{query[:50]}...'")
                     cached_result = self.retrieval_cache[similar_key]
-                    return (
-                        f"⚠️ QUERY TƯƠNG TỰ ĐÃ ĐƯỢC GỌI ⚠️\n\n"
-                        f"Query mới: '{query[:40]}...'\n"
-                        f"Query cũ tương tự: '{similar_query[:40]}...'\n"
-                        f"Số lượt đã dùng: {query_count}\n\n"
-                        f"KẾT QUẢ TỪ QUERY TƯƠNG TỰ:\n{cached_result[:500]}...\n\n"
-                        f"🚨 DỪNG LẠI! Dùng thông tin đã có để TẠO OUTPUT JSON 🚨"
-                    )
+                    return f"[QUERY TƯƠNG TỰ ĐÃ ĐƯỢC GỌI - DỪNG LẠI] Query '{query[:30]}...' rất giống với query trước đó.\n\nKết quả từ query tương tự:\n{cached_result}\n\n[HÀNH ĐỘNG BẮT BUỘC: Bạn đã có đủ thông tin. TẠO OUTPUT JSON NGAY BÂY GIỜ. KHÔNG gọi thêm retrieval_tool.]"
             
             # Cache miss - execute and cache
-            logger.info(f"Cache MISS (query #{query_count + 1}): {query[:50]}...")
+            logger.info(f"Cache MISS for query: {query[:50]}...")
             
             # Track this query in history
             if course_id not in self.query_history:
