@@ -25,6 +25,8 @@ from schemas.user_schemas import (
     ExperienceAddRequest,
     TestStatsResponse,
     ActivityLogRequest,
+    SubscriptionUpgradeRequest,
+    SubscriptionVerifyRequest,
 )
 from models import User
 from controllers.user_controller import (
@@ -293,3 +295,36 @@ async def get_users_by_ids_endpoint(
 ):
     """Batch fetch user information by IDs"""
     return await get_users_by_ids(user_ids, db)
+
+
+# ---------- Subscription ----------
+@router.get("/subscription/info/{level}")
+async def get_subscription_info_endpoint(
+    level: int
+):
+    """Get subscription plan information by level (0=Free, 1=Premium, 2=Pro)"""
+    from controllers.user_controller import get_subscription_info_by_level
+    return await get_subscription_info_by_level(level)
+
+
+@router.post("/subscription/upgrade")
+async def request_subscription_upgrade_endpoint(
+    request: SubscriptionUpgradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Request subscription upgrade and get QR code for payment"""
+    from controllers.user_controller import request_subscription_upgrade
+    return await request_subscription_upgrade(request, current_user, db)
+
+
+@router.post("/admin/subscription/verify")
+async def verify_subscription_payment_endpoint(
+    request: SubscriptionVerifyRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify payment and upgrade user subscription (Admin only)"""
+    from controllers.user_controller import verify_subscription_payment
+    return await verify_subscription_payment(request, current_user, credentials, db)
