@@ -38,7 +38,7 @@ class RecommendationService:
             secret_access_key=secret_access_key
         )
         
-        self.queue_url = os.getenv("AGENTIC_QUEUE_URL", "")
+        self.queue_url = os.getenv("SQS_QUEUE_URL", "")
         self.region = region
         self.max_poll_attempts = 30  # 30 seconds max wait
         self.poll_interval = 1  # 1 second between polls

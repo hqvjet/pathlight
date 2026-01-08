@@ -45,6 +45,9 @@ class CourseConfig:
     
     # SQS Queue for async processing
     SQS_QUEUE_URL: str = os.getenv("SQS_QUEUE_URL", "")
+    
+    # DynamoDB for recommendation sim search results
+    SIM_SEARCH_TABLE_NAME: str = os.getenv("SIM_SEARCH_TABLE_NAME", "sim_search_table")
 
 config = CourseConfig()
 
