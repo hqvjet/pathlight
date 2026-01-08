@@ -49,8 +49,10 @@ def list_my_generations(request: Request):
     if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     rows = fetch_user_quiz_generations(user_id)
+    # Return empty list if DynamoDB is unavailable, rather than error
+    # This allows frontend to show empty state instead of error
     if rows is None:
-        return {"status": 500, "message": "Không thể lấy dữ liệu tiến trình"}
+        return {"status": 200, "items": []}
     return {"status": 200, "items": rows}
 
 
