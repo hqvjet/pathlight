@@ -33,6 +33,8 @@ class MessageType(str, Enum):
   GENERATE_COURSE_WITH_VECTORIZE = "GENERATE_COURSE_WITH_VECTORIZE"
   CHATBOT_QUESTION = "CHATBOT_QUESTION"
   GENERATE_QUIZ_WITH_VECTORIZE = "GENERATE_QUIZ_WITH_VECTORIZE"
+  RECOMMEND_COURSES = "RECOMMEND_COURSES"
+  RECOMMEND_QUIZZES = "RECOMMEND_QUIZZES"
 
 
 class BaseMessage(BaseModel):
@@ -76,6 +78,28 @@ class GenerateQuizWithVectorizePayload(BaseModel):
 
 class GenerateQuizWithVectorizeMessage(BaseMessage):
   payload: GenerateQuizWithVectorizePayload
+
+
+class RecommendCoursesPayload(BaseModel):
+  sim_id: str  # Unique search ID from course service
+  user_id: str  # User to get recommendations for
+  topk: int  # Number of recommendations to return
+  course_ids: List[str]  # List of course IDs to search within (public courses)
+
+
+class RecommendCoursesMessage(BaseMessage):
+  payload: RecommendCoursesPayload
+
+
+class RecommendQuizzesPayload(BaseModel):
+  sim_id: str  # Unique search ID from quiz service
+  user_id: str  # User to get recommendations for
+  topk: int  # Number of recommendations to return
+  quiz_ids: List[str]  # List of quiz IDs to search within (public quizzes)
+
+
+class RecommendQuizzesMessage(BaseMessage):
+  payload: RecommendQuizzesPayload
 
 
 class SQSBatchResponse(BaseModel):
