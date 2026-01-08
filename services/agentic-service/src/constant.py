@@ -4,6 +4,11 @@ TEST_CREATOR_AGENT_NAME = "test_creator_agent"
 FINAL_TEST_CREATOR_AGENT_NAME = "final_test_creator_agent"
 ORCHESTRATOR_AGENT_NAME = "orchestrator_agent"
 
+# Quiz agent names
+QUIZ_PLANNER_AGENT_NAME = "quiz_planner"
+QUESTIONER_AGENT_NAME = "questioner"
+QUIZ_ORCHESTRATOR_AGENT_NAME = "quiz_orchestrator"
+
 # Iteration limits - REDUCED to prevent timeout
 MAX_TOOL_CALLS_PER_AGENT = 3  # CRITICAL: Giảm từ 15→3 để tránh token explosion
 MAX_GRAPH_ITERATIONS = 50  # Tăng để đủ cho lessons (orchestrator iterations)
@@ -18,6 +23,7 @@ LESSON_GENERATION_TIMEOUT = 90  # Timeout for single lesson generation (seconds)
 LLM_MAX_TOKENS_PLANNER = None  # No limit - needs full roadmap JSON
 LLM_MAX_TOKENS_LESSON = None   # No limit - let LLM decide based on prompt guidance
 LLM_MAX_TOKENS_TEST = 1500     # 4-6 assessments
+LLM_MAX_TOKENS_QUESTIONER = 2000  # Quiz question generation
 
 # LLM temperature settings
 LLM_TEMPERATURE = 0.0  # CRITICAL: 0 for deterministic output (no randomness)

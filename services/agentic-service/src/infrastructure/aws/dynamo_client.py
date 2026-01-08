@@ -24,6 +24,10 @@ def _table_name() -> str:
     return os.getenv("DDB_TABLE_NAME", "pathlight-agentic-status")
 
 
+def _quiz_table_name() -> str:
+    return os.getenv("DDB_QUIZ_TABLE_NAME", "quiz_generation_tracking")
+
+
 def _resource():
     region = os.getenv("REGION", "ap-northeast-1")
     access_key = os.getenv("ACCESS_KEY_ID")
@@ -39,8 +43,8 @@ def _resource():
         return None
 
 
-def _ensure_table(resource) -> Optional[Any]:
-    name = _table_name()
+def _ensure_table(resource, table_name: Optional[str] = None, pk_name: str = "course_id") -> Optional[Any]:
+    name = table_name or _table_name()
     if resource is None:
         return None
     try:
@@ -59,8 +63,8 @@ def _ensure_table(resource) -> Optional[Any]:
         try:
             table = resource.create_table(
                 TableName=name,
-                KeySchema=[{"AttributeName": "course_id", "KeyType": "HASH"}],
-                AttributeDefinitions=[{"AttributeName": "course_id", "AttributeType": "S"}],
+                KeySchema=[{"AttributeName": pk_name, "KeyType": "HASH"}],
+                AttributeDefinitions=[{"AttributeName": pk_name, "AttributeType": "S"}],
                 BillingMode="PAY_PER_REQUEST",
             )
             table.wait_until_exists()
@@ -88,18 +92,18 @@ def put_item(item: Dict[str, Any]) -> None:
         logger.warning(f"DynamoDB put_item failed: {e}")
 
 
-def ensure_table(strict: bool = False) -> bool:
+def ensure_table(strict: bool = False, table_name: Optional[str] = None, pk_name: str = "course_id") -> bool:
     """Ensure DynamoDB table exists; optionally raise if unavailable.
 
     Returns True if table is available, False otherwise. If strict=True and table
     is not available, raises a RuntimeError.
     """
     resource = _resource()
-    table = _ensure_table(resource) if resource else None
+    table = _ensure_table(resource, table_name, pk_name) if resource else None
     ok = table is not None
     if not ok and strict:
         raise RuntimeError(
-            f"DynamoDB table {_table_name()} unavailable and auto-create disabled"
+            f"DynamoDB table {table_name or _table_name()} unavailable and auto-create disabled"
         )
     return ok
 
@@ -119,46 +123,48 @@ def put_item_strict(item: Dict[str, Any]) -> None:
         raise RuntimeError(f"DynamoDB put_item failed: {e}")
 
 
-def update_item(course_id: str, updates: Dict[str, Any]) -> None:
+def update_item(pk_value: str, updates: Dict[str, Any], table_name: Optional[str] = None, pk_name: str = "course_id") -> None:
     resource = _resource()
-    table = _ensure_table(resource) if resource else None
+    table = _ensure_table(resource, table_name, pk_name) if resource else None
     if not table:
         return
     try:
         # Simple upsert/merge pattern: read, shallow-merge, write back
         current = {}
         try:
-            resp = table.get_item(Key={"course_id": course_id})
+            resp = table.get_item(Key={pk_name: pk_value})
             current = resp.get("Item", {}) or {}
         except Exception:
             current = {}
         # Ensure PK is always present
-        if "course_id" not in current:
-            current["course_id"] = course_id
+        if pk_name not in current:
+            current[pk_name] = pk_value
         current.update(updates)
-        put_item(current)
+        current["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        table.put_item(Item=current)
     except (ClientError, BotoCoreError) as e:
         logger.warning(f"DynamoDB update_item failed: {e}")
 
 
-def update_item_strict(course_id: str, updates: Dict[str, Any]) -> None:
+def update_item_strict(pk_value: str, updates: Dict[str, Any], table_name: Optional[str] = None, pk_name: str = "course_id") -> None:
     """Strict variant of update_item that raises on failure and ensures PK."""
     resource = _resource()
-    table = _ensure_table(resource) if resource else None
+    table = _ensure_table(resource, table_name, pk_name) if resource else None
     if not table:
         raise RuntimeError(
-            f"DynamoDB table {_table_name()} unavailable; cannot update status item"
+            f"DynamoDB table {table_name or _table_name()} unavailable; cannot update status item"
         )
     try:
         current = {}
         try:
-            resp = table.get_item(Key={"course_id": course_id})
+            resp = table.get_item(Key={pk_name: pk_value})
             current = resp.get("Item", {}) or {}
         except Exception:
             current = {}
-        if "course_id" not in current:
-            current["course_id"] = course_id
+        if pk_name not in current:
+            current[pk_name] = pk_value
         current.update(updates)
-        put_item_strict(current)
+        current["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        table.put_item(Item=current)
     except (ClientError, BotoCoreError) as e:
         raise RuntimeError(f"DynamoDB update_item failed: {e}")

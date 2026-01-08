@@ -261,3 +261,142 @@ def mark_final_ready(course_id: str, count: int) -> None:
 
 def mark_vectorized(course_id: str, ok: bool = True) -> None:
     update_item_strict(course_id, {"vectorized": bool(ok)})
+
+
+# Quiz generation tracking functions
+QUIZ_TRACKING_TABLE = "quiz_generation_tracking"
+
+
+def start_quiz(quiz_id: str, user_id: str, strict: bool = True) -> None:
+    """Initialize quiz generation tracking.
+    
+    Sets status to 'initializing' with 0% progress.
+    """
+    if not user_id or not str(user_id).strip():
+        raise ValueError("user_id is required for quiz tracking")
+    
+    updates = {
+        "status": "initializing",
+        "progress_percentage": 0,
+        "current_step": "Khởi tạo",
+        "current_step_detail": "Đang khởi tạo workflow tạo quiz...",
+        "user_id": str(user_id),
+        "plan_ready": False,
+        "questions_ready": False,
+        "start_timestamp": int(time.time()),
+    }
+    
+    if strict:
+        ensure_table(strict=True, table_name=QUIZ_TRACKING_TABLE, pk_name="quiz_id")
+        update_item_strict(quiz_id, updates, table_name=QUIZ_TRACKING_TABLE, pk_name="quiz_id")
+    else:
+        update_item(quiz_id, updates, table_name=QUIZ_TRACKING_TABLE, pk_name="quiz_id")
+
+
+def mark_quiz_planning(quiz_id: str) -> None:
+    """Mark that quiz planning phase has started."""
+    update_item(
+        quiz_id,
+        {
+            "status": "planning",
+            "progress_percentage": 20,
+            "current_step": "Lập kế hoạch",
+            "current_step_detail": "Đang phân tích yêu cầu và tạo ý tưởng câu hỏi...",
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+
+
+def mark_quiz_plan_ready(quiz_id: str, title: str, overview: str, ideas_count: int) -> None:
+    """Mark that quiz plan is ready."""
+    update_item(
+        quiz_id,
+        {
+            "status": "creating_questions",
+            "progress_percentage": 40,
+            "current_step": "Tạo câu hỏi",
+            "current_step_detail": f"Đã hoàn thành {ideas_count} ý tưởng câu hỏi. Bắt đầu tạo nội dung...",
+            "plan_ready": True,
+            "title": title or "",
+            "overview": overview or "",
+            "ideas_count": ideas_count,
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+
+
+def mark_quiz_questions_progress(quiz_id: str, have: int, planned: int) -> None:
+    """Update quiz question creation progress."""
+    # 40% to 90% range for questions
+    if planned > 0:
+        question_progress = (have / planned) * 50
+        progress_pct = int(40 + question_progress)
+    else:
+        progress_pct = 40
+    
+    update_item(
+        quiz_id,
+        {
+            "status": "creating_questions",
+            "progress_percentage": progress_pct,
+            "current_step": f"Tạo câu hỏi {have}/{planned}",
+            "current_step_detail": f"Đang tạo nội dung chi tiết cho câu hỏi thứ {have}...",
+            "questions_count": have,
+            "questions_planned": planned,
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+
+
+def mark_quiz_questions_ready(quiz_id: str, count: int) -> None:
+    """Mark that all quiz questions are created."""
+    update_item(
+        quiz_id,
+        {
+            "status": "finalizing",
+            "progress_percentage": 95,
+            "current_step": "Hoàn thiện",
+            "current_step_detail": f"Đã hoàn thành {count} câu hỏi. Đang hoàn thiện và lưu quiz...",
+            "questions_ready": True,
+            "questions_count": count,
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+
+
+def mark_quiz_completed(quiz_id: str) -> None:
+    """Mark quiz generation as completed successfully."""
+    update_item(
+        quiz_id,
+        {
+            "status": "completed",
+            "progress_percentage": 100,
+            "current_step": "Hoàn thành",
+            "current_step_detail": "Quiz đã được tạo thành công!",
+            "end_timestamp": int(time.time()),
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+
+
+def mark_quiz_failed(quiz_id: str, error_message: str) -> None:
+    """Mark quiz generation as failed with error message."""
+    update_item(
+        quiz_id,
+        {
+            "status": "failed",
+            "progress_percentage": 0,
+            "current_step": "Thất bại",
+            "current_step_detail": "Đã xảy ra lỗi trong quá trình tạo quiz",
+            "error_message": error_message,
+            "end_timestamp": int(time.time()),
+        },
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id",
+    )
+

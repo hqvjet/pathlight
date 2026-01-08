@@ -6,7 +6,9 @@ from constant import (
     ORCHESTRATOR_AGENT_NAME, 
     LESSON_CREATOR_AGENT_NAME, 
     PLANNER_AGENT_NAME, 
-    TEST_CREATOR_AGENT_NAME
+    TEST_CREATOR_AGENT_NAME,
+    QUIZ_PLANNER_AGENT_NAME,
+    QUESTIONER_AGENT_NAME,
 )
 
 class PromptManager:
@@ -17,6 +19,8 @@ class PromptManager:
             # ORCHESTRATOR_AGENT_NAME: self.catalog['orchestrator']['prompt_path'],
             LESSON_CREATOR_AGENT_NAME: self.catalog['lesson_creator']['prompt_path'],
             TEST_CREATOR_AGENT_NAME: self.catalog['test_creator']['prompt_path'],
+            QUIZ_PLANNER_AGENT_NAME: self.catalog['quiz_planner']['prompt_path'],
+            QUESTIONER_AGENT_NAME: self.catalog['questioner']['prompt_path'],
         }
 
     def get_prompt(self, agent_name: str) -> PromptTemplate:
