@@ -68,13 +68,25 @@ class LessonCreatorAgent(BaseAgent):
 
         # Determine total planned lessons
         planned_total: Optional[int] = state.lessons_expected or (len(state.roadmap) if state.roadmap else None)
+        
+        # Get current lesson title from roadmap if available for better context
+        current_lesson_title = ""
+        next_idx = state.next_lesson_index or (len(lessons) + 1)
+        if state.roadmap and len(state.roadmap) >= next_idx:
+            try:
+                # Adjust index (roadmap is 0-indexed, next_lesson_index is 1-indexed usually)
+                roadmap_idx = next_idx - 1
+                if 0 <= roadmap_idx < len(state.roadmap):
+                    current_lesson_title = state.roadmap[roadmap_idx].get("title", "")
+            except:
+                pass
 
         # SEQUENTIAL GENERATION - CRITICAL FIX for timeout
         # Generate ONE lesson at a time to prevent timeout and ensure quality
         if planned_total and len(lessons) < planned_total:
             # Use next_lesson_index from state (initialized by planner)
             start_index = state.next_lesson_index or (len(lessons) + 1)
-            tracer.record("single", "generate next lesson (sequential)", index=start_index, total=planned_total)
+            tracer.record("single", "generate next lesson (sequential)", index=start_index, total=planned_total, current_title=current_lesson_title)
             prev_ids = [l.lesson_id for l in lessons]
 
             result = self._generate_single_lesson(state, start_index, prev_ids)
@@ -277,12 +289,22 @@ class LessonCreatorAgent(BaseAgent):
         tracer = StepTracer(self.name, state.id, logger=self.logger)
 
         # Keep roadmap minimal: only the current item to reduce tokens
+        # CRITICAL: Pass the specific title of the lesson to be generated
+        target_lesson_title = f"Lesson {index}"
         slim_roadmap = None
-        if state.roadmap and len(state.roadmap) >= index:
-            try:
-                slim_roadmap = [state.roadmap[index - 1]]
-            except Exception:
-                slim_roadmap = state.roadmap[:1]
+        if state.roadmap:
+            # Try to get the specific roadmap item for this lesson
+            roadmap_index = index - 1
+            if 0 <= roadmap_index < len(state.roadmap):
+                 try:
+                    target_item = state.roadmap[roadmap_index]
+                    slim_roadmap = [target_item]
+                    target_lesson_title = target_item.get("title", target_lesson_title)
+                 except:
+                    slim_roadmap = state.roadmap[:1]
+            else:
+                 # Fallback if index out of range
+                 slim_roadmap = state.roadmap[:1]
 
         history: List = [
             SystemMessage(
@@ -291,7 +313,7 @@ class LessonCreatorAgent(BaseAgent):
                     history=[],
                     difficulty=state.difficulty,
                     duration=str(state.duration),
-                    title=state.title,
+                    title=target_lesson_title, # Pass SPECIFIC lesson title, not course title
                     description=state.description,
                     roadmap=slim_roadmap or state.roadmap,
                     lessons_expected=state.lessons_expected or "",
