@@ -765,3 +765,34 @@ def get_recommended_quizzes_controller(request: Request, topk: int = 20):
     finally:
         session.close()
 
+
+def update_quiz_previous_score_controller(request: Request, quiz_id: str, score: int):
+    """Update the previous_score field for a quiz."""
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    session = _get_db()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        
+        # Check if user owns the quiz
+        if str(quiz.user_id) != str(user_id):
+            raise HTTPException(status_code=403, detail="Not authorized to update this quiz")
+        
+        # Update the previous score
+        setattr(quiz, "previous_score", int(score))
+        session.commit()
+        
+        return {"status": 200, "message": "Previous score updated successfully", "previous_score": score}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to update previous score: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update previous score")
+    finally:
+        session.close()
+

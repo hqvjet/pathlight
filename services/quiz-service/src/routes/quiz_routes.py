@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, HTTPException
 from typing import Optional
 
 from src.controllers.quiz_controller import (
@@ -16,6 +16,7 @@ from src.controllers.quiz_controller import (
     delete_quiz_admin_controller,
     toggle_quiz_visibility_admin_controller,
     get_recommended_quizzes_controller,
+    update_quiz_previous_score_controller,
     _verify_token,
 )
 from src.schemas.quiz_schemas import (
@@ -121,6 +122,15 @@ def update_visibility(request: Request, body: QuizVisibilityUpdate):
 @router.put("/finish")
 def finish_quiz(request: Request, body: FinishQuizRequest):
     return finish_quiz_controller(request, body)
+
+
+@router.put("/{quiz_id}/previous-score")
+def update_quiz_previous_score(request: Request, quiz_id: str, body: dict):
+    """Update the previous_score for a quiz."""
+    score = body.get("score")
+    if score is None:
+        raise HTTPException(status_code=400, detail="Score is required")
+    return update_quiz_previous_score_controller(request, quiz_id, score)
 
 
 @router.delete("/{quiz_id}")
