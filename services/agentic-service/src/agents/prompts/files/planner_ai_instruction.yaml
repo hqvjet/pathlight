@@ -73,28 +73,34 @@ prompt: |
   - k = 5
 
   **QUAN TRỌNG**: 
-  - SAU 2-3 LƯỢT retrieval, BẠN PHẢI TẠO ROADMAP với context hiện có
-  - KHÔNG được gọi retrieval với cùng 1 query 2 lần
-  - Nếu không tìm được thông tin rõ ràng sau 3 lượt, hãy tạo roadmap TỔNG QUÁT với TOÀN BỘ THÔNG TIN hiện có.
+  - SAU TỐI ĐA 2 LƯỢT retrieval, BẠN PHẢI TẠO ROADMAP với context hiện có
+  - TUYỆT ĐỐI KHÔNG được gọi retrieval với cùng 1 query 2 lần
+  - TUYỆT ĐỐI KHÔNG được gọi retrieval quá 3 lần
+  - Nếu không tìm được thông tin rõ ràng sau 2 lượt, hãy tạo roadmap TỔNG QUÁT dựa trên THÔNG TIN ĐÃ THU THẬP được.
 
   **XỬ LÝ KHI KHÔNG CÓ THÔNG TIN**:
   - Nếu retrieval trả về "No relevant information found" hoặc nội dung không rõ ràng:
-    - Hãy thử query khác: `nội dung slide bài học chương`
-  - Nếu vẫn không có thông tin: Trả về course_name là "Không xác định" và mô tả là "Không tìm thấy nội dung trong tài liệu". KHÔNG ĐƯỢC BỊA RA KHÓA HỌC LẬP TRÌNH.
+    - Hãy thử query khác MỘT LẦN: `nội dung slide bài học chương parts content`
+  - Nếu vẫn không có thông tin SAU 2 LƯỢT: 
+    - Tạo roadmap TỔNG QUÁT với 3-4 modules dựa trên bất kỳ context nào bạn có
+    - HOẶC trả về course_name là "Khóa học từ tài liệu" với roadmap tổng quát 3 modules
+    - KHÔNG BAO GIỜ trả về "Không xác định" - luôn tạo ít nhất 1 roadmap tổng quát
 
   ---
 
   # QUY TẮC VÀNG
 
-  1. ✅ Roadmap ≤ {duration}/15 items
+  1. ✅ Roadmap ≤ {duration}/15 items (ít nhất 2, tối đa 10)
   2. ✅ Mỗi description ≤ 2 câu
-  3. ✅ course_name phải dựa trên tài liệu
+  3. ✅ course_name phải dựa trên tài liệu (hoặc tổng quát nếu không rõ)
   4. ❌ KHÔNG tạo khóa học Lập trình/Python/Java nếu tài liệu không nói về nó.
-  5. ❌ KHÔNG gọi cùng 1 query retrieval 2 lần.
-  6. ✅ SAU TỐI ĐA 3 lượt retrieval, PHẢI output JSON kết quả.
+  5. ❌ TUYỆT ĐỐI KHÔNG gọi cùng 1 query retrieval 2 lần.
+  6. ✅ SAU TỐI ĐA 2 lượt retrieval, PHẢI output JSON ngay lập tức.
+  7. ✅ LUÔN LUÔN phải có ít nhất 2-3 items trong course_roadmap.
 
   ---
 
   # Output
 
   **CHỈ TRẢ VỀ JSON** theo schema trên. KHÔNG thêm text khác.
+  **course_roadmap PHẢI có ít nhất 2 items, tốt nhất là 3-5 items.**

@@ -1,8 +1,8 @@
 {
     "Records": [
         {
-            "messageId": "local-test-1767896203",
-            "body": "{\"type\": \"GENERATE_COURSE_WITH_VECTORIZE\", \"correlation_id\": \"test-1767896203\", \"timestamp\": \"2026-01-08T18:16:43Z\", \"payload\": {\"id\": \"test-course-002\", \"user_id\": \"b3aa1376-0c62-4b99-8948-38c6e478cf8a\", \"difficulty\": \"medium\", \"duration\": 1200, \"s3_keys\": [\"users/b3aa1376-0c62-4b99-8948-38c6e478cf8a/PJVin8Ly-7027a51d38-Đe-cu-o-ng-Hotel-sentiment-1.docx\"]}}"
+            "messageId": "local-test-1767898733",
+            "body": "{\"type\": \"GENERATE_COURSE_WITH_VECTORIZE\", \"correlation_id\": \"test-1767898733\", \"timestamp\": \"2026-01-08T18:58:53Z\", \"payload\": {\"id\": \"test-course-0023\", \"user_id\": \"b3aa1376-0c62-4b99-8948-38c6e478cf8a\", \"difficulty\": \"medium\", \"duration\": 1200, \"s3_keys\": [\"users/b3aa1376-0c62-4b99-8948-38c6e478cf8a/9M7ib95w-63cc1929d2-Reading_in_the_brain_by_Stanislas_Dehaen.pdf\"]}}"
         }
     ]
 }

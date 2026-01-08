@@ -93,16 +93,30 @@ class PlannerAgent(BaseAgent):
 
         count = 1
         previous_queries = []  # Track queries to detect loops
+        consecutive_same_query = 0  # Track consecutive identical queries
         
         while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
             
             # CRITICAL: Detect if LLM is stuck in loop (calling same query repeatedly)
             current_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
-            if len(previous_queries) >= 2 and all(q in previous_queries[-2:] for q in current_queries):
-                self.logger.warning(f"Planner stuck in loop at iteration {count}, forcing final output")
-                tracer.record("warn", "detected query loop", iteration=count, query=current_queries[0][:100])
-                break  # Exit loop to force final JSON output
+            
+            # Check if ANY current query has been seen in last 3 queries
+            if len(previous_queries) > 0:
+                last_queries_set = set(previous_queries[-3:] if len(previous_queries) >= 3 else previous_queries)
+                if any(q in last_queries_set for q in current_queries):
+                    consecutive_same_query += 1
+                    self.logger.warning(f"Planner repeating query (count={consecutive_same_query}) at iteration {count}")
+                    tracer.record("warn", "query repetition detected", iteration=count, repetition_count=consecutive_same_query, query=current_queries[0][:100])
+                    
+                    # Force stop after 2 consecutive repetitions
+                    if consecutive_same_query >= 2:
+                        self.logger.warning(f"Planner stuck in loop after {consecutive_same_query} repetitions, forcing final output")
+                        tracer.record("warn", "detected query loop - stopping", iteration=count)
+                        break  # Exit loop to force final JSON output
+                else:
+                    consecutive_same_query = 0
+            
             previous_queries.extend(current_queries)
             
             for tool_call in ai.tool_calls:
@@ -140,12 +154,26 @@ class PlannerAgent(BaseAgent):
             tracer.record("warn", f"Forcing final output (count={count}, max={MAX_TOOL_CALLS_PER_AGENT})")
             self.logger.warning(f"Planner forcing final output: count={count}/{MAX_TOOL_CALLS_PER_AGENT}")
             
-            # Add explicit instruction to force JSON output with available context
+            # Add VERY explicit instruction to force JSON output with available context
+            # Remove any tool call messages from history to prevent confusion
             force_instruction = SystemMessage(
                 content=(
-                    "BẮT BUỘC: Bây giờ hãy tạo JSON output NGAY với thông tin đã có. "
-                    "Nếu chưa đủ thông tin chi tiết, hãy tạo roadmap TỔNG QUÁT dựa trên context hiện tại. "
-                    "KHÔNG được tiếp tục gọi tool. CHỈ output JSON theo format yêu cầu."
+                    "=== CRITICAL INSTRUCTION - MUST FOLLOW ==="
+                    "\n\nSTOP using tools NOW. You have gathered enough context.\n\n"
+                    "REQUIRED ACTION: Generate the final JSON output RIGHT NOW based on the information you have retrieved.\n\n"
+                    "If the context is not detailed enough, create a GENERAL roadmap based on what you know.\n\n"
+                    "You MUST output ONLY valid JSON in this exact format:\n"
+                    "{{\n"
+                    '  "course_name": "Course title from document or general topic",\n'
+                    '  "course_description": "2-3 sentence description",\n'
+                    '  "course_roadmap": [\n'
+                    '    {{"title": "Module 1", "description": "Description"}},\n'
+                    '    {{"title": "Module 2", "description": "Description"}},\n'
+                    '    {{"title": "Module 3", "description": "Description"}}\n'
+                    "  ]\n"
+                    "}}\n\n"
+                    "IMPORTANT: course_roadmap MUST contain at least 2-3 items.\n"
+                    "DO NOT call any more tools. DO NOT add any text outside the JSON."
                 )
             )
             history.append(force_instruction)
@@ -194,23 +222,52 @@ class PlannerAgent(BaseAgent):
         except json.JSONDecodeError as e:
             tracer.record("error", "failed to parse JSON", error=str(e), content=str(ai.content)[:500])
             self.logger.error(f"Planner JSON parse error. Content: {ai.content[:1000]}")
-            raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
+            
+            # FALLBACK: Try to extract JSON from text if wrapped in markdown or has extra text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', ai.content)
+            if json_match:
+                try:
+                    json_content = json.loads(json_match.group(0))
+                    self.logger.warning("Successfully extracted JSON from wrapped content")
+                except:
+                    raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
+            else:
+                raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
         
-        # CRITICAL FIX: Validate required fields
+        # CRITICAL FIX: Validate required fields with detailed error messages
         course_name = json_content.get("course_name")
         if not course_name:
             tracer.record("error", "missing course_name", keys=list(json_content.keys()))
-            raise ValueError("Planner: LLM response missing 'course_name' field")
+            self.logger.error(f"Planner validation failed: missing course_name. JSON keys: {list(json_content.keys())}")
+            self.logger.error(f"Full JSON content: {json_content}")
+            raise ValueError(f"Planner: LLM response missing 'course_name' field. Available keys: {list(json_content.keys())}")
         
         course_description = json_content.get("course_description")
         if not course_description:
             tracer.record("error", "missing course_description")
-            raise ValueError("Planner: LLM response missing 'course_description' field")
+            self.logger.error(f"Planner validation failed: missing course_description. JSON: {json_content}")
+            raise ValueError(f"Planner: LLM response missing 'course_description' field. Available keys: {list(json_content.keys())}")
         
         course_roadmap = json_content.get("course_roadmap")
         if not course_roadmap or not isinstance(course_roadmap, list) or len(course_roadmap) == 0:
-            tracer.record("error", "invalid course_roadmap", type=type(course_roadmap))
-            raise ValueError("Planner: 'course_roadmap' must be non-empty list")
+            tracer.record("error", "invalid course_roadmap", type=type(course_roadmap), value=course_roadmap)
+            self.logger.error(f"Planner validation failed: invalid course_roadmap")
+            self.logger.error(f"Type: {type(course_roadmap)}, Value: {course_roadmap}")
+            self.logger.error(f"Full JSON: {json_content}")
+            
+            # ULTIMATE FALLBACK: Create a basic roadmap based on duration
+            self.logger.warning("Creating fallback roadmap due to invalid LLM output")
+            num_lessons = max(2, min(5, int(state.duration) // 20))  # 2-5 lessons based on duration
+            course_roadmap = [
+                {
+                    "title": f"Module {i+1}: {course_name} - Part {i+1}",
+                    "description": f"Learn key concepts and skills in this section of the course."
+                }
+                for i in range(num_lessons)
+            ]
+            tracer.record("warn", "using fallback roadmap", num_items=len(course_roadmap))
+            self.logger.warning(f"Generated fallback roadmap with {len(course_roadmap)} items")
         
         # CRITICAL FIX: Validate roadmap length
         roadmap_len = len(course_roadmap)

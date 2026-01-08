@@ -10,7 +10,7 @@ QUESTIONER_AGENT_NAME = "questioner"
 QUIZ_ORCHESTRATOR_AGENT_NAME = "quiz_orchestrator"
 
 # Iteration limits - BALANCED for reliability
-MAX_TOOL_CALLS_PER_AGENT = 10  # CRITICAL: Planner cần 5-8 calls để gather context đủ trên Lambda
+MAX_TOOL_CALLS_PER_AGENT = 5  # CRITICAL: Planner should use max 2-3 retrieval calls, allow some buffer
 MAX_GRAPH_ITERATIONS = 50  # Tăng để đủ cho lessons (orchestrator iterations)
 EARLY_STOP_NO_PROGRESS_LIMIT = 3  # Stop if no state change for N iterations
 
