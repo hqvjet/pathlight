@@ -58,6 +58,7 @@ export const courseApi = {
     const qs = params.toString();
     return apiClient.get(`/course/public${qs ? `?${qs}` : ''}`);
   },
+  getRecommended: (topk: number = 20) => apiClient.get(`/course/recommend?topk=${topk}`),
   updateVisibility: (payload: UpdateVisibilityRequest) => apiClient.put<{ status: number; course_id: string; publish: boolean }>(`/course/visibility`, payload),
   deleteCourse: (course_id: string) => apiClient.delete<{ status: number; message?: string }>(`/course/delete?course_id=${encodeURIComponent(course_id)}`),
   listMyGenerations: () => apiClient.get<{ status: number; items?: Array<Record<string, unknown>>; message?: string }>(`/course/generations/my`),

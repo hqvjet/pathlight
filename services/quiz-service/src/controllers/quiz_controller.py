@@ -37,11 +37,11 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".ppt", ".docx", ".doc"}
 
 # Experience rewards
 DIFFICULTY_EXP = {
-    "easy": 5,
-    "medium": 10,
-    "hard": 15,
+    "easy": 25,
+    "medium": 50,
+    "hard": 100,
 }
-QUIZ_COMPLETION_EXP = 50  # Bonus for completing entire quiz
+QUIZ_COMPLETION_EXP = 150
 
 
 def _get_db() -> Session:
@@ -211,17 +211,16 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
     if not queue_url:
         raise HTTPException(status_code=500, detail="SQS_QUEUE_URL is not configured")
 
-    short_prompt = (body.short_prompt or body.short_user_prompt or "").strip()
-    if not short_prompt or not short_prompt.strip():
-        raise HTTPException(status_code=400, detail="short_prompt is required")
-
-    job_type = body.type or "generate_quiz"
-    allowed_job_types = {"generate_course", "generate_quiz"}
+    job_type = body.type or "GENERATE_QUIZ_WITH_VECTORIZE"
+    allowed_job_types = {"GENERATE_QUIZ_WITH_VECTORIZE"}
     if job_type not in allowed_job_types:
-        raise HTTPException(status_code=400, detail="type must be one of generate_course, generate_quiz")
+        raise HTTPException(status_code=400, detail="type must be GENERATE_QUIZ_WITH_VECTORIZE")
 
     quiz_id = body.quiz_id or f"quiz-{uuid4()}"
-    s3_keys = (body.documents or []) + (body.s3_key or [])
+    s3_keys = body.s3_keys or []
+    
+    if not s3_keys:
+        raise HTTPException(status_code=400, detail="At least one document is required")
 
     user_id = _verify_token(request)
     if not user_id:
@@ -262,17 +261,15 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
     try:
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
-            course_id=quiz_id,
+            quiz_id=quiz_id,
             s3_keys=s3_keys,
-            short_prompt=short_prompt,
-            user_role=body.user_role or body.user_position or "",
-            course_level=body.course_level,
-            course_constraint=body.course_constraint,
-            course_duration=body.course_duration,
+            difficulty=body.difficulty,
+            duration=body.duration,
             user_id=user_id,
             region=region,
             group_id=os.getenv("SQS_GROUP_ID"),
             job_type=job_type,
+            num_questions=body.num_questions or 10,
         )
         _log_activity(request, user_id, "create_quiz")
         return {"status": 202, "message": "submitted", "sqs_message_id": resp.get("MessageId"), "quiz_id": quiz_id}
@@ -431,6 +428,7 @@ def get_quiz_detail_controller(
     *,
     include_hints: bool = True,
     include_explanations: bool = True,
+    include_answers: bool = False,
 ) -> QuizDetailResponse:
     user_id = _verify_token(request)
     session = _get_db()
@@ -441,17 +439,18 @@ def get_quiz_detail_controller(
         _ensure_owner_or_public(quiz, user_id)
         cards = session.query(QuizCard).filter(QuizCard.quiz_id == quiz.quiz_id).order_by(QuizCard.created_at.asc()).all()
         card_models = [
-            QuizCardItem(  # type: ignore[arg-type]
+            QuizCardItem(
                 card_id=c.card_id,
                 quiz_id=c.quiz_id,
                 question=c.question,
-				hint=c.hint if include_hints else None,
-				explanation=c.explanation if include_explanations else None,
+                hint=c.hint if include_hints else None,
+                explanation=c.explanation if include_explanations else None,
                 difficulty=c.difficulty,
                 option1=c.option1,
                 option2=c.option2,
                 option3=c.option3,
                 option4=c.option4,
+                answer=c.answer if include_answers else None,
             )
             for c in cards
         ]
@@ -550,17 +549,20 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
         if not cards:
             return QuizSubmitResponse(status=400, message="Quiz chưa có câu hỏi")
         card_map = {c.card_id: c for c in cards}  # type: ignore[misc]
-        if not body.answers or len(body.answers) < len(cards):
-            return QuizSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi")
+        
+        # Allow submission with unanswered questions (answer = 0 means unanswered/wrong)
         correct_count = 0
         results: list[QuizSubmitResultItem] = []
-        for ans in body.answers:
-            card = card_map.get(ans.card_id)  # type: ignore[arg-type]
-            if not card:
-                continue
-            selected = int(ans.answer)
+        
+        # Create a map of submitted answers
+        answer_map = {ans.card_id: ans for ans in (body.answers or [])}
+        
+        # Process all cards (including unanswered ones)
+        for card in cards:
+            ans = answer_map.get(card.card_id)
+            selected = int(ans.answer) if ans else 0  # 0 means unanswered
             correct = int(card.answer)  # type: ignore[arg-type]
-            is_correct = selected == correct
+            is_correct = selected == correct and selected != 0  # answer = 0 is always wrong
             if is_correct:
                 correct_count += 1
             results.append(
@@ -576,9 +578,13 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
         total = len(cards)
         score = round((correct_count / total) * 100, 2)
         
-        # Calculate experience based on difficulty and performance
+        # Award experience only on first attempt for AI-generated quizzes
+        is_first_attempt = quiz.previous_score is None
+        is_ai_quiz = getattr(quiz, 'creation_type', 'ai') == 'ai'
         gained_exp = 0
-        if score >= 70:  # Only award exp if passed (70% or higher)
+        
+        if is_first_attempt and is_ai_quiz and score >= 70:
+            # Award exp based on difficulty of correctly answered questions
             for result in results:
                 if result.is_correct:
                     difficulty = result.difficulty.lower() if result.difficulty else "medium"
@@ -655,11 +661,14 @@ def finish_quiz_controller(request: Request, body: FinishQuizRequest):
         session.commit()
         
         # Award completion bonus if quiz passed and not already finished
-        # IMPORTANT: Do NOT award EXP for manual quizzes (to prevent spam)
+        # IMPORTANT: Only award EXP for AI quizzes, not manual (to prevent spam)
+        # Only award on first finish
         exp_amount = 0
         is_manual = getattr(quiz, 'creation_type', 'ai') == 'manual'
         prev_score = quiz.previous_score
-        if not already_finished and not is_manual and prev_score is not None and prev_score >= 70:  # type: ignore[arg-type]
+        is_first_finish = not already_finished
+        
+        if is_first_finish and not is_manual and prev_score is not None and prev_score >= 70:  # type: ignore[arg-type]
             exp_amount = QUIZ_COMPLETION_EXP
         
         award_result = _award_experience(request, user_id, exp_amount) if exp_amount > 0 else None
@@ -708,3 +717,82 @@ def delete_quiz_controller(request: Request, quiz_id: str):
         return {"status": 200, "message": "Đã xóa quiz"}
     finally:
         session.close()
+
+
+def get_recommended_quizzes_controller(request: Request, topk: int = 20):
+    """Get personalized quiz recommendations for current user."""
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    from src.services.recommendation_service import RecommendationService
+    
+    session = _get_db()
+    try:
+        rec_service = RecommendationService()
+        recommendations = rec_service.recommend_quizzes(user_id, session, topk)
+        
+        # Convert to response format
+        items = []
+        for rec in recommendations:
+            quiz = rec["quiz"]
+            score = rec["score"]
+            
+            created_at = getattr(quiz, 'created_at', None)
+            updated_at = getattr(quiz, 'updated_at', None)
+            
+            items.append({
+                "id": getattr(quiz, 'id', quiz.quiz_id),
+                "quiz_id": quiz.quiz_id,
+                "title": quiz.title,
+                "description": getattr(quiz, 'overview', getattr(quiz, 'description', '')),
+                "difficulty": getattr(quiz, 'level', 'medium'),
+                "duration": quiz.duration,
+                "publish": quiz.publish,
+                "user_id": quiz.user_id,
+                "num_questions": len(quiz.cards) if quiz.cards else getattr(quiz, 'num_questions', 0),
+                "previous_score": getattr(quiz, 'previous_score', None),
+                "recommendation_score": score,
+                "created_at": created_at.isoformat() if created_at else None,
+                "updated_at": updated_at.isoformat() if updated_at else None,
+            })
+        
+        return {"status": 200, "items": items}
+    except Exception as e:
+        logger.error(f"Failed to get quiz recommendations: {e}")
+        # Return empty list on error rather than failing completely
+        return {"status": 200, "items": []}
+    finally:
+        session.close()
+
+
+def update_quiz_previous_score_controller(request: Request, quiz_id: str, score: int):
+    """Update the previous_score field for a quiz."""
+    user_id = _verify_token(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    session = _get_db()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.quiz_id == quiz_id).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        
+        # Check if user owns the quiz
+        if str(quiz.user_id) != str(user_id):
+            raise HTTPException(status_code=403, detail="Not authorized to update this quiz")
+        
+        # Update the previous score
+        setattr(quiz, "previous_score", int(score))
+        session.commit()
+        
+        return {"status": 200, "message": "Previous score updated successfully", "previous_score": score}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to update previous score: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update previous score")
+    finally:
+        session.close()
+

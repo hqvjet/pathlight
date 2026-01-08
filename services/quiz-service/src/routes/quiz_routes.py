@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, HTTPException
 from typing import Optional
 
 from src.controllers.quiz_controller import (
@@ -15,6 +15,8 @@ from src.controllers.quiz_controller import (
     list_all_quizzes_admin_controller,
     delete_quiz_admin_controller,
     toggle_quiz_visibility_admin_controller,
+    get_recommended_quizzes_controller,
+    update_quiz_previous_score_controller,
     _verify_token,
 )
 from src.schemas.quiz_schemas import (
@@ -49,8 +51,10 @@ def list_my_generations(request: Request):
     if not user_id:
         return {"status": 401, "message": "Unauthorized"}
     rows = fetch_user_quiz_generations(user_id)
+    # Return empty list if DynamoDB is unavailable, rather than error
+    # This allows frontend to show empty state instead of error
     if rows is None:
-        return {"status": 500, "message": "Không thể lấy dữ liệu tiến trình"}
+        return {"status": 200, "items": []}
     return {"status": 200, "items": rows}
 
 
@@ -82,14 +86,21 @@ def list_public_quizzes(search: Optional[str] = Query(default=None), owner_id: O
     return list_public_quizzes_controller(search, owner_id)
 
 
+@router.get("/recommend")
+def get_recommended_quizzes(request: Request, topk: int = Query(default=20, ge=1, le=100)):
+    """Get personalized quiz recommendations for current user."""
+    return get_recommended_quizzes_controller(request, topk)
+
+
 @router.get("/{quiz_id}", response_model=QuizDetailResponse)
 def get_quiz_detail(
     quiz_id: str,
     request: Request,
     include_hints: bool = Query(default=True),
     include_explanations: bool = Query(default=True),
+    include_answers: bool = Query(default=False),
 ):
-    return get_quiz_detail_controller(request, quiz_id, include_hints=include_hints, include_explanations=include_explanations)
+    return get_quiz_detail_controller(request, quiz_id, include_hints=include_hints, include_explanations=include_explanations, include_answers=include_answers)
 
 
 @router.post("/{quiz_id}/start")
@@ -111,6 +122,15 @@ def update_visibility(request: Request, body: QuizVisibilityUpdate):
 @router.put("/finish")
 def finish_quiz(request: Request, body: FinishQuizRequest):
     return finish_quiz_controller(request, body)
+
+
+@router.put("/{quiz_id}/previous-score")
+def update_quiz_previous_score(request: Request, quiz_id: str, body: dict):
+    """Update the previous_score for a quiz."""
+    score = body.get("score")
+    if score is None:
+        raise HTTPException(status_code=400, detail="Score is required")
+    return update_quiz_previous_score_controller(request, quiz_id, score)
 
 
 @router.delete("/{quiz_id}")

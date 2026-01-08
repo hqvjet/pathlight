@@ -1606,3 +1606,52 @@ def finish_lesson_controller(request: Request, payload: FinishLessonRequest):
 		return JSONResponse(status_code=500, content={"status": 500, "message": "Internal error"})
 	finally:
 		session.close()
+
+
+def get_recommended_courses_controller(request: Request, topk: int = 20):
+	"""Get personalized course recommendations for current user."""
+	user_id = _verify_token(request)
+	if not user_id:
+		raise HTTPException(status_code=401, detail="Unauthorized")
+	
+	from src.services.recommendation_service import RecommendationService
+	from src.database import SessionLocal
+	
+	session = SessionLocal()
+	try:
+		rec_service = RecommendationService()
+		recommendations = rec_service.recommend_courses(user_id, session, topk)
+		
+		# Convert to response format
+		items = []
+		for rec in recommendations:
+			course = rec["course"]
+			score = rec["score"]
+			
+			# Count lessons
+			num_lessons = 0
+			if hasattr(course, 'lessons') and course.lessons:
+				num_lessons = len(course.lessons)
+			
+			items.append({
+				"id": getattr(course, 'id', course.course_id),
+				"course_id": course.course_id,
+				"title": course.title,
+				"description": getattr(course, 'overview', getattr(course, 'description', '')),
+				"difficulty": getattr(course, 'level', 'medium'),
+				"duration": course.duration,
+				"publish": course.publish,
+				"user_id": course.user_id,
+				"num_lessons": num_lessons,
+				"recommendation_score": score,
+			})
+		
+		logger.info(f"Recommended {len(items)} courses for user {user_id}")
+		return {"status": 200, "items": items}
+		
+	except Exception as e:
+		logger.error(f"Failed to get course recommendations: {e}")
+		# Return empty list on error rather than failing completely
+		return {"status": 200, "items": []}
+	finally:
+		session.close()

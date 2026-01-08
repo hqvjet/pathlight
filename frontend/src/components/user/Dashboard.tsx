@@ -75,7 +75,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         
         {/* Header Row */}
         <div className="flex items-center justify-between mb-6">
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-gray-900">
               Xin chào, {user.given_name || user.name}! 👋
             </h1>
@@ -93,12 +93,23 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               </a>
             </div>
           </div>
-          <div className="bg-gradient-to-br from-orange-400 to-red-400 text-white rounded-2xl px-6 py-4 shadow-lg">
-            <div className="flex items-center gap-3">
-              <span className="text-4xl">🔥</span>
-              <div>
-                <div className="text-3xl font-black">{user?.streak ?? 0}</div>
-                <div className="text-xs text-orange-50 font-medium">day streak</div>
+          
+          {/* Redesigned Streak - No box */}
+          <div className="flex items-center gap-2">
+            <svg 
+              viewBox="0 0 24 24" 
+              fill="currentColor"
+              className="text-orange-500 w-8 h-8 drop-shadow-lg"
+              style={{ 
+                filter: (user?.streak ?? 0) > 10 ? 'drop-shadow(0 0 8px rgba(249, 115, 22, 0.5))' : 'none'
+              }}
+            >
+              <path d="M12 2C12 2 8 6 8 10c0 2.21 1.79 4 4 4s4-1.79 4-4c0-4-4-8-4-8zm0 18c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.5 9.5C4.56 11.13 4 13 4 15c0 4.42 3.58 8 8 8s8-3.58 8-8c0-2-.56-3.87-1.5-5.5l-1.2 1.7c.45.83.7 1.79.7 2.8 0 3.31-2.69 6-6 6z"/>
+            </svg>
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-black text-orange-600">{user?.streak ?? 0}</span>
+                <span className="text-sm text-orange-600 font-bold">ngày</span>
               </div>
             </div>
           </div>

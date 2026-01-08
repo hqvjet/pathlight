@@ -195,16 +195,16 @@ export default function Layout({ children, title, user }: LayoutProps) {
 
       {/* Sidebar (always fixed so it doesn't stretch with content) */}
       <aside
-        className={`group/sidebar fixed top-0 left-0 z-50 bg-cyan-600 text-white flex flex-col h-screen transition-[width,transform] duration-200 shadow-xl
+        className={`group/sidebar fixed top-0 left-0 z-50 bg-gradient-to-b from-cyan-700 to-cyan-800 text-white flex flex-col h-screen transition-[width,transform] duration-200 shadow-xl
         ${isMobile ? (sidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64') : (sidebarOpen ? 'w-64' : 'w-16')}`}
         data-collapsed={!sidebarOpen && !isMobile}
       >
         {/* Logo & Desktop Toggle */}
-        <div className={`flex items-center h-14 px-3 border-b border-cyan-700 ${!sidebarOpen && !isMobile && 'justify-center'}`}>
+        <div className={`flex items-center h-14 px-3 border-b border-cyan-900/30 ${!sidebarOpen && !isMobile && 'justify-center'}`}>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Image src="/assets/icons/logo.png" alt="logo" width={28} height={28} className="flex-shrink-0" />
             {(sidebarOpen || isMobile) && (
-              <span className="font-bold text-lg truncate">PathLight</span>
+              <span className="font-bold text-lg truncate text-white">PathLight</span>
             )}
           </div>
           {/* Desktop collapse toggle */}
@@ -212,7 +212,7 @@ export default function Layout({ children, title, user }: LayoutProps) {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               aria-label={sidebarOpen ? 'Thu gọn sidebar' : 'Mở rộng sidebar'}
-              className={`p-1.5 rounded-md text-white/70 hover:text-white hover:bg-white/20 transition-colors ml-2 ${!sidebarOpen && 'rotate-180'}`}
+              className={`p-1.5 rounded-md text-white/85 hover:text-white hover:bg-white/20 transition-colors ml-2 ${!sidebarOpen && 'rotate-180'}`}
             >
               <svg
                 className="w-5 h-5 transition-transform"
@@ -237,8 +237,8 @@ export default function Layout({ children, title, user }: LayoutProps) {
                   key={item.href}
                   href={item.href}
                   onClick={() => isMobile && setSidebarOpen(false)}
-                  className={`flex items-center mx-2 px-3 py-2.5 rounded-lg transition-colors group focus:outline-none focus:ring-2 focus:ring-white/40
-                    ${active ? 'bg-cyan-700 text-white shadow-lg' : 'text-white/90 hover:bg-cyan-700/70 hover:text-white'}
+                  className={`flex items-center mx-2 px-3 py-2.5 rounded-lg transition-all group focus:outline-none focus:ring-2 focus:ring-white/50
+                    ${active ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm font-semibold' : 'text-white/95 hover:bg-white/15 hover:text-white'}
                     ${!sidebarOpen && !isMobile && 'justify-center mx-1'}`}
                   title={!sidebarOpen && !isMobile ? item.label : undefined}
                 >
@@ -250,10 +250,10 @@ export default function Layout({ children, title, user }: LayoutProps) {
           </nav>
         </div>
         {/* Logout */}
-        <div className="px-2 pt-2 pb-3 border-t border-cyan-700">
+        <div className="px-2 pt-2 pb-3 border-t border-cyan-900/30">
           <button
             onClick={handleLogout}
-            className={`flex items-center w-full px-3 py-2.5 text-white/90 hover:bg-red-500 hover:text-white rounded-lg transition-colors group focus:outline-none focus:ring-2 focus:ring-white/40 ${!sidebarOpen && !isMobile && 'justify-center mx-1'}`}
+            className={`flex items-center w-full px-3 py-2.5 text-white/95 hover:bg-red-500 hover:text-white rounded-lg transition-colors group focus:outline-none focus:ring-2 focus:ring-white/50 ${!sidebarOpen && !isMobile && 'justify-center mx-1'}`}
             title={!sidebarOpen && !isMobile ? 'Đăng Xuất' : undefined}
           >
             <LogoutIcon className="w-5 h-5 flex-shrink-0" />

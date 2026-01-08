@@ -25,6 +25,7 @@ export interface UserProfile {
   rank?: number;
   avatarKey?: number;
   streak?: number;
+  subscription?: number;
 }
 
 export interface ProfileFormData {

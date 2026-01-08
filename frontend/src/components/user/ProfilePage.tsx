@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProfileData } from './profile/hooks';
 import { ProfileAvatar } from './profile/ProfileAvatar';
 import { ProfileFormData } from './profile/types';
+import SubscriptionModal from './subscription/SubscriptionModal';
 
 export default function ProfilePage() {
   const { loading, saving, user, uploading, avatarLoading, avatarKey, formData, setFormData, loadUserProfile, updateProfile, uploadAvatar, remindTime, setRemindTime, updateRemindTime, remindSaving } = useProfileData();
   const [showNativeDate, setShowNativeDate] = useState(false);
   const [nativeDateValue, setNativeDateValue] = useState('');
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   useEffect(() => { loadUserProfile(); }, [loadUserProfile]);
 
@@ -249,6 +251,89 @@ export default function ProfilePage() {
                     <div className="text-[11px] text-gray-500">Khóa đã hoàn thành</div>
                     <div className="font-semibold text-gray-900">{completedCourses}</div>
                   </div>
+                </div>
+
+                {/* Subscription Section */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="h-4 w-4 text-purple-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                      </svg>
+                      <span className="text-sm font-semibold text-gray-900">Gói đăng ký</span>
+                    </div>
+                  </div>
+                  
+                  {(() => {
+                    const subscription = user?.subscription ?? 0;
+                    const tierInfo = subscription === 2 
+                      ? { name: 'Pro', color: 'from-purple-500 to-pink-500', bgColor: 'bg-gradient-to-br from-purple-50 via-fuchsia-50 to-pink-50', borderColor: 'border-purple-200', textColor: 'text-purple-700', features: ['60 câu hỏi/quiz', '3 lần dùng power-up', 'Tất cả tính năng'] }
+                      : subscription === 1 
+                      ? { name: 'Premium', color: 'from-sky-500 to-blue-500', bgColor: 'bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50', borderColor: 'border-sky-200', textColor: 'text-sky-700', features: ['45 câu hỏi/quiz', '2 lần dùng power-up', 'Nhiều tính năng'] }
+                      : { name: 'Free', color: 'from-gray-400 to-gray-500', bgColor: 'bg-gradient-to-br from-gray-50 to-slate-50', borderColor: 'border-gray-200', textColor: 'text-gray-700', features: ['30 câu hỏi/quiz', '1 lần dùng power-up', 'Tính năng cơ bản'] };
+                    
+                    return (
+                      <>
+                        <div className={`rounded-xl border-2 ${tierInfo.borderColor} ${tierInfo.bgColor} p-5 relative overflow-hidden`}>
+                          <div className="absolute top-0 right-0 w-32 h-32 opacity-30 -mr-16 -mt-16">
+                            <div className={`w-full h-full rounded-full bg-gradient-to-br ${tierInfo.color}`}></div>
+                          </div>
+                          
+                          <div className="relative">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${tierInfo.color} text-white font-bold text-lg shadow-lg`}>
+                                  {tierInfo.name}
+                                </div>
+                                {subscription > 0 && (
+                                  <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2 mb-4">
+                              {tierInfo.features.map((feature, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <svg className={`w-4 h-4 ${tierInfo.textColor} flex-shrink-0`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  <span className={`text-sm ${tierInfo.textColor} font-medium`}>{feature}</span>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {subscription < 2 && (
+                              <button 
+                                onClick={() => setShowSubscriptionModal(true)}
+                                className="w-full py-2.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold text-sm shadow-lg transition-all flex items-center justify-center gap-2"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                                {subscription === 0 ? 'Nâng cấp lên Premium' : 'Nâng cấp lên Pro'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {subscription < 2 && (
+                          <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                              </svg>
+                              <div className="text-[11px] leading-relaxed text-amber-800">
+                                <span className="font-semibold">Mở khóa nhiều tính năng hơn!</span><br />
+                                {subscription === 0 ? 'Nâng cấp lên Premium để tạo quiz với nhiều câu hỏi hơn và sử dụng power-up hiệu quả hơn.' : 'Nâng cấp lên Pro để trải nghiệm tối đa với 60 câu hỏi và 3 lần dùng mỗi power-up!'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Streak Section */}
@@ -509,6 +594,14 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        currentSubscription={user?.subscription ?? 0}
+        onSuccess={() => loadUserProfile()}
+      />
     </>
   );
 }

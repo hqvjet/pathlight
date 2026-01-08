@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GenerationCard, { GenerationItem } from "./GenerationCard";
 import GenerationDetailModal from "./GenerationDetailModal";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, LayoutGrid, List } from "lucide-react";
+import { userApi } from "@/lib/api/user";
 
 export type { GenerationItem };
 
@@ -114,6 +115,34 @@ export default function GenerationList({
   const [selectedItem, setSelectedItem] = useState<GenerationItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
+  // Fetch user names when items change
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      const userIds = [...new Set(items.map(item => item.user_id).filter(Boolean))] as string[];
+      if (userIds.length === 0) return;
+      
+      try {
+        const response = await userApi.batchUsers(userIds);
+        if (response.status === 200 && response.data) {
+          const names: Record<string, string> = {};
+          // Response.data is an object, not an array
+          Object.values(response.data).forEach((user: unknown) => {
+            const userRecord = user as Record<string, unknown>;
+            if (userRecord.id) {
+              names[userRecord.id as string] = (userRecord.name || userRecord.email || userRecord.id) as string;
+            }
+          });
+          setUserNames(names);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user names:', error);
+      }
+    };
+
+    fetchUserNames();
+  }, [items]);
 
   const handleItemClick = (item: GenerationItem) => {
     setSelectedItem(item);
@@ -191,6 +220,7 @@ export default function GenerationList({
             key={item.course_id}
             item={item}
             onClick={() => handleItemClick(item)}
+            userNames={userNames}
           />
         ))}
       </div>

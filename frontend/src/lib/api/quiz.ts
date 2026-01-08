@@ -3,13 +3,11 @@ import { apiClient } from './http';
 
 // For agentic quiz generation
 export type CreateQuizRequest = {
-  type?: 'generate_quiz' | 'generate_course';
-  short_prompt: string;
-  user_role?: string;
-  course_duration: number;
-  course_level: string;
-  course_constraint: string;
-  documents?: string[];
+  type?: 'GENERATE_QUIZ_WITH_VECTORIZE';
+  duration: number;
+  difficulty: string;
+  s3_keys?: string[];
+  num_questions?: number;
 };
 
 // For manual quiz creation
@@ -54,19 +52,22 @@ export const quizApi = {
   listPublic: (params?: { search?: string; owner_id?: string }) =>
     apiClient.get(`/quiz/public${buildQueryString(params)}`),
 
-  /** Fetch quiz detail with optional hint/explanation gating */
+  /** Get recommended quizzes for current user */
+  getRecommended: (topk: number = 20) => apiClient.get(`/quiz/recommend?topk=${topk}`),
+
+  /** Fetch quiz detail with optional hint/explanation/answer gating */
   getById: (
     id: string,
-    options?: { include_hints?: boolean; include_explanations?: boolean },
+    options?: { include_hints?: boolean; include_explanations?: boolean; include_answers?: boolean },
   ) => {
     const query = buildQueryString({
       include_hints: options?.include_hints,
       include_explanations: options?.include_explanations,
+      include_answers: options?.include_answers,
     });
     return apiClient.get(`/quiz/${id}${query}`);
   },
 
-  /** Create quiz (agentic generation) */
   /** Create quiz (agentic generation) */
   create: (data: CreateQuizRequest) => apiClient.post('/quiz/create', data),
 
@@ -84,6 +85,9 @@ export const quizApi = {
 
   /** Submit answers for a quiz */
   submit: (id: string, answers: QuizSubmitAnswer[]) => apiClient.post(`/quiz/${id}/submit`, { answers }),
+
+  /** Update previous score */
+  updatePreviousScore: (id: string, score: number) => apiClient.put(`/quiz/${id}/previous-score`, { score }),
 
   /** Update visibility (is_public) */
   updateVisibility: (quizId: string, isPublic: boolean) =>

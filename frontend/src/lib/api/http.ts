@@ -222,15 +222,36 @@ export class ApiClient {
   delete<T>(endpoint: string, config: ApiRequestConfig = {}) { return this.executeWithRetry<T>(this.buildUrl(endpoint, config.baseURL), { ...config, method: 'DELETE' }); }
   async uploadFile<T>(endpoint: string, file: File, config: ApiRequestConfig = {}, fieldName = 'file') {
     const url = this.buildUrl(endpoint, config.baseURL);
-    const formData = new FormData(); formData.append(fieldName, file, file.name);
+    const formData = new FormData();
+    formData.append(fieldName, file, file.name);
+    
     const method = (config.method || 'POST').toUpperCase();
-    const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    
+    // Build headers without Content-Type for FormData (browser will set it with boundary)
+    const token = this.tokenManager.getToken();
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (!config.skipAuth && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     return this.executeWithRetry<T>(url, { ...config, method, body: formData, headers });
   }
   async uploadMultipleFiles<T>(endpoint: string, files: File[], config: ApiRequestConfig = {}) {
     const url = this.buildUrl(endpoint, config.baseURL);
-  const formData = new FormData(); files.forEach((file, i) => formData.append(`files[${i}]`, file, file.name));
-  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    const formData = new FormData();
+    files.forEach((file, i) => formData.append(`files[${i}]`, file, file.name));
+    
+    // Build headers without Content-Type for FormData (browser will set it with boundary)
+    const token = this.tokenManager.getToken();
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (!config.skipAuth && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
 
@@ -241,7 +262,16 @@ export class ApiClient {
     for (const file of files) {
       formData.append(fieldName, file, file.name);
     }
-  const headers = await this.buildHeaders({ ...config, body: formData, skipAuth: config.skipAuth });
+    
+    // Build headers without Content-Type for FormData (browser will set it with boundary)
+    const token = this.tokenManager.getToken();
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (!config.skipAuth && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     return this.executeWithRetry<T>(url, { ...config, method: 'POST', body: formData, headers });
   }
 }

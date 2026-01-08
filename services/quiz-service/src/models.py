@@ -30,7 +30,7 @@ class QuizCard(Base):
     quiz_id = Column(String, ForeignKey("quiz.quiz_id", ondelete="CASCADE"), nullable=False, index=True)
     question = Column(String, nullable=False)
     hint = Column(String, nullable=True)
-    explanation = Column(String, nullable=False)
+    explanation = Column(String, nullable=True)
     difficulty = Column(String, nullable=False)
     option1 = Column(String, nullable=False)
     option2 = Column(String, nullable=False)

@@ -44,6 +44,37 @@ export function useProfileData() {
       } catch { return profile; }
     };
 
+    const hydrateFromCourseStats = async (profile: UserProfile): Promise<UserProfile> => {
+      try {
+        const courseResponse = await api.course.getAll();
+        if (courseResponse.status === 200 && courseResponse.data) {
+          const data = courseResponse.data as { courses?: unknown[] };
+          const courses = data.courses || [];
+          const merged = { ...profile } as UserProfile;
+          
+          // Calculate stats from courses array
+          const total_courses = courses.length;
+          const completed_courses = courses.filter((c: unknown) => {
+            const course = c as Record<string, unknown>;
+            return course?.finish === true;
+          }).length;
+          const total_lessons = courses.reduce<number>((sum, c) => {
+            const course = c as Record<string, unknown>;
+            const lessons = (course?.lesson_num ?? course?.num_lessons ?? 0) as number;
+            return sum + lessons;
+          }, 0) as number;
+          
+          merged.course_num = total_courses;
+          merged.total_courses = total_courses;
+          merged.lesson_num = total_lessons;
+          merged.completed_courses = completed_courses;
+          
+          return merged;
+        }
+      } catch { /* ignore errors */ }
+      return profile;
+    };
+
     try {
       let response = await api.user.getDashboard();
       if (response.status === 401) { storage.removeToken(); router.push('/auth/signin'); return; }
@@ -60,6 +91,9 @@ export function useProfileData() {
         if (userObj.rank === undefined || userObj.rank === null) {
           userObj = await hydrateFromDashboard(userObj);
         }
+
+        // Fetch course and lesson stats
+        userObj = await hydrateFromCourseStats(userObj);
 
         const googleAvatar = (userObj as { google_avatar_url?: string }).google_avatar_url || userObj.avatar_url;
         // Normalize avatar_url for profile page through the Next.js proxy

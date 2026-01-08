@@ -294,7 +294,9 @@ async def admin_update_subscription(user_id: str, request: AdminUpdateSubscripti
             setattr(target_user, 'profile', profile)
             if not getattr(target_user, 'profile_id', None):
                 setattr(target_user, 'profile_id', profile.profile_id)
-        setattr(target_user, 'subscription', request.subscription)
+        
+        # Set subscription directly on profile, not on user
+        setattr(profile, 'subscription', request.subscription)
         db.flush()
         db.commit()
         
@@ -497,6 +499,124 @@ async def get_users_by_ids(user_ids: list[str], db: Session) -> dict:
 # ---------- Experience wrappers ----------
 async def update_test_stats(request: TestStatsRequest, current_user: User, db: Session) -> TestStatsResponse:
     return await svc_update_test_stats(request, current_user, db)
+
+
+# ---------- Subscription ----------
+async def get_subscription_info_by_level(level: int) -> SubscriptionInfoResponse:
+    """Get subscription information for a specific level."""
+    try:
+        from services.subscription_service import get_subscription_info
+        
+        if level not in [0, 1, 2]:
+            return SubscriptionInfoResponse(
+                status=400,
+                message="Subscription level phải là 0, 1, hoặc 2"
+            )
+        
+        info = get_subscription_info(level)
+        return SubscriptionInfoResponse(
+            status=200,
+            name=info["name"],
+            price=info["price"],
+            quiz_questions=info["quiz_questions"],
+            powerup_uses=info["powerup_uses"],
+            features=info["features"]
+        )
+    except Exception as e:
+        logger.error(f"Error getting subscription info: {e}")
+        return SubscriptionInfoResponse(
+            status=500,
+            message="Có lỗi xảy ra, xin vui lòng thử lại"
+        )
+
+
+async def request_subscription_upgrade(
+    request: SubscriptionUpgradeRequest,
+    current_user: User,
+    db: Session
+) -> SubscriptionPaymentResponse:
+    """Create subscription upgrade request with QR code."""
+    try:
+        from services.subscription_service import create_subscription_request
+        
+        result = create_subscription_request(
+            user=current_user,
+            target_subscription=request.target_subscription,
+            db=db
+        )
+        
+        if not result.get("success"):
+            return SubscriptionPaymentResponse(
+                status=400,
+                success=False,
+                message=result.get("message", "Có lỗi xảy ra")
+            )
+        
+        return SubscriptionPaymentResponse(
+            status=200,
+            success=True,
+            transaction_ref=result.get("transaction_ref"),
+            current_subscription=result.get("current_subscription"),
+            target_subscription=result.get("target_subscription"),
+            subscription_name=result.get("subscription_name"),
+            amount=result.get("amount"),
+            qr_url=result.get("qr_url"),
+            bank_info=result.get("bank_info"),
+            message=result.get("message")
+        )
+    except Exception as e:
+        logger.error(f"Error requesting subscription upgrade: {e}")
+        return SubscriptionPaymentResponse(
+            status=500,
+            success=False,
+            message="Có lỗi xảy ra, xin vui lòng thử lại"
+        )
+
+
+async def verify_subscription_payment(
+    request: SubscriptionVerifyRequest,
+    current_user: User,
+    credentials: HTTPAuthorizationCredentials,
+    db: Session
+) -> SubscriptionVerifyResponse:
+    """Verify payment and upgrade subscription (Admin only)."""
+    guard = _admin_guard(credentials, db)
+    if guard:
+        return guard
+    
+    try:
+        from services.subscription_service import verify_and_upgrade_subscription
+        
+        # Get the target user (could be different from admin)
+        # For now, we'll use current_user, but you can extend this to accept user_id
+        result = verify_and_upgrade_subscription(
+            user=current_user,
+            transaction_ref=request.transaction_ref,
+            target_subscription=request.target_subscription,
+            db=db
+        )
+        
+        if not result.get("success"):
+            return SubscriptionVerifyResponse(
+                status=400,
+                success=False,
+                message=result.get("message", "Có lỗi xảy ra")
+            )
+        
+        return SubscriptionVerifyResponse(
+            status=200,
+            success=True,
+            new_subscription=result.get("new_subscription"),
+            subscription_name=result.get("subscription_name"),
+            message=result.get("message")
+        )
+    except Exception as e:
+        logger.error(f"Error verifying subscription payment: {e}")
+        return SubscriptionVerifyResponse(
+            status=500,
+            success=False,
+            message="Có lỗi xảy ra, xin vui lòng thử lại"
+        )
 
 async def reset_test_stats(current_user: User, db: Session) -> TestStatsResponse:
     return await svc_reset_test_stats(current_user, db)
