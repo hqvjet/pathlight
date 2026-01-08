@@ -69,8 +69,8 @@ def test_create_quiz_enqueues_job(monkeypatch):
 
     body = CreateQuizRequest(
         duration=15,
-        level="easy",
-        documents=["users/user-123/doc.pdf"],
+        difficulty="easy",
+        s3_keys=["users/user-123/doc.pdf"],
         num_questions=10,
     )
 
@@ -80,15 +80,15 @@ def test_create_quiz_enqueues_job(monkeypatch):
     assert resp["quiz_id"]
     assert sent_kwargs.get("course_id") == resp["quiz_id"]
     assert sent_kwargs.get("s3_keys") == ["users/user-123/doc.pdf"]
-    assert sent_kwargs.get("job_type") == "generate_quiz"
+    assert sent_kwargs.get("job_type") == "GENERATE_QUIZ_WITH_VECTORIZE"
 
 
 def test_create_quiz_requires_documents(monkeypatch):
     monkeypatch.setenv("SQS_QUEUE_URL", "https://example.com/queue")
     body = CreateQuizRequest(
         duration=15,
-        level="easy",
-        documents=[],  # Empty documents
+        difficulty="easy",
+        s3_keys=[],  # Empty s3_keys
     )
     with pytest.raises(HTTPException) as exc:
         quiz_controller.create_quiz_controller(FakeRequest(), body)
