@@ -4,7 +4,9 @@ from constant import (
     LESSON_CREATOR_AGENT_NAME,
     ORCHESTRATOR_AGENT_NAME,
     PLANNER_AGENT_NAME,
-    TEST_CREATOR_AGENT_NAME
+    TEST_CREATOR_AGENT_NAME,
+    QUIZ_PLANNER_AGENT_NAME,
+    QUESTIONER_AGENT_NAME
 )
 from core.logging import setup_logger
 
@@ -21,6 +23,8 @@ class ToolManager:
             ORCHESTRATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
             LESSON_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
             TEST_CREATOR_AGENT_NAME: [self.tools["retrieval_tool"]],
+            QUIZ_PLANNER_AGENT_NAME: [self.tools["retrieval_tool"]],
+            QUESTIONER_AGENT_NAME: [self.tools["retrieval_tool"]],
         }
         
         # Token optimization: Cache retrieval results

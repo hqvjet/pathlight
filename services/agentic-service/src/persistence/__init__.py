@@ -5,3 +5,4 @@ defined across microservices (course, lesson, tests, final tests).
 """
 
 from .course_persistence import save_course_state, init_database  # noqa: F401
+from .quiz_persistence import save_quiz_state  # noqa: F401
