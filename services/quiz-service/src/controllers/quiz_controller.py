@@ -550,17 +550,20 @@ def submit_quiz_controller(request: Request, quiz_id: str, body: QuizSubmitReque
         if not cards:
             return QuizSubmitResponse(status=400, message="Quiz chưa có câu hỏi")
         card_map = {c.card_id: c for c in cards}  # type: ignore[misc]
-        if not body.answers or len(body.answers) < len(cards):
-            return QuizSubmitResponse(status=400, message="Vui lòng trả lời tất cả câu hỏi")
+        
+        # Allow submission with unanswered questions (answer = 0 means unanswered/wrong)
         correct_count = 0
         results: list[QuizSubmitResultItem] = []
-        for ans in body.answers:
-            card = card_map.get(ans.card_id)  # type: ignore[arg-type]
-            if not card:
-                continue
-            selected = int(ans.answer)
+        
+        # Create a map of submitted answers
+        answer_map = {ans.card_id: ans for ans in (body.answers or [])}
+        
+        # Process all cards (including unanswered ones)
+        for card in cards:
+            ans = answer_map.get(card.card_id)
+            selected = int(ans.answer) if ans else 0  # 0 means unanswered
             correct = int(card.answer)  # type: ignore[arg-type]
-            is_correct = selected == correct
+            is_correct = selected == correct and selected != 0  # answer = 0 is always wrong
             if is_correct:
                 correct_count += 1
             results.append(
