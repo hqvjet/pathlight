@@ -48,6 +48,16 @@ class QuizConfig:
     # DynamoDB (for generation status tracking)
     DYNAMODB_TABLE_NAME: str = os.getenv("DYNAMODB_TABLE_NAME", "")
     REGION: str = os.getenv("REGION", "ap-northeast-1")
+    
+    # SQS Queue for async processing
+    SQS_QUEUE_URL: str = os.getenv("SQS_QUEUE_URL", "")
+    
+    # DynamoDB for recommendation sim search results
+    SIM_SEARCH_TABLE_NAME: str = os.getenv("SIM_SEARCH_TABLE_NAME", "sim_search_table")
+    
+    # AWS Credentials
+    ACCESS_KEY_ID: str = os.getenv("ACCESS_KEY_ID", "")
+    SECRET_ACCESS_KEY: str = os.getenv("SECRET_ACCESS_KEY", "")
 
     # JWT Configuration
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")

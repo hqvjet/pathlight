@@ -4,12 +4,14 @@ import { useState, useMemo, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QuizCard, QuizCardData } from '@/components/user/quizzes/QuizCard';
 import { quizApi } from '@/lib/api/quiz';
+import { userApi } from '@/lib/api/user';
 import { showToast } from '@/utils/toast';
 
 type LevelFilter = 'all' | 'easy' | 'medium' | 'hard';
 type StatusFilter = 'all' | 'completed' | 'draft';
 type SortOption = 'latest' | 'questions_desc' | 'title_asc';
 type TabType = 'my' | 'public';
+type ViewMode = 'grid' | 'list';
 
 const ITEMS_PER_PAGE = 9;
 
@@ -20,7 +22,8 @@ function MyQuizzesContent() {
 	const [search, setSearch] = useState('');
 	const [sort, setSort] = useState<SortOption>('latest');
 	const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+	const [statusFilter] = useState<StatusFilter>('all');
+	const [viewMode, setViewMode] = useState<ViewMode>('grid');
 	const [myQuizzes, setMyQuizzes] = useState<QuizCardData[]>([]);
 	const [publicQuizzes, setPublicQuizzes] = useState<QuizCardData[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -45,18 +48,62 @@ function MyQuizzesContent() {
 			setLoading(true);
 			setError(null);
 			try {
+				// Use recommendation API instead of listPublic
 				const [myResp, publicResp] = await Promise.all([
 					quizApi.listMine(),
-					quizApi.listPublic({}),
+					quizApi.getRecommended(20),
 				]);
-
-				if (cancelled) return;
-
 				const myData = (myResp?.data as { quizzes?: QuizCardData[] })?.quizzes || [];
-				const publicData = (publicResp?.data as { quizzes?: QuizCardData[] })?.quizzes || [];
+				// Map recommended quiz items to QuizCardData format
+				const publicItems = (publicResp?.data as { status: number; items?: unknown[] })?.items || [];
+				const publicData: QuizCardData[] = publicItems.map((item: unknown) => {
+				const quizItem = item as Record<string, unknown>;
+				return {
+					id: (quizItem.id || quizItem.quiz_id) as string | undefined,
+					quiz_id: quizItem.quiz_id as string | undefined,
+					title: (quizItem.title || 'Untitled Quiz') as string,
+					description: (quizItem.description || quizItem.overview || '') as string | undefined,
+					overview: (quizItem.overview || quizItem.description || '') as string | undefined,
+					level: (quizItem.difficulty || 'medium') as 'easy' | 'medium' | 'hard',
+					num_questions: (quizItem.num_questions as number) || 0,
+					duration: (quizItem.duration as number) || 30,
+					finish: false,
+					publish: true,
+					owner_id: quizItem.user_id as string | undefined,
+					created_at: (quizItem.created_at as string) || new Date().toISOString(),
+					updated_at: (quizItem.updated_at as string) || new Date().toISOString(),
+					previous_score: quizItem.previous_score as number | null | undefined,
+					recommendation_score: quizItem.recommendation_score as number | undefined,
+				};
+			});
 
-				setMyQuizzes(myData);
-				setPublicQuizzes(publicData);
+			// Fetch owner names for all quizzes
+			const allOwnerIds = [...new Set([...myData, ...publicData].map(q => q.owner_id).filter(Boolean))];
+			
+			if (allOwnerIds.length > 0) {
+					try {
+						const usersResp = await userApi.batchUsers(allOwnerIds as string[]);
+						const usersData = usersResp?.data as Record<string, { name: string }>;
+						
+						// Map owner names to quizzes
+						const addOwnerNames = (quizzes: QuizCardData[]) =>
+							quizzes.map(q => ({
+								...q,
+								owner_name: q.owner_id && usersData?.[q.owner_id]?.name || undefined
+							}));
+						
+						setMyQuizzes(addOwnerNames(myData));
+						setPublicQuizzes(addOwnerNames(publicData));
+					} catch (userError) {
+						console.error('Failed to fetch owner names:', userError);
+						// Continue without owner names
+						setMyQuizzes(myData);
+						setPublicQuizzes(publicData);
+					}
+				} else {
+					setMyQuizzes(myData);
+					setPublicQuizzes(publicData);
+				}
 			} catch (e: unknown) {
 				if (!cancelled) {
 					setError(e instanceof Error ? e.message : 'Không thể tải danh sách quiz');
@@ -95,7 +142,7 @@ function MyQuizzesContent() {
 				break;
 			default:
 				list = [...list].sort(
-					(a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+					(a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
 				);
 		}
 		return list;
@@ -126,20 +173,31 @@ function MyQuizzesContent() {
 	}
 
 	return (
-		<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+		<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
 			<div className="space-y-2">
 				<p className="text-sm text-gray-500 font-medium tracking-wide">{greeting}</p>
 				<div className="flex flex-wrap items-center justify-between gap-4">
-					<h1 className="text-2xl font-semibold text-gray-900">Bộ Câu Hỏi Của Tôi</h1>
-					<Link
-						href="/user/create-quiz"
-						className="inline-flex items-center gap-2 px-5 h-11 rounded-md bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold shadow-sm shadow-sky-500/30"
-					>
-						<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-						</svg>
-						Tạo Quiz
-					</Link>
+					<h1 className="text-2xl font-bold text-gray-900">Bộ Câu Hỏi Của Tôi</h1>
+					<div className="flex items-center gap-3">
+						<Link
+							href="/user/quiz-tracking"
+							className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 text-sm font-semibold transition-colors"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+							</svg>
+							Tiến trình tạo
+						</Link>
+						<Link
+							href="/user/create-quiz"
+							className="inline-flex items-center gap-2 px-5 h-10 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-sm font-semibold shadow-lg shadow-sky-500/30 transition-all"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+							</svg>
+							Tạo Quiz
+						</Link>
+					</div>
 				</div>
 			</div>
 
@@ -195,52 +253,65 @@ function MyQuizzesContent() {
 						</svg>
 					</div>
 
-					<div className="flex flex-wrap items-center gap-3">
-						<div className="flex items-center gap-2">
-							<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Độ khó</label>
-							<select
-								value={levelFilter}
-								onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
-								className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
-							>
-								<option value="all">Tất cả</option>
-								<option value="easy">Dễ</option>
-								<option value="medium">Trung bình</option>
-								<option value="hard">Khó</option>
-							</select>
-						</div>
-
-						{activeTab === 'my' && (
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<div className="flex flex-wrap items-center gap-3">
 							<div className="flex items-center gap-2">
-								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Trạng thái</label>
+								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Độ khó</label>
 								<select
-									value={statusFilter}
-									onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-									className="h-11 pl-3 pr-8 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40"
+									value={levelFilter}
+									onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
+									className="h-10 pl-3 pr-8 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400"
 								>
 									<option value="all">Tất cả</option>
-									<option value="completed">Hoàn thành</option>
-									<option value="draft">Bản nháp</option>
+									<option value="easy">Dễ</option>
+									<option value="medium">Trung bình</option>
+									<option value="hard">Khó</option>
 								</select>
 							</div>
-						)}
 
-						<div className="flex items-center gap-2">
-							<label className="text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:block">Sắp xếp</label>
-							<div className="relative">
-								<select
-									value={sort}
-									onChange={(e) => setSort(e.target.value as SortOption)}
-									className="appearance-none h-11 pl-4 pr-10 rounded-lg bg-white border border-transparent shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
-								>
-									<option value="latest">Mới nhất</option>
-									<option value="questions_desc">Số câu hỏi giảm dần</option>
-									<option value="title_asc">Theo tên A-Z</option>
-								</select>
-								<svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-								</svg>
+							<div className="flex items-center gap-2">
+								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:block">Sắp xếp</label>
+								<div className="relative">
+									<select
+										value={sort}
+										onChange={(e) => setSort(e.target.value as SortOption)}
+										className="appearance-none h-10 pl-4 pr-10 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
+									>
+										<option value="latest">Mới nhất</option>
+										<option value="questions_desc">Số câu hỏi giảm dần</option>
+										<option value="title_asc">Theo tên A-Z</option>
+									</select>
+									<svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+									</svg>
+								</div>
 							</div>
+						</div>
+						
+						{/* View mode toggle */}
+						<div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+							<button
+								onClick={() => setViewMode('grid')}
+								className={`p-2 rounded-md transition-colors ${
+									viewMode === 'grid' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+								}`}
+								title="Dạng lưới"
+							>
+								<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+								</svg>
+							</button>
+							<button
+								onClick={() => setViewMode('list')}
+								className={`p-2 rounded-md transition-colors ${
+									viewMode === 'list' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+								}`}
+								title="Dạng danh sách"
+							>
+								<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+								</svg>
+							</button>
 						</div>
 					</div>
 				</div>
@@ -264,9 +335,9 @@ function MyQuizzesContent() {
 						</div>
 					) : (
 						<>
-							<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+							<div className={viewMode === 'grid' ? 'grid gap-5 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-4'}>
 								{paginatedQuizzes.map((quiz) => (
-									<QuizCard key={quiz.id} quiz={quiz} />
+									<QuizCard key={quiz.id || quiz.quiz_id} quiz={quiz} viewMode={viewMode} />
 								))}
 							</div>
 

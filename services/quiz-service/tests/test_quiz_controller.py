@@ -68,33 +68,32 @@ def test_create_quiz_enqueues_job(monkeypatch):
     monkeypatch.setattr(quiz_controller.boto3, "client", fake_client)
 
     body = CreateQuizRequest(
-        short_prompt="generate quiz",
-        course_duration=7,
-        course_level="overview",
-        course_constraint="professional",
-        documents=["users/user-123/doc.pdf"],
+        duration=15,
+        difficulty="easy",
+        s3_keys=["users/user-123/doc.pdf"],
+        num_questions=10,
     )
 
     resp = quiz_controller.create_quiz_controller(FakeRequest(), body)
 
     assert resp["status"] == 202
     assert resp["quiz_id"]
-    assert sent_kwargs.get("course_id") == resp["quiz_id"]
+    assert sent_kwargs.get("quiz_id") == resp["quiz_id"]
     assert sent_kwargs.get("s3_keys") == ["users/user-123/doc.pdf"]
-    assert sent_kwargs.get("job_type") == "generate_quiz"
+    assert sent_kwargs.get("job_type") == "GENERATE_QUIZ_WITH_VECTORIZE"
 
 
-def test_create_quiz_requires_prompt(monkeypatch):
+def test_create_quiz_requires_documents(monkeypatch):
     monkeypatch.setenv("SQS_QUEUE_URL", "https://example.com/queue")
     body = CreateQuizRequest(
-        short_prompt=" ",
-        course_duration=7,
-        course_level="overview",
-        course_constraint="professional",
+        duration=15,
+        difficulty="easy",
+        s3_keys=[],  # Empty s3_keys
     )
     with pytest.raises(HTTPException) as exc:
         quiz_controller.create_quiz_controller(FakeRequest(), body)
     assert exc.value.status_code == 400
+    assert "document" in exc.value.detail.lower()
 
 
 def test_submit_quiz_scores_and_updates_best(session_factory, monkeypatch):

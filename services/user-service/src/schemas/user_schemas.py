@@ -265,3 +265,57 @@ class ActivitySeriesResponse(BaseModel):
     status: int
     items: Optional[List[ActivityItem]] = None
     message: Optional[str] = None
+
+
+# ---------- Subscription ----------
+
+class SubscriptionUpgradeRequest(BaseModel):
+    target_subscription: int
+
+    @validator('target_subscription')
+    def validate_subscription(cls, v):
+        if v not in [1, 2]:
+            raise ValueError('Target subscription phải là 1 (Premium) hoặc 2 (Pro)')
+        return v
+
+
+class SubscriptionInfoResponse(BaseModel):
+    status: int
+    name: Optional[str] = None
+    price: Optional[int] = None
+    quiz_questions: Optional[int] = None
+    powerup_uses: Optional[int] = None
+    features: Optional[List[str]] = None
+    message: Optional[str] = None
+
+
+class SubscriptionPaymentResponse(BaseModel):
+    status: int
+    success: Optional[bool] = None
+    transaction_ref: Optional[str] = None
+    current_subscription: Optional[int] = None
+    target_subscription: Optional[int] = None
+    subscription_name: Optional[str] = None
+    amount: Optional[int] = None
+    qr_url: Optional[str] = None
+    bank_info: Optional[dict] = None
+    message: Optional[str] = None
+
+
+class SubscriptionVerifyRequest(BaseModel):
+    transaction_ref: str
+    target_subscription: int
+
+    @validator('target_subscription')
+    def validate_subscription(cls, v):
+        if v not in [1, 2]:
+            raise ValueError('Target subscription phải là 1 (Premium) hoặc 2 (Pro)')
+        return v
+
+
+class SubscriptionVerifyResponse(BaseModel):
+    status: int
+    success: Optional[bool] = None
+    new_subscription: Optional[int] = None
+    subscription_name: Optional[str] = None
+    message: Optional[str] = None

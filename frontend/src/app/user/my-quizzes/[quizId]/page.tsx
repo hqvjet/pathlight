@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { quizApi } from '@/lib/api/quiz';
 import { showToast } from '@/utils/toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlayCircle, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { PlayCircle, Eye, EyeOff, Trash2, Clock, Award, Target } from 'lucide-react';
+import QuizSettingsModal, { AnswerDisplayMode } from '@/components/user/quizzes/QuizSettingsModal';
 
 interface QuizCard {
   card_id: string;
@@ -46,6 +46,7 @@ export default function QuizDetailPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +58,12 @@ export default function QuizDetailPage({ params }: PageProps) {
         const resp = await quizApi.getById(quizId, { include_hints: true, include_explanations: true });
         if (cancelled) return;
 
-        const data = resp?.data as QuizDetail;
-        if (!data) {
-          throw new Error('Quiz không tồn tại');
+        // Backend returns { status, quiz: { quiz_id, ..., cards: [...] } }
+        const responseData = resp?.data as { status?: number; quiz?: QuizDetail };
+        const data = responseData?.quiz;
+        
+        if (!data || !data.cards) {
+          throw new Error('Quiz không tồn tại hoặc chưa có câu hỏi');
         }
 
         setQuiz(data);
@@ -78,7 +82,11 @@ export default function QuizDetailPage({ params }: PageProps) {
   }, [quizId]);
 
   const handlePlay = () => {
-    router.push(`/user/my-quizzes/${quizId}/play`);
+    setShowSettings(true);
+  };
+
+  const handleStartQuiz = (mode: AnswerDisplayMode) => {
+    router.push(`/user/my-quizzes/${quizId}/play?mode=${mode}`);
   };
 
   const handleToggleVisibility = async () => {
@@ -130,148 +138,184 @@ export default function QuizDetailPage({ params }: PageProps) {
   }
 
   const levelLabels = {
-    easy: { label: 'Dễ', color: 'bg-green-100 text-green-700' },
-    medium: { label: 'Trung bình', color: 'bg-yellow-100 text-yellow-700' },
-    hard: { label: 'Khó', color: 'bg-red-100 text-red-700' },
+    easy: { label: 'Dễ', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: '😊' },
+    medium: { label: 'Trung bình', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: '🤔' },
+    hard: { label: 'Khó', color: 'bg-rose-100 text-rose-800 border-rose-200', icon: '😰' },
   };
 
   const levelInfo = levelLabels[quiz.level as keyof typeof levelLabels] || levelLabels.easy;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-3 text-sm text-gray-600">
-        <Link href="/user/my-quizzes" className="text-sky-600 font-semibold hover:text-sky-700">
-          ← Quay lại danh sách
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Breadcrumb */}
+        <Link href="/user/my-quizzes" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-sky-600 font-medium mb-4 transition">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Quay lại danh sách
         </Link>
-        <span className="text-gray-400">/</span>
-        <span className="font-semibold text-gray-800">{quiz.title}</span>
-      </div>
 
-      {/* Hero */}
-      <Card className="shadow-lg border-gray-200">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex-1">
-              <CardTitle className="text-2xl sm:text-3xl text-gray-900 mb-2">{quiz.title}</CardTitle>
-              <p className="text-gray-600 leading-relaxed">{quiz.overview}</p>
+        {/* Main Card - More Compact */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Compact Header */}
+          <div className="bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-5 relative">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-white mb-1 line-clamp-2">{quiz.title}</h1>
+                <p className="text-sky-100 text-sm line-clamp-1">{quiz.overview}</p>
+              </div>
+              <Badge className={`${levelInfo.color} border shrink-0 text-sm px-3 py-1`}>
+                {levelInfo.icon} {levelInfo.label}
+              </Badge>
             </div>
-            <Badge className={`${levelInfo.color} border-none shrink-0 text-sm px-3 py-1`}>
-              {levelInfo.label}
-            </Badge>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid sm:grid-cols-4 gap-4 text-sm">
-            <div className="bg-sky-50 rounded-lg p-3">
-              <p className="text-gray-600 mb-1">Số câu hỏi</p>
-              <p className="text-xl font-bold text-sky-600">{quiz.num_questions}</p>
-            </div>
-            <div className="bg-orange-50 rounded-lg p-3">
-              <p className="text-gray-600 mb-1">Thời lượng</p>
-              <p className="text-xl font-bold text-orange-600">{quiz.duration} phút</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3">
-              <p className="text-gray-600 mb-1">Điểm cao nhất</p>
-              <p className={`text-xl font-bold ${
-                quiz.previous_score !== null && quiz.previous_score !== undefined
-                  ? quiz.previous_score >= 70 ? 'text-green-600' : 'text-orange-600'
-                  : 'text-gray-400'
-              }`}>
-                {quiz.previous_score !== null && quiz.previous_score !== undefined ? `${quiz.previous_score}%` : '--'}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-gray-600 mb-1">Trạng thái</p>
-              <div className="flex flex-wrap gap-1.5">
-                {quiz.finish && (
-                  <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-xs">
-                    Hoàn thành
-                  </Badge>
-                )}
-                {quiz.publish ? (
-                  <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 text-xs">
-                    Công khai
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-gray-300 text-gray-600 text-xs">
-                    Riêng tư
-                  </Badge>
-                )}
+
+          {/* Compact Stats - Single Row */}
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-sky-100 rounded-lg">
+                  <Target className="w-4 h-4 text-sky-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Số câu</p>
+                  <p className="text-lg font-bold text-gray-900">{quiz.num_questions}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-orange-100 rounded-lg">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Thời lượng</p>
+                  <p className="text-lg font-bold text-gray-900">{quiz.duration} <span className="text-xs font-normal">phút</span></p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-emerald-100 rounded-lg">
+                  <Award className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Điểm cao</p>
+                  <p className={`text-lg font-bold ${
+                    quiz.previous_score !== null && quiz.previous_score !== undefined
+                      ? quiz.previous_score >= 70 ? 'text-emerald-600' : 'text-orange-600'
+                      : 'text-gray-400'
+                  }`}>
+                    {quiz.previous_score !== null && quiz.previous_score !== undefined ? `${quiz.previous_score}%` : '--'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-gray-100 rounded-lg">
+                  {quiz.publish ? <Eye className="w-4 h-4 text-gray-600" /> : <EyeOff className="w-4 h-4 text-gray-600" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Trạng thái</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {quiz.publish ? 'Công khai' : 'Riêng tư'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-4 border-t">
+          {/* Compact Action Buttons */}
+          <div className="px-6 py-4 bg-white flex flex-wrap items-center gap-2.5">
             <button
               onClick={handlePlay}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-sky-500 text-white font-semibold hover:bg-sky-600 shadow-sm"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold hover:from-sky-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all text-sm"
             >
-              <PlayCircle className="w-5 h-5" />
+              <PlayCircle className="w-4 h-4" />
               Bắt đầu làm quiz
             </button>
             <button
               onClick={handleToggleVisibility}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-400 transition-all text-sm"
             >
               {quiz.publish ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              {quiz.publish ? 'Đặt riêng tư' : 'Công khai'}
+              {quiz.publish ? 'Riêng tư' : 'Công khai'}
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-200 text-red-600 font-semibold hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-rose-300 text-rose-600 font-medium hover:bg-rose-50 hover:border-rose-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
             >
               <Trash2 className="w-4 h-4" />
-              {deleting ? 'Đang xóa...' : 'Xóa quiz'}
+              Xóa quiz
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Quiz Cards List */}
-      <Card className="shadow-sm border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-lg text-gray-900">Danh sách câu hỏi</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {quiz.cards.map((card, idx) => (
-              <div key={card.card_id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition">
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <p className="text-sm font-semibold text-gray-900 flex-1">
-                    Câu {idx + 1}: {card.question}
-                  </p>
-                  <Badge className={`shrink-0 ${
-                    card.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
-                    card.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-red-100 text-red-700'
-                  } border-none text-xs`}>
-                    {card.difficulty === 'easy' ? 'Dễ' : card.difficulty === 'medium' ? 'TB' : 'Khó'}
-                  </Badge>
-                </div>
-                <div className="space-y-1 text-xs text-gray-600">
-                  {[1, 2, 3, 4].map((num) => {
-                    const option = card[`option${num}` as 'option1' | 'option2' | 'option3' | 'option4'];
-                    const isCorrect = card.answer === num;
-                    return (
-                      <p key={num} className={isCorrect ? 'font-semibold text-green-600' : ''}>
-                        {num}. {option} {isCorrect && '✓'}
-                      </p>
-                    );
-                  })}
-                </div>
-                {(card.hint || card.explanation) && (
-                  <div className="mt-2 pt-2 border-t border-gray-300 text-xs text-gray-500">
-                    {card.hint && <p>💡 Gợi ý: {card.hint}</p>}
-                    {card.explanation && <p className="mt-1">📖 Giải thích: {card.explanation}</p>}
-                  </div>
-                )}
+        {/* Additional Info Cards */}
+        <div className="grid sm:grid-cols-2 gap-4 mt-4">
+          {/* Quick Stats */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Thống kê nhanh
+            </h3>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Điểm trung bình mỗi câu</span>
+                <span className="font-semibold text-gray-900">
+                  {quiz.previous_score ? Math.round(quiz.previous_score / quiz.num_questions) : 0} điểm
+                </span>
               </div>
-            ))}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Thời gian/câu</span>
+                <span className="font-semibold text-gray-900">
+                  {Math.round((quiz.duration * 60) / quiz.num_questions)} giây
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Tình trạng</span>
+                <span className={`font-semibold ${quiz.finish ? 'text-emerald-600' : 'text-gray-400'}`}>
+                  {quiz.finish ? 'Đã hoàn thành' : 'Chưa hoàn thành'}
+                </span>
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Tips */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200 p-5">
+            <h3 className="text-sm font-semibold text-amber-900 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              Mẹo làm bài
+            </h3>
+            <ul className="space-y-2 text-sm text-amber-900">
+              <li className="flex items-start gap-2">
+                <span className="text-amber-500 mt-0.5">•</span>
+                <span>Đọc kỹ câu hỏi trước khi chọn đáp án</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-500 mt-0.5">•</span>
+                <span>Sử dụng items hỗ trợ khi gặp khó khăn</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-500 mt-0.5">•</span>
+                <span>Điểm số cao hơn khi trả lời nhanh</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Quiz Settings Modal */}
+      <QuizSettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onStart={handleStartQuiz}
+        quizTitle={quiz.title}
+      />
     </div>
   );
 }

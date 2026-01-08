@@ -59,20 +59,6 @@ export function ReviewStep({ draft, onBack, onSubmit, isSubmitting }: ReviewStep
               </div>
             )}
 
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Prompt cho AI</h3>
-              <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">
-                {draft.meta.shortPrompt || '(Không có)'}
-              </p>
-            </div>
-
-            {draft.meta.userPosition && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Vị trí</h3>
-                <p className="text-sm text-gray-600">{draft.meta.userPosition}</p>
-              </div>
-            )}
-
             <div className="grid sm:grid-cols-3 gap-4 pt-2">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-gray-400" />
@@ -91,6 +77,20 @@ export function ReviewStep({ draft, onBack, onSubmit, isSubmitting }: ReviewStep
                   <p className="text-sm font-semibold text-gray-700">{draft.meta.duration} phút</p>
                 </div>
               </div>
+
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Số câu hỏi</p>
+                  <p className="text-sm font-semibold text-gray-700">{draft.meta.numQuestions} câu</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <span className="font-semibold">Lưu ý:</span> AI sẽ tự động tạo quiz từ nội dung tài liệu đã upload.
+              </p>
             </div>
           </div>
         ) : (

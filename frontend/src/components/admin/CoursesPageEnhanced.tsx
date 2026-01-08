@@ -180,7 +180,7 @@ export default function CoursesPageEnhanced() {
           >
             <div className="p-5">
               <div className="flex items-start justify-between mb-3">
-                <h3 className="font-bold text-gray-900 text-lg flex-1 line-clamp-2">{course.title}</h3>
+                <h3 className="font-bold text-gray-900 text-lg flex-1 truncate pr-2">{course.title}</h3>
                 <span
                   className={`ml-2 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                     course.publish ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'

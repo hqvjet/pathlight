@@ -58,7 +58,7 @@ def send_generate_with_vectorize(
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
-        params["MessageGroupId"] = group_id or "agentic"
+        params["MessageGroupId"] = str(uuid.uuid4())
         params["MessageDeduplicationId"] = str(uuid.uuid4())
     return sqs.send_message(**params)
 
@@ -116,7 +116,60 @@ def send_chatbot_question(
 
     params = {"QueueUrl": queue_url, "MessageBody": body}
     if queue_url.endswith(".fifo"):
-        params["MessageGroupId"] = group_id or "chatbot"
+        params["MessageGroupId"] = str(uuid.uuid4())
         params["MessageDeduplicationId"] = str(uuid.uuid4())
     return sqs.send_message(**params)
+
+
+def send_recommend_courses(
+    queue_url: str,
+    sim_id: str,
+    user_id: str,
+    course_ids: List[str],
+    topk: int = 20,
+    *,
+    region: Optional[str] = None,
+    group_id: Optional[str] = None,
+) -> dict:
+    """
+    Send RECOMMEND_COURSES message to SQS.
+    
+    Args:
+        queue_url: SQS queue URL
+        sim_id: Unique similarity search ID
+        user_id: User ID for profile-based recommendation
+        course_ids: List of candidate course IDs (all public courses)
+        topk: Number of recommendations to return
+        region: AWS region
+        group_id: Message group ID for FIFO queues
+        
+    Returns:
+        SQS send_message response
+    """
+    region = region or os.getenv("REGION") or "ap-northeast-1"
+    session = _session(region)
+    sqs = session.client("sqs", region_name=region)
+
+    payload = {
+        "sim_id": sim_id,
+        "user_id": user_id,
+        "topk": topk,
+        "course_ids": course_ids,
+    }
+
+    body = json.dumps(
+        {
+            "type": "RECOMMEND_COURSES",
+            "correlation_id": str(uuid.uuid4()),
+            "timestamp": _iso_now(),
+            "payload": payload,
+        }
+    )
+
+    params = {"QueueUrl": queue_url, "MessageBody": body}
+    if queue_url.endswith(".fifo"):
+        params["MessageGroupId"] = str(uuid.uuid4())
+        params["MessageDeduplicationId"] = str(uuid.uuid4())
+    return sqs.send_message(**params)
+
 

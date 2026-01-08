@@ -177,15 +177,34 @@ function MyCoursesContent() {
     };
   }, [authLoading, isAuthenticated]); // Removed selectedId to prevent infinite loop
 
-  // Load public courses immediately on mount
+  // Load recommended courses immediately on mount
   useEffect(() => {
     if (authLoading || !isAuthenticated) return;
     let cancelled = false;
     const loadPublic = async () => {
       try {
-        const resp = await courseApi.listPublic();
-        const data = resp.data as ApiCourseListResponse | undefined;
-        let list = (data?.courses || []).map(mapApiToCard);
+        // Use recommendation API instead of listPublic
+        const resp = await courseApi.getRecommended(20);
+        const data = resp.data as { status: number; items?: unknown[] };
+        let list = (data?.items || []).map((item: unknown) => {
+          const courseItem = item as Record<string, unknown>;
+          return {
+            course_id: courseItem.course_id as string,
+            title: courseItem.title as string,
+            overview: courseItem.description as string,
+            level: courseItem.difficulty as string,
+            finish: false,
+            duration: courseItem.duration as number,
+            lesson_num: (courseItem.num_lessons as number) || 0,
+            finish_lesson_num: 0,
+            created_at: (courseItem.created_at as string) || new Date().toISOString(),
+            updated_at: (courseItem.updated_at as string) || new Date().toISOString(),
+            publish: true,
+            user_id: courseItem.user_id as string,
+            owner_id: courseItem.user_id as string,
+            recommendation_score: courseItem.recommendation_score as number | undefined,
+          };
+        }).map(mapApiToCard);
         
         // Fetch owner names for public courses
         const uniqueOwnerIds = Array.from(new Set(list.map(c => c.ownerId).filter(Boolean)));
