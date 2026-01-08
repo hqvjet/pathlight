@@ -10,7 +10,7 @@ QUESTIONER_AGENT_NAME = "questioner"
 QUIZ_ORCHESTRATOR_AGENT_NAME = "quiz_orchestrator"
 
 # Iteration limits - STRICT for token optimization
-MAX_TOOL_CALLS_PER_AGENT = 3  # CRITICAL: Agents should use 1-2 retrieval calls max, reduced from 5 to prevent loops
+MAX_TOOL_CALLS_PER_AGENT = 2  # CRITICAL: Chỉ cho phép TỐI ĐA 2 lượt retrieval - đủ cho scan + deep dive
 MAX_GRAPH_ITERATIONS = 50  # Tăng để đủ cho lessons (orchestrator iterations)
 EARLY_STOP_NO_PROGRESS_LIMIT = 3  # Stop if no state change for N iterations
 

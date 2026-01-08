@@ -1,11 +1,37 @@
 name: lesson_creator_agent
 variables: [id, history, difficulty, duration, title, description, roadmap, lessons_expected, next_lesson_index, prev_lessons]
 prompt: |
-    Tạo BÀI HỌC #{next_lesson_index} cho khóa "{title}".
+    # Tạo BÀI HỌC #{next_lesson_index}: "{title}"
     
-    **ROADMAP**: {roadmap}
+    ---
     
-    # OUTPUT
+    # ⚠️ GIỚI HẠN NGHIÊM NGẶT ⚠️
+    
+    **CHỈ ĐƯỢC GỌI RETRIEVAL_TOOL TỐI ĐA 2 LẦN.**
+    
+    - Lần 1: Tìm nội dung về "{title}"
+    - Lần 2 (nếu cần): Deep dive với keyword KHÁC
+    - **SAU LẦN 1 NẾU CÓ NỘI DUNG → VIẾT BÀI NGAY**
+    - **KHÔNG GỌI QUERY GIỐNG HOẶC TƯƠNG TỰ**
+    
+    ---
+    
+    # QUY TRÌNH
+    
+    ## BƯỚC 1: TÌM NỘI DUNG
+    Gọi retrieval_tool với query:
+    ```
+    "{title}" concept definition example details "khái niệm" "định nghĩa" "ví dụ"
+    ```
+    
+    ## BƯỚC 2: VIẾT BÀI
+    **Nếu có nội dung** → VIẾT JSON NGAY (không gọi thêm)
+    **Nếu thiếu chi tiết** → Query 2 với keyword cụ thể KHÁC
+    **Sau Query 2** → BẮT BUỘC viết JSON
+    
+    ---
+    
+    # OUTPUT JSON
     
     ```json
     {{
@@ -13,17 +39,17 @@ prompt: |
         {{
           "lesson_id": "{id}-L{next_lesson_index}",
           "title": "Tên bài học",
-          "overview": "Mô tả mục tiêu: Sau bài học, học viên sẽ có thể [làm được gì]. (2-3 câu)",
-          "content": "# Mục tiêu\n- Mục tiêu 1\n- Mục tiêu 2\n- Mục tiêu 3\n\n## Giới thiệu\n(2-3 đoạn: Giới thiệu chủ đề, tầm quan trọng, bối cảnh)\n\n## Khái niệm chính\n(3-4 đoạn: Định nghĩa, đặc điểm, cách thức hoạt động)\n\n## Ví dụ thực tế\n(2-3 ví dụ cụ thể với giải thích)\n\n## Tóm tắt\n(1-2 đoạn tổng kết điểm chính)",
+          "overview": "Mô tả mục tiêu 2-3 câu",
+          "content": "# Mục tiêu\\n- ...\\n\\n## Giới thiệu\\n...\\n\\n## Khái niệm chính\\n...\\n\\n## Ví dụ\\n...\\n\\n## Tóm tắt\\n...",
           "duration": 20,
           "assessments": [
             {{
-              "question": "Câu hỏi kiểm tra hiểu biết?",
-              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
-              "answer": 0,
+              "question": "Câu hỏi?",
+              "options": ["A", "B", "C", "D"],
+              "answer": 1,
               "hint": "Gợi ý",
               "explanation": "Giải thích",
-              "difficulty": "medium"
+              "difficulty": "{difficulty}"
             }}
           ]
         }}
@@ -31,57 +57,23 @@ prompt: |
     }}
     ```
     
+    ---
+    
     # YÊU CẦU
     
-    1. **Overview**: Mô tả mục tiêu cụ thể (học viên sẽ làm được gì), 2-3 câu
-    2. **Content**: Học thuật nhưng NGẮN GỌN - đừng viết quá dài, tầm 1500-3000 chars là đủ
-    3. **Duration**: Theo biến duration (giờ), là thời gian trung bình để hoàn thành bài học
-    4. **Structure**: Mục tiêu → Giới thiệu → Khái niệm → Ví dụ → Tóm tắt
-    5. **Assessments**: 3 câu hỏi
-    6. **Answer**: Integer 0-3 (index của array)
-    7. **difficulty**: "easy", "medium", "hard" theo biến difficulty, là độ khó của câu hỏi
-    8. **Options**: Đúng 4 items
+    - **Content**: 1500-3000 ký tự, ngắn gọn
+    - **Assessments**: 3 câu hỏi
+    - **Answer**: Integer 1-4 (index của đáp án đúng)
+    - **Options**: Đúng 4 items
     
-    **QUAN TRỌNG - ĐỘ DÀI**:
-    - ĐỪNG viết quá dài, content khoảng 1500-3000 chars là vừa đủ
-    - Mỗi đoạn chỉ 2-3 câu ngắn gọn, đi thẳng vào vấn đề
-    - Tập trung vào chất lượng, không phải số lượng
-    - Viết súc tích, học thuật nhưng dễ hiểu
+    ---
     
-    **QUY TẮC BẤT DI BẤT DỊCH (STRICT RULES - NO COMPROMISE)**:
-    1. **CHẤT LƯỢNG NỘI DUNG LÀ SỐ 1**: 
-       - 100% nội dung bài học PHẢI được trích xuất từ tài liệu. KHÔNG được bịa đặt.
-
-    2. **CHIẾN LƯỢC QUERY 1 "THẦN THÁNH" (MANDATORY UNIVERSAL OPENER)**:
-       - Bạn KHÔNG được tự nghĩ query đầu tiên. BẮT BUỘC dùng format sau:
-       - **QUERY 1**: `"{title}" concept definition formula structure example main_points details "khái niệm" "định nghĩa" "công thức" "cấu trúc" "ví dụ" "chi tiết"`
-       - **TẠI SAO?**: Đây là "lưới quét đa năng" (Universal Net). 
-         - Nếu tài liệu là Toán/Lý: Nó bắt keywords "formula", "công thức".
-         - Nếu tài liệu là Xã hội: Nó bắt "concept", "definition", "khái niệm".
-         - Nếu tài liệu là Kỹ thuật/IT: Nó bắt "structure", "details", "cấu trúc".
-       - Query này sẽ giúp bạn định vị ngay lập tức nội dung quan trọng nhất mà không cần suy nghĩ nhiều.
-
-    3. **QUY TRÌNH "SCAN & DEEP DIVE"**:
-       - **Bước 1 (SCAN)**: Gọi ngay `retrieval_tool` với **QUERY 1** ở trên.
-       - **Bước 2 (ANALYZE)**: Đọc kỹ kết quả trả về. Xác định xem nội dung thuộc thể loại gì (Công thức toán? Sự kiện lịch sử? Quy trình?).
-       - **Bước 3 (DEEP DIVE)**: 
-         - Nếu Query 1 đã đủ thông tin -> Viết bài ngay.
-         - Nếu Query 1 trả về các khái niệm con nhưng chưa chi tiết -> Tự tạo Query 2: `"{title}" <khái niệm con tìm được ở bước 1> detailed explain`.
-         - Nếu Query 1 KHÔNG có kết quả -> Lúc này mới thử các từ khóa đồng nghĩa hoặc tiếng Anh.
-
-    4. **CẤM TUYỆT ĐỐI**:
-       - CẤM spam query "Khóa học từ tài liệu".
-       - CẤM gọi lại query đã gọi trước đó (hệ thống sẽ CHẶN và force output).
-       - CẤM gọi query có >70% keywords giống query trước (bị coi là LOOP).
-       - CẤM viết nội dung chung chung khi không tìm thấy thông tin.
-       - **SAU 1 QUERY CÓ KẾT QUẢ → PHẢI VIẾT BÀI NGAY, KHÔNG GỌI THÊM QUERY**.
-
-    **CẢNH BÁO LOOP DETECTION**:
-    - Hệ thống TỰ ĐỘNG phát hiện query trùng lặp/tương tự
-    - Nếu bạn cố gọi query giống nhau → Bị FORCE OUTPUT ngay lập tức
-    - **CHỈ ĐƯỢC GỌI TỐI ĐA 2 QUERY KHÁC NHAU** cho mỗi bài học
-
-    **BẮT ĐẦU**: 
-    1. Lấy `{title}` của bài học.
-    2. Thực thi **QUERY 1** theo đúng format lưới quét đa năng ở trên.
-    3. Tùy biến hành động tiếp theo dựa trên kết quả thực tế.
+    # QUY TẮC
+    
+    1. ❌ **KHÔNG GỌI CÙNG QUERY 2 LẦN**
+    2. ✅ **SAU 1 QUERY CÓ KẾT QUẢ → VIẾT BÀI NGAY**
+    3. ❌ KHÔNG bịa đặt nội dung không có trong tài liệu
+    
+    ---
+    
+    **CHỈ TRẢ VỀ JSON. KHÔNG TEXT KHÁC.**

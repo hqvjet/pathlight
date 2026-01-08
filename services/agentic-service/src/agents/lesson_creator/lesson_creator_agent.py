@@ -434,6 +434,22 @@ class LessonCreatorAgent(BaseAgent):
                 history.append(
                     ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
                 )
+                
+                # CRITICAL: Inject strong guidance for weak LLM
+                remaining = MAX_TOOL_CALLS_PER_AGENT - count
+                queries_str = ", ".join([f'"{q[:30]}..."' for q in previous_queries[-2:]]) if previous_queries else "(chưa có)"
+                
+                guidance = SystemMessage(content=(
+                    f"\n=== TRẠNG THÁI ==="
+                    f"\n• Lượt retrieval: {count}/{MAX_TOOL_CALLS_PER_AGENT} (còn {remaining})"
+                    f"\n• Query đã gọi: {queries_str}"
+                    f"\n\n=== HÀNH ĐỘNG ==="
+                    f"\n• Nếu có nội dung về '{target_lesson_title}' → VIẾT BÀI NGAY"
+                    f"\n• KHÔNG gọi lại query tương tự"
+                    f"\n• Còn {remaining} lượt → sau đó BẮT BUỘC output JSON"
+                ))
+                history.append(guidance)
+                
                 # Token optimization: Trim history to prevent explosion
                 history = trim_history(history)
                 tracer.record(
