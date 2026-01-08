@@ -738,6 +738,9 @@ def get_recommended_quizzes_controller(request: Request, topk: int = 20):
             quiz = rec["quiz"]
             score = rec["score"]
             
+            created_at = getattr(quiz, 'created_at', None)
+            updated_at = getattr(quiz, 'updated_at', None)
+            
             items.append({
                 "id": getattr(quiz, 'id', quiz.quiz_id),
                 "quiz_id": quiz.quiz_id,
@@ -750,8 +753,8 @@ def get_recommended_quizzes_controller(request: Request, topk: int = 20):
                 "num_questions": len(quiz.cards) if quiz.cards else getattr(quiz, 'num_questions', 0),
                 "previous_score": getattr(quiz, 'previous_score', None),
                 "recommendation_score": score,
-                "created_at": quiz.created_at.isoformat() if quiz.created_at else None,
-                "updated_at": quiz.updated_at.isoformat() if quiz.updated_at else None,
+                "created_at": created_at.isoformat() if created_at else None,
+                "updated_at": updated_at.isoformat() if updated_at else None,
             })
         
         return {"status": 200, "items": items}
