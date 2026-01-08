@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/context/AuthContext';
 import { v4 as uuid } from 'uuid';
@@ -14,6 +14,7 @@ import { SuccessStep } from './SuccessStep';
 import { showToast } from '@/utils/toast';
 import { quizApi } from '@/lib/api/quiz';
 import { courseApi, PresignUploadResponseItem } from '@/lib/api/course';
+import { userApi } from '@/lib/api/user';
 import { API_CONFIG } from '@/config/env';
 
 interface CreateQuizWizardProps {
@@ -25,6 +26,24 @@ export function CreateQuizWizard({ userTier = 'free' }: CreateQuizWizardProps) {
   const { user } = useAuthContext();
   const [draft, setDraft] = useState<QuizDraftState>(createEmptyQuizDraft);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userSubscription, setUserSubscription] = useState<number>(0); // 0=free, 1=premium, 2=pro
+
+  // Fetch user subscription info
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const userInfoResp = await userApi.getInfo();
+        const responseData = userInfoResp?.data as { Info?: { subscription?: number }; info?: { subscription?: number } } | undefined;
+        const userInfo = responseData?.Info || responseData?.info;
+        const subscription = userInfo?.subscription || 0;
+        setUserSubscription(subscription);
+      } catch (error) {
+        console.error('Failed to fetch user subscription:', error);
+        setUserSubscription(0); // Default to free
+      }
+    };
+    fetchSubscription();
+  }, []);
 
   const setStep = (step: number) => setDraft((d) => ({ ...d, step }));
   const next = () => setDraft((d) => ({ ...d, step: d.step + 1 }));
@@ -164,22 +183,18 @@ export function CreateQuizWizard({ userTier = 'free' }: CreateQuizWizardProps) {
     setIsSubmitting(true);
 
     try {
-      if (!draft.meta.shortPrompt?.trim()) {
-        showToast.error('Vui lòng nhập prompt ngắn');
+      if (draft.documents.length === 0) {
+        showToast.error('Vui lòng upload ít nhất một tài liệu');
         setIsSubmitting(false);
         return;
       }
 
       const payload = {
-        type: 'generate_quiz' as const,
-        short_prompt: draft.meta.shortPrompt.trim(),
-        user_role: draft.meta.userPosition || '',
-        course_duration: Math.max(1, draft.meta.duration || 15),
-        course_level: draft.meta.level || 'easy',
-        course_constraint: 'professional',
-        documents: draft.documents.length > 0 
-          ? draft.documents.map((d) => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name))
-          : undefined,
+        type: 'GENERATE_QUIZ_WITH_VECTORIZE' as const,
+        duration: Math.max(1, draft.meta.duration || 15),
+        difficulty: draft.meta.level || 'easy',
+        num_questions: draft.meta.numQuestions || 10,
+        s3_keys: draft.documents.map((d) => d.s3Key || (d.url ? decodeURIComponent(d.url.split('/s3/').pop() || '') : d.name)),
       };
 
       const resp = await quizApi.create(payload);
@@ -274,6 +289,7 @@ export function CreateQuizWizard({ userTier = 'free' }: CreateQuizWizardProps) {
               onNext={next}
               onCancel={back}
               isAIMode={true}
+              userSubscription={userSubscription}
             />
           )}
 
@@ -298,6 +314,7 @@ export function CreateQuizWizard({ userTier = 'free' }: CreateQuizWizardProps) {
               onNext={next}
               onCancel={back}
               isAIMode={false}
+              userSubscription={userSubscription}
             />
           )}
 
@@ -326,7 +343,7 @@ export function CreateQuizWizard({ userTier = 'free' }: CreateQuizWizardProps) {
       {draft.step === 5 && draft.quizId && (
         <SuccessStep 
           quizId={draft.quizId} 
-          quizTitle={draft.meta.title || draft.meta.shortPrompt} 
+          quizTitle={draft.meta.title || draft.meta.overview || 'Quiz mới'} 
           isAI={draft.creationType === 'ai'}
         />
       )}

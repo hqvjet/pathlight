@@ -1,19 +1,32 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List } from "lucide-react";
 import QuizGenerationCard from "./QuizGenerationCard";
 import QuizGenerationDetailModal from "./QuizGenerationDetailModal";
+import { userApi } from "@/lib/api/user";
 
 export interface QuizGenerationItem {
   quiz_id: string;
   user_id?: string;
-  progress?: string;
+  status?: string;
+  progress_percentage?: number;
+  current_step?: string;
+  current_step_detail?: string;
+  plan_ready?: boolean;
+  questions_ready?: boolean;
+  title?: string;
+  overview?: string;
+  ideas_count?: number;
+  questions_count?: number;
+  start_timestamp?: string;
+  end_timestamp?: string;
+  updated_at?: string;
+  // Legacy field names for backward compatibility
   title_ready?: boolean;
   cards_ready?: boolean;
   final_ready?: boolean;
-  updated_at?: string;
 }
 
 interface PaginationProps {
@@ -121,6 +134,35 @@ export default function QuizGenerationList({
 }) {
   const [selectedItem, setSelectedItem] = useState<QuizGenerationItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
+  // Fetch user names when items change
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      const userIds = [...new Set(items.map(item => item.user_id).filter(Boolean))] as string[];
+      if (userIds.length === 0) return;
+      
+      try {
+        const response = await userApi.batchUsers(userIds);
+        if (response.status === 200 && response.data) {
+          const names: Record<string, string> = {};
+          // Response.data is an object, not an array
+          Object.values(response.data).forEach((user: unknown) => {
+            const userRecord = user as Record<string, unknown>;
+            if (userRecord.id) {
+              names[userRecord.id as string] = (userRecord.name || userRecord.email || userRecord.id) as string;
+            }
+          });
+          setUserNames(names);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user names:', error);
+      }
+    };
+
+    fetchUserNames();
+  }, [items]);
 
   const handleItemClick = (item: QuizGenerationItem) => {
     setSelectedItem(item);
@@ -161,17 +203,49 @@ export default function QuizGenerationList({
   const currentItems = items.slice(startIndex, endIndex);
 
   return (
-    <Card className="overflow-hidden border-gray-100">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+    <div className="space-y-6">
+      {/* View Mode Toggle */}
+      <div className="flex items-center justify-end gap-2 px-6">
+        <span className="text-sm text-gray-600 font-medium">Hiển thị:</span>
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Danh sách"
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="Lưới"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* List or Grid */}
+      <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6' : 'space-y-4 p-6'}>
         {currentItems.map((item) => (
           <QuizGenerationCard
             key={item.quiz_id}
             item={item}
             onClick={() => handleItemClick(item)}
+            userNames={userNames}
           />
         ))}
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && onPageChange && onItemsPerPageChange && (
         <Pagination
           currentPage={currentPage}
@@ -183,6 +257,7 @@ export default function QuizGenerationList({
         />
       )}
 
+      {/* Detail Modal */}
       {selectedItem && (
         <QuizGenerationDetailModal
           item={selectedItem}
@@ -190,6 +265,6 @@ export default function QuizGenerationList({
           onClose={handleCloseModal}
         />
       )}
-    </Card>
+    </div>
   );
 }

@@ -24,7 +24,7 @@ function getGenerationStatus(item: GenerationItem) {
   const steps = [
     { key: 'vectorized', label: 'Docs', done: item.vectorized, count: null },
     { key: 'title_ready', label: 'Plan', done: item.title_ready, count: item.roadmap_count },
-    { key: 'lesson_planned', label: 'Lessons Plan', done: item.title_ready && item.lessons_planned, count: item.lessons_planned },
+    { key: 'lesson_planned', label: 'L.Plan', done: item.title_ready && item.lessons_planned, count: item.lessons_planned },
     { key: 'lessons_ready', label: 'Lessons', done: item.lessons_ready, count: item.lessons_count },
   ];
   
@@ -86,31 +86,33 @@ function getUserDisplayName(userId?: string): string {
 
 export default function GenerationCard({ 
   item, 
-  onClick 
+  onClick,
+  userNames
 }: { 
   item: GenerationItem; 
   onClick?: () => void;
+  userNames?: Record<string, string>;
 }) {
   const status = getGenerationStatus(item);
   const displayTitle = item.title || "Đang tạo khóa học...";
   const displayDesc = item.description ? truncateText(item.description, 120) : null;
   const timeElapsed = getTimeElapsed(item.updated_at);
-  const creatorName = getUserDisplayName(item.user_id);
+  const creatorName = item.user_id && userNames?.[item.user_id] ? userNames[item.user_id] : getUserDisplayName(item.user_id);
   const lessonsInfo = item.lessons_planned 
     ? `${item.lessons_count || 0}/${item.lessons_planned}` 
     : null;
 
   return (
     <Card 
-      className="group p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-orange-300 bg-white"
+      className="group p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-orange-300 bg-white h-full flex flex-col"
       onClick={onClick}
     >
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1 flex flex-col">
         {/* Header with Status Badge */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 
-              className="font-bold text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1" 
+              className="font-bold text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-2" 
               title={item.title}
             >
               {displayTitle}
@@ -147,13 +149,13 @@ export default function GenerationCard({
 
         {/* Meta Information */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 pb-3 border-b border-gray-100">
-          <div className="flex items-center gap-1.5" title="Người tạo">
-            <User className="w-3.5 h-3.5 text-gray-500" />
-            <span>{creatorName}</span>
+          <div className="flex items-center gap-1.5 truncate" title="Người tạo">
+            <User className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+            <span className="truncate">{creatorName}</span>
           </div>
-          <div className="flex items-center gap-1.5" title="Cập nhật lần cuối">
+          <div className="flex items-center gap-1.5 shrink-0" title="Cập nhật lần cuối">
             <CalendarClock className="w-3.5 h-3.5 text-gray-500" />
-            <span>{timeElapsed}</span>
+            <span className="whitespace-nowrap">{timeElapsed}</span>
           </div>
         </div>
 
@@ -206,7 +208,7 @@ export default function GenerationCard({
               }`}>
                 {step.done ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-4 h-4" />}
               </div>
-              <span className={`text-xs text-center leading-tight ${
+              <span className={`text-xs text-center leading-tight whitespace-nowrap ${
                 step.done ? 'text-green-700 font-medium' : 'text-gray-600'
               }`}>
                 {step.label}

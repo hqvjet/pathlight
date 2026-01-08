@@ -42,8 +42,7 @@ export interface QuizDraftState {
     overview: string;
     level: 'easy' | 'medium' | 'hard';
     duration: number; // minutes
-    userPosition?: string; // For AI generation
-    shortPrompt?: string; // For AI generation
+    numQuestions: number; // number of questions
   };
   cards: QuizCardDraft[];
 }
@@ -59,8 +58,7 @@ export const createEmptyQuizDraft = (): QuizDraftState => ({
     overview: '',
     level: 'easy',
     duration: 15,
-    userPosition: '',
-    shortPrompt: '',
+    numQuestions: 10,
   },
   cards: [],
 });

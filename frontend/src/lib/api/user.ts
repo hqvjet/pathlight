@@ -13,6 +13,10 @@ export const userApi = {
   getActivity: (days = 365) => apiClient.get(`/user/activity?days=${days}`),
   getAllUsers: () => apiClient.get('/user/admin/users'),
   batchUsers: (userIds: string[]) => apiClient.post('/user/users/batch', userIds),
+  // Subscription
+  getSubscriptionInfo: (level: number) => apiClient.get(`/user/subscription/info/${level}`),
+  requestSubscriptionUpgrade: (data: { target_subscription: number }) => apiClient.post('/user/subscription/upgrade', data),
+  verifySubscriptionPayment: (data: { transaction_ref: string; target_subscription: number }) => apiClient.post('/user/admin/subscription/verify', data),
 };
 
 /** Course domain API helpers - microservice */

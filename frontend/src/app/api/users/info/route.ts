@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { API_CONFIG } from '@/config/env';
 
 // =============================================================================
@@ -17,6 +18,7 @@ function createProxyHeaders(request: NextRequest): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
+  // First try Authorization header (for direct API calls)
   const authHeader = request.headers.get('authorization');
   if (authHeader) {
     headers.Authorization = authHeader;
@@ -28,9 +30,15 @@ function createProxyHeaders(request: NextRequest): Record<string, string> {
 async function proxyToUserService(
   endpoint: string,
   method: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  accessToken?: string
 ): Promise<Response> {
   const userServiceUrl = `${API_CONFIG.USER_SERVICE_URL}/user${endpoint}`;
+  
+  // Use access_token from cookies if available
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
   
   console.log(`[USER INFO API] Proxying ${method} request to: ${userServiceUrl}`);
 
@@ -62,8 +70,19 @@ async function handleApiResponse(response: Response): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Get access token from cookies
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get('session_token')?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Unauthorized - No access token' },
+        { status: 401 }
+      );
+    }
+
     const headers = createProxyHeaders(request);
-    const response = await proxyToUserService('/info', 'GET', headers);
+    const response = await proxyToUserService('/info', 'GET', headers, accessToken);
     return handleApiResponse(response);
   } catch (error) {
     console.error('[USER INFO API] GET error:', error);
