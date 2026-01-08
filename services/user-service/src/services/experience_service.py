@@ -15,7 +15,6 @@ from services.token_service import create_access_token
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "LEVEL_EXP_THRESHOLDS",
     "get_exp_for_level",
     "calculate_level_from_exp",
     "auto_level_up",
@@ -28,87 +27,31 @@ __all__ = [
 ]
 
 # ===== LEVEL SYSTEM CONFIGURATION =====
-LEVEL_EXP_THRESHOLDS = [
-    0,
-    1000,
-    3000,
-    6000,
-    10000,
-    15000,
-    21000,
-    28000,
-    36000,
-    45000,
-    55000,
-    66000,
-    78000,
-    91000,
-    105000,
-    120000,
-    136000,
-    153000,
-    171000,
-    190000,
-    210000,
-    231000,
-    253000,
-    276000,
-    300000,
-    325000,
-    351000,
-    378000,
-    406000,
-    435000,
-    465000,
-    496000,
-    528000,
-    561000,
-    595000,
-    630000,
-    666000,
-    703000,
-    741000,
-    780000,
-    820000,
-    861000,
-    903000,
-    946000,
-    990000,
-    1035000,
-    1081000,
-    1128000,
-    1176000,
-    1225000,
-    1275000,
-    1326000,
-    1378000,
-    1431000,
-    1485000,
-    1540000,
-    1596000,
-    1653000,
-    1711000,
-    1770000,
-    1830000,
-    1891000,
-    1953000,
-    2016000,
-    2080000,
-    2145000,
-    2211000,
-]
-
 def get_exp_for_level(level: int) -> int:
+    """
+    Calculate total EXP required to reach a specific level.
+    
+    Hybrid progression system:
+    - Levels 1-20: Polynomial growth
+    - Levels 21+: Exponential growth
+    
+    Args:
+        level: Target level (1-indexed)
+        
+    Returns:
+        Total EXP required from level 1 to reach this level
+    """
     if level <= 1:
         return 0
-    idx = level - 1
-    if idx < len(LEVEL_EXP_THRESHOLDS):
-        return LEVEL_EXP_THRESHOLDS[idx]
-    base_level = len(LEVEL_EXP_THRESHOLDS)
-    base_exp = LEVEL_EXP_THRESHOLDS[-1]
-    growth_factor = 1.3
+    if level <= 20:
+        return int(400 * (level ** 2) + 100 * level)
+    
+    base_level = 20
+    base_exp = int(400 * (base_level ** 2) + 100 * base_level)
+    growth_factor = 1.12
     additional_levels = level - base_level
     additional_exp = base_exp * (growth_factor ** additional_levels) - base_exp
+    
     return int(base_exp + additional_exp)
 
 def calculate_level_from_exp(current_exp: int) -> Tuple[int, int, int]:
@@ -120,7 +63,7 @@ def calculate_level_from_exp(current_exp: int) -> Tuple[int, int, int]:
         if current_exp < next_level_exp:
             break
         level += 1
-        if level > 1000:  # safety cap
+        if level > 1000:
             break
     current_level_exp = get_exp_for_level(level)
     next_level_exp = get_exp_for_level(level + 1)
@@ -344,18 +287,29 @@ async def add_experience(request, current_user: User, db: Session) -> TestStatsR
         return TestStatsResponse(status=500, message="Có lỗi xảy ra khi thêm kinh nghiệm", updated_stats=None)
 
 async def get_level_system_info() -> dict:
+    """
+    Get detailed level system information including progression formula.
+    Shows both early game (polynomial) and late game (exponential) curves.
+    """
     try:
         level_info = []
-        for i, exp in enumerate(LEVEL_EXP_THRESHOLDS):
-            level = i + 1
+        
+        # Show first 30 levels as examples
+        for level in range(1, 31):
+            exp = get_exp_for_level(level)
             next_exp = get_exp_for_level(level + 1)
+            progression_type = "Polynomial (Early)" if level <= 20 else "Exponential (Late)"
+            
             level_info.append({
                 "level": level,
                 "required_exp": exp,
                 "next_level_exp": next_exp,
-                "exp_to_next": next_exp - exp
+                "exp_to_next": next_exp - exp,
+                "progression_type": progression_type
             })
-        for level in range(len(LEVEL_EXP_THRESHOLDS) + 1, len(LEVEL_EXP_THRESHOLDS) + 6):
+        
+        # Add some high level examples
+        for level in [40, 50, 60, 70, 80, 90, 100]:
             exp = get_exp_for_level(level)
             next_exp = get_exp_for_level(level + 1)
             level_info.append({
@@ -363,14 +317,26 @@ async def get_level_system_info() -> dict:
                 "required_exp": exp,
                 "next_level_exp": next_exp,
                 "exp_to_next": next_exp - exp,
-                "calculated": True
+                "progression_type": "Exponential (Late)",
+                "example": True
             })
+        
         return {
             "status": 200,
-            "message": "Level system information",
+            "message": "Level system information - Hybrid progression",
             "level_system": {
-                "max_predefined_level": len(LEVEL_EXP_THRESHOLDS),
-                "growth_factor_beyond_max": 1.3,
+                "formula": {
+                    "early_game": "400 * level² + 100 * level (Levels 1-20)",
+                    "late_game": "Exponential with 12% growth per level (Levels 21+)",
+                    "transition_at_level": 20
+                },
+                "characteristics": {
+                    "level_2": "1,000 EXP",
+                    "level_10": "41,000 EXP", 
+                    "level_20": "164,000 EXP (transition point)",
+                    "level_50": "~3.8M EXP",
+                    "level_100": "~1.1B EXP"
+                },
                 "levels": level_info
             }
         }

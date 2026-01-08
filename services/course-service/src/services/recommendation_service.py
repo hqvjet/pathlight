@@ -43,9 +43,13 @@ class RecommendationService:
         self.max_poll_attempts = 30
         self.poll_interval = 1
         
-    def get_all_public_course_ids(self, db: Session) -> List[str]:
+    def get_all_public_course_ids(self, db: Session, exclude_user_id: Optional[str] = None) -> List[str]:
+        """Get all public course IDs, optionally excluding a specific user's courses."""
         try:
-            courses = db.query(Course.course_id).filter(Course.publish == True).all()
+            query = db.query(Course.course_id).filter(Course.publish == True)
+            if exclude_user_id:
+                query = query.filter(Course.user_id != exclude_user_id)
+            courses = query.all()
             return [course.course_id for course in courses]
         except Exception as e:
             logger.error(f"Failed to get public course IDs: {e}")
@@ -58,7 +62,7 @@ class RecommendationService:
         topk: int = 20
     ) -> List[Dict]:
         sim_id = f"sim-course-{uuid.uuid4()}"
-        course_ids = self.get_all_public_course_ids(db)
+        course_ids = self.get_all_public_course_ids(db, exclude_user_id=user_id)
         
         if not course_ids:
             logger.warning("No public courses found")

@@ -97,8 +97,7 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserI
           <th className="py-3 px-3 text-left font-semibold">Người dùng</th>
           <th className="py-3 px-3 text-left font-semibold">Cấp độ</th>
           <th className="py-3 px-3 text-right font-semibold">Tổng EXP</th>
-          <th className="py-3 px-3 text-right font-semibold">Khóa học</th>
-          <th className="py-3 px-3 text-left font-semibold">Huy hiệu</th>
+          <th className="py-3 px-3 text-center font-semibold">Huy hiệu</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -122,11 +121,8 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserI
               <span className="font-semibold text-gray-900">{(u.experience || 0).toLocaleString()}</span>
               <span className="text-xs text-gray-500 ml-1">EXP</span>
             </td>
-            <td className="py-3 px-3 text-right">
-              <span className="font-semibold text-blue-600">{u.completed_courses || 0}</span>
-            </td>
             <td className="py-3 px-3">
-              <div className="flex gap-1">
+              <div className="flex gap-1 justify-center">
                 {badges.slice(0, 3).map((badge, idx) => (
                   <div key={idx} className="group relative">
                     <badge.icon className={`w-4 h-4 ${badge.color}`} />
@@ -140,7 +136,7 @@ export const LeaderboardTable: React.FC<{ users: LeaderboardUser[]; currentUserI
           </tr>
         )})}
         {tableUsers.length === 0 && (
-          <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">Không có xếp hạng khác</td></tr>
+          <tr><td colSpan={6} className="py-8 text-center text-gray-400 text-sm">Không có xếp hạng khác</td></tr>
         )}
       </tbody>
     </table>
