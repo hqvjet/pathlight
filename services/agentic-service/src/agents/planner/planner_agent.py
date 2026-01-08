@@ -147,6 +147,9 @@ class PlannerAgent(BaseAgent):
                         "duration": str(state.duration),
                     }
                 )
+            # CRITICAL FIX: Append the new AI message to history for the NEXT iteration
+            # This ensures the LLM knows what it just asked for and what tools it called
+            history.append(ai)
             count += 1
 
         # CRITICAL FIX: Force final JSON output after hitting max tool calls OR detecting loop

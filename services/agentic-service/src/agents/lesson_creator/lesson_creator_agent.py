@@ -337,6 +337,8 @@ class LessonCreatorAgent(BaseAgent):
                 "prev_lessons": prev_lessons,
             }
         )
+        # CRITICAL FIX: Append initial AI message to history
+        history.append(ai)
         tracer.record("llm", "initial response", index=index, content_preview=str(ai.content)[:200])
 
         count = 1
@@ -377,6 +379,8 @@ class LessonCreatorAgent(BaseAgent):
                         "prev_lessons": prev_lessons,
                     }
                 )
+            # CRITICAL FIX: Append the new AI message to history for the NEXT iteration
+            history.append(ai)
             count += 1
 
         # CRITICAL FIX: Force final JSON output after hitting max tool calls
