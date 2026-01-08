@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from services.sqs_publisher import send_recommend_quizzes
 from services.sim_search_dynamo_client import SimSearchDynamoClient
-from models import Quiz
+from src.models import Quiz
 
 import logging
 
