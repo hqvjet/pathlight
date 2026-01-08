@@ -13,6 +13,9 @@ class AppSettings:
     OPENSEARCH_VERIFY_CERTS = True
     # Default OpenSearch index aligned with provided mapping
     OPENSEARCH_INDEX_NAME = "pathlight-vector-db"
+    # Recommendation system indices
+    COURSE_VECTOR_INDEX = "pathlight-course-vectors"
+    QUIZ_VECTOR_INDEX = "pathlight-quiz-vectors"
     OPENSEARCH_TIMEOUT = 60
     EMBEDDING_MODEL = "text-embedding-3-small"
     LOG_LEVEL = "INFO"
@@ -42,6 +45,12 @@ class Config:
         self.REGION = os.getenv("REGION", "ap-northeast-1")
         self.S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "")
         self.OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOST", "")
+        
+        # DynamoDB tables
+        self.GENERATION_TRACKING_TABLE = os.getenv("GENERATION_TRACKING_TABLE", "course_generation_tracking")
+        self.QUIZ_TRACKING_TABLE = os.getenv("QUIZ_TRACKING_TABLE", "quiz_generation_tracking")
+        self.CHATBOT_TABLE_NAME = os.getenv("CHATBOT_TABLE_NAME", "chatbot_conversations")
+        self.SIM_SEARCH_TABLE_NAME = os.getenv("SIM_SEARCH_TABLE_NAME", "sim_search_table")
 
         # OpenSearch feature flags
         self.OPENSEARCH_ENABLED = self._get_opensearch_enabled_default()
