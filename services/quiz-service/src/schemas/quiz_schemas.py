@@ -43,6 +43,7 @@ class QuizCardItem(BaseModel):
     hint: Optional[str] = Field(default=None)
     explanation: Optional[str] = Field(default=None)
     difficulty: str
+    answer: Optional[int] = Field(default=None, description="Correct answer (1-4), only included if requested")
     option1: str
     option2: str
     option3: str

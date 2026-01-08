@@ -21,23 +21,29 @@ def _ddb_table():
         return _ddb_table_instance
     
     table_name = os.getenv("DDB_QUIZ_TABLE_NAME", "quiz_generation_tracking")
+    logger.info(f"Initializing DynamoDB table: {table_name}")
+    
     if not table_name:
         logger.warning("DDB_QUIZ_TABLE_NAME not set; generation status unavailable")
         return None
     
     try:
         import boto3
+        region = os.getenv("REGION", "ap-northeast-1")
+        logger.info(f"Connecting to DynamoDB in region: {region}")
+        
         dynamodb = boto3.resource(
             "dynamodb",
-            region_name=os.getenv("REGION", "ap-northeast-1"),
+            region_name=region,
         )
         _ddb_table_instance = dynamodb.Table(table_name)  # type: ignore[attr-defined]
+        logger.info(f"Successfully initialized DynamoDB table: {table_name}")
         return _ddb_table_instance
     except ImportError:
         logger.warning("boto3 not installed; generation status unavailable")
         return None
     except Exception as e:
-        logger.error("Failed to initialize DynamoDB table: %s", e)
+        logger.error(f"Failed to initialize DynamoDB table {table_name}: {e}", exc_info=True)
         return None
 
 
@@ -104,8 +110,10 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
     - Scans quiz_generation_tracking table filtering by user_id
     - Returns normalized quiz generation items with status tracking
     """
+    logger.info(f"Fetching quiz generations for user_id: {user_id}")
     table = _ddb_table()
     if table is None:
+        logger.warning("DynamoDB table not available, returning None")
         return None
     
     try:
@@ -114,13 +122,22 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
         items: List[Dict[str, Any]] = []
         # Scan with filter for user_id
         scan_kwargs = {"FilterExpression": Attr("user_id").eq(str(user_id))}
+        logger.info(f"Scanning DynamoDB with filter: user_id == {user_id}")
+        
         resp = table.scan(**scan_kwargs)
         items.extend(resp.get("Items", []) or [])
+        logger.info(f"Found {len(items)} items in first scan")
         
         # Handle pagination
+        page_count = 1
         while "LastEvaluatedKey" in resp:
+            page_count += 1
             resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], **scan_kwargs)
-            items.extend(resp.get("Items", []) or [])
+            page_items = resp.get("Items", []) or []
+            items.extend(page_items)
+            logger.info(f"Page {page_count}: Found {len(page_items)} items")
+
+        logger.info(f"Total items found: {len(items)}")
 
         # Normalize fields for frontend (all items are quizzes in this table)
         normalized: List[Dict[str, Any]] = []
@@ -144,7 +161,8 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 "updated_at": it.get("updated_at"),
             })
         
+        logger.info(f"Returning {len(normalized)} normalized items")
         return normalized
     except Exception as e:
-        logger.error("DynamoDB scan error for user %s quizzes: %s", user_id, e)
+        logger.error(f"DynamoDB scan error for user {user_id} quizzes: {e}", exc_info=True)
         return None

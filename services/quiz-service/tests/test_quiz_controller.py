@@ -78,7 +78,7 @@ def test_create_quiz_enqueues_job(monkeypatch):
 
     assert resp["status"] == 202
     assert resp["quiz_id"]
-    assert sent_kwargs.get("course_id") == resp["quiz_id"]
+    assert sent_kwargs.get("quiz_id") == resp["quiz_id"]
     assert sent_kwargs.get("s3_keys") == ["users/user-123/doc.pdf"]
     assert sent_kwargs.get("job_type") == "GENERATE_QUIZ_WITH_VECTORIZE"
 

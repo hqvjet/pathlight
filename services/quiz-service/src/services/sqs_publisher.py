@@ -25,7 +25,7 @@ def _session(region: str | None, profile: str | None = None) -> boto3.Session:
 
 def send_generate_with_vectorize(
     queue_url: str,
-    course_id: str,
+    quiz_id: str,
     s3_keys: Optional[List[str]],
     *,
     difficulty: str,
@@ -33,7 +33,7 @@ def send_generate_with_vectorize(
     user_id: Optional[str] = None,
     region: Optional[str] = None,
     group_id: Optional[str] = None,
-    job_type: str = "GENERATE_COURSE_WITH_VECTORIZE",
+    job_type: str = "GENERATE_QUIZ_WITH_VECTORIZE",
     num_questions: Optional[int] = None,
 ) -> dict:
     region = region or os.getenv("REGION") or "ap-northeast-1"
@@ -43,7 +43,7 @@ def send_generate_with_vectorize(
     # Build payload based on job type
     if job_type == "GENERATE_QUIZ_WITH_VECTORIZE":
         payload = {
-            "id": course_id,
+            "id": quiz_id,
             "user_id": user_id,
             "difficulty": difficulty,
             "duration": duration,
@@ -51,9 +51,9 @@ def send_generate_with_vectorize(
             "s3_keys": s3_keys or [],
         }
     else:
-        # Course format: keep existing fields for backward compatibility
+        # Quiz format: keep existing fields for backward compatibility
         payload = {
-            "id": course_id,
+            "id": quiz_id,
             "user_id": user_id,
             "difficulty": difficulty,
             "duration": duration,

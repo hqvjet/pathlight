@@ -212,9 +212,9 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
         raise HTTPException(status_code=500, detail="SQS_QUEUE_URL is not configured")
 
     job_type = body.type or "GENERATE_QUIZ_WITH_VECTORIZE"
-    allowed_job_types = {"GENERATE_COURSE_WITH_VECTORIZE", "GENERATE_QUIZ_WITH_VECTORIZE"}
+    allowed_job_types = {"GENERATE_QUIZ_WITH_VECTORIZE"}
     if job_type not in allowed_job_types:
-        raise HTTPException(status_code=400, detail="type must be GENERATE_COURSE_WITH_VECTORIZE or GENERATE_QUIZ_WITH_VECTORIZE")
+        raise HTTPException(status_code=400, detail="type must be GENERATE_QUIZ_WITH_VECTORIZE")
 
     quiz_id = body.quiz_id or f"quiz-{uuid4()}"
     s3_keys = body.s3_keys or []
@@ -261,7 +261,7 @@ def create_quiz_controller(request: Request, body: CreateQuizRequest):
     try:
         resp = send_generate_with_vectorize(
             queue_url=queue_url,
-            course_id=quiz_id,
+            quiz_id=quiz_id,
             s3_keys=s3_keys,
             difficulty=body.difficulty,
             duration=body.duration,
@@ -428,6 +428,7 @@ def get_quiz_detail_controller(
     *,
     include_hints: bool = True,
     include_explanations: bool = True,
+    include_answers: bool = False,
 ) -> QuizDetailResponse:
     user_id = _verify_token(request)
     session = _get_db()
@@ -449,6 +450,7 @@ def get_quiz_detail_controller(
                 option2=c.option2,
                 option3=c.option3,
                 option4=c.option4,
+                answer=c.answer if include_answers else None,
             )
             for c in cards
         ]

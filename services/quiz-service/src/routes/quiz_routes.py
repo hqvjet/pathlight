@@ -90,8 +90,9 @@ def get_quiz_detail(
     request: Request,
     include_hints: bool = Query(default=True),
     include_explanations: bool = Query(default=True),
+    include_answers: bool = Query(default=False),
 ):
-    return get_quiz_detail_controller(request, quiz_id, include_hints=include_hints, include_explanations=include_explanations)
+    return get_quiz_detail_controller(request, quiz_id, include_hints=include_hints, include_explanations=include_explanations, include_answers=include_answers)
 
 
 @router.post("/{quiz_id}/start")
