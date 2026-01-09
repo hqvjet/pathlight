@@ -1,4 +1,5 @@
 "use client";
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,53 +8,46 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Clock, Zap, Calendar, Hash } from "lucide-react";
+import { CheckCircle, Clock, Zap, Calendar, Hash, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
 import { GenerationItem } from "./GenerationCard";
 
 function getDetailedStatus(item: GenerationItem) {
   const steps = [
     { 
-      key: 'vectorized', 
+      key: 'vectorization', 
       label: 'Phân tích tài liệu', 
-      done: Boolean(item.vectorized),
-      description: 'Vectorize và index tài liệu vào OpenSearch',
-      count: null
+      done: item.vectorization_status === 'done',
+      description: `Vectorize và index tài liệu vào OpenSearch${item.vectorization_chunks ? ` (${item.vectorization_chunks} chunks)` : ''}`,
+      count: item.vectorization_chunks
     },
     { 
-      key: 'title_ready', 
+      key: 'planning', 
       label: 'Tạo kế hoạch khóa học', 
-      done: Boolean(item.title_ready),
-      description: 'Sinh tiêu đề, mô tả và roadmap học tập',
-      count: item.roadmap_count
+      done: item.planning_status === 'done',
+      description: `Sinh tiêu đề, mô tả và roadmap học tập${item.planning_roadmap_count ? ` (${item.planning_roadmap_count} modules)` : ''}`,
+      count: item.planning_roadmap_count
     },
     { 
-      key: 'lessons_ready', 
-      label: 'Lập kế hoạch bài học', 
-      done: Boolean(item.lessons_ready),
-      description: `Xác định số lượng bài học cần tạo${item.lessons_count ? ` (${item.lessons_count} bài)` : ''}`,
-      count: item.lessons_count
-    },
-    { 
-      key: 'tests_ready', 
+      key: 'lessons', 
       label: 'Tạo nội dung bài học', 
-      done: Boolean(item.tests_ready),
-      description: `Sinh nội dung chi tiết cho từng bài học${item.lessons_count ? ` (${item.lessons_count} bài hoàn thành)` : ''}`,
-      count: null
+      done: item.lessons_status === 'done',
+      description: `Sinh nội dung chi tiết cho từng bài học${item.lessons_completed && item.lessons_total ? ` (${item.lessons_completed}/${item.lessons_total} bài hoàn thành)` : ''}`,
+      count: item.lessons_completed && item.lessons_total ? `${item.lessons_completed}/${item.lessons_total}` : item.lessons_total
+    },
+    { 
+      key: 'tests', 
+      label: 'Tạo câu hỏi kiểm tra', 
+      done: item.tests_status === 'done',
+      description: `Sinh câu hỏi trắc nghiệm cho từng bài học${item.tests_completed && item.tests_total ? ` (${item.tests_completed}/${item.tests_total} bài)` : ''}`,
+      count: item.tests_completed && item.tests_total ? `${item.tests_completed}/${item.tests_total}` : item.tests_total
     },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;
-  const isComplete = completedSteps === steps.length;
+  const isComplete = item.overall_status === 'done';
   const currentStep = steps.find(s => !s.done);
   const progressPercent = (completedSteps / steps.length) * 100;
-  
-  // Use final_ready as overall status, but also check if all steps are done
-  let overallStatus: 'done' | 'processing' | 'error' = 'processing';
-  if (isComplete || item.final_ready === true) {
-    overallStatus = 'done';
-  } else if (item.final_ready === false && item.progress?.includes('error')) {
-    overallStatus = 'error';
-  }
+  const overallStatus = item.overall_status || 'processing';
   
   return { steps, completedSteps, isComplete, currentStep, progressPercent, overallStatus };
 }
@@ -67,10 +61,12 @@ export default function GenerationDetailModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const [isLessonsExpanded, setIsLessonsExpanded] = useState(false);
+  
   if (!item) return null;
 
   const status = getDetailedStatus(item);
-  const updated = item.updated_at ? new Date(item.updated_at).toLocaleString('vi-VN') : "Chưa có thông tin";
+  const updated = item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : "Chưa có thông tin";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -94,9 +90,9 @@ export default function GenerationDetailModal({
         <div className="space-y-6">
           {/* Course Info */}
           <div className="space-y-3">
-            {item.title && (
+            {item.planning_course_title && (
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                <h3 className="text-lg font-bold text-gray-900">{item.planning_course_title}</h3>
               </div>
             )}
             {item.description && (
@@ -216,7 +212,9 @@ export default function GenerationDetailModal({
             <h3 className="text-lg font-semibold text-gray-900">Chi tiết các bước</h3>
             <div className="space-y-3">
               {status.steps.map((step, index) => {
-                const isActive = !status.isComplete && status.currentStep?.key === step.key;
+                const isLessonsStep = step.key === 'lessons';
+                const hasLessons = isLessonsStep && item.lessons_list && item.lessons_list.length > 0;
+                
                 return (
                   <div
                     key={step.key}
@@ -269,6 +267,49 @@ export default function GenerationDetailModal({
                         }`}>
                           {step.description}
                         </p>
+                        
+                        {/* Lessons List Expandable Section */}
+                        {hasLessons && (
+                          <div className="mt-3">
+                            <button
+                              onClick={() => setIsLessonsExpanded(!isLessonsExpanded)}
+                              className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-800 transition-colors"
+                            >
+                              <BookOpen className="w-4 h-4" />
+                              <span>
+                                Xem danh sách bài học ({item.lessons_list?.length} bài)
+                              </span>
+                              {isLessonsExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </button>
+                            
+                            {isLessonsExpanded && (
+                              <div className="mt-3 space-y-2 pl-2 border-l-2 border-green-300">
+                                {item.lessons_list?.map((lesson, idx) => (
+                                  <div
+                                    key={lesson.id}
+                                    className="flex items-start gap-2 p-2 bg-white rounded border border-green-100 hover:border-green-200 transition-colors"
+                                  >
+                                    <div className="flex-shrink-0 w-6 h-6 rounded bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">
+                                      {idx + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                                        {lesson.title}
+                                      </p>
+                                      <p className="text-xs text-gray-500 font-mono mt-0.5 truncate" title={lesson.id}>
+                                        {lesson.id}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

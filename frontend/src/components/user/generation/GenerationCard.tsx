@@ -6,50 +6,67 @@ import { CheckCircle, Clock, Zap, FileText, User, CalendarClock } from "lucide-r
 export type GenerationItem = {
   course_id: string;
   user_id?: string;
+  overall_status?: 'processing' | 'done' | 'error';
+  error_message?: string;
+  
   title?: string;
   description?: string;
-  progress?: string;
-  title_ready?: boolean;
-  lessons_ready?: boolean;
-  tests_ready?: boolean;
-  final_ready?: boolean;
-  vectorized?: boolean;
-  lessons_count?: number;
-  lessons_planned?: number;
-  roadmap_count?: number;
-  tests_count?: number;
-  final_count?: number;
-  updated_at?: string;
+  vectorization_status?: string;
+  vectorization_chunks?: number;
+  
+  planning_status?: string;
+  planning_course_title?: string;
+  planning_roadmap_count?: number;
+  
+  lessons_status?: string;
+  lessons_completed?: number;
+  lessons_total?: number;
+  lessons_list?: Array<{ id: string; title: string }>;
+  
+  tests_status?: string;
+  tests_completed?: number;
+  tests_total?: number;
+  
+  start_timestamp?: number;
+  last_updated?: string;
+  end_timestamp?: number;
 };
 
 function getGenerationStatus(item: GenerationItem) {
   const steps = [
-    { key: 'vectorized', label: 'Vectorized', done: Boolean(item.vectorized), count: null },
-    { key: 'title_ready', label: 'Plan', done: Boolean(item.title_ready), count: item.roadmap_count },
-    { key: 'lessons_ready', label: 'Lessons', done: Boolean(item.lessons_ready), count: item.lessons_count },
-    { key: 'tests_ready', label: 'Tests', done: Boolean(item.tests_ready), count: item.tests_count },
+    { 
+      key: 'vectorization', 
+      label: 'Vectorized', 
+      done: item.vectorization_status === 'done', 
+      count: item.vectorization_chunks 
+    },
+    { 
+      key: 'planning', 
+      label: 'Plan', 
+      done: item.planning_status === 'done', 
+      count: item.planning_roadmap_count 
+    },
+    { 
+      key: 'lessons', 
+      label: 'Lessons', 
+      done: item.lessons_status === 'done', 
+      count: item.lessons_completed && item.lessons_total ? `${item.lessons_completed}/${item.lessons_total}` : item.lessons_total
+    },
+    { 
+      key: 'tests', 
+      label: 'Tests', 
+      done: item.tests_status === 'done', 
+      count: item.tests_completed && item.tests_total ? `${item.tests_completed}/${item.tests_total}` : item.tests_total
+    },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;
-  const isComplete = completedSteps === steps.length;
+  const isComplete = item.overall_status === 'done';
   const currentStep = steps.find(s => !s.done);
   const progressPercent = (completedSteps / steps.length) * 100;
-  
-  // Use final_ready as overall status indicator, but also check if all steps are done
-  let overallStatus: 'done' | 'processing' | 'error' = 'processing';
-  if (isComplete || item.final_ready === true) {
-    overallStatus = 'done';
-  } else if (item.final_ready === false && item.progress?.includes('error')) {
-    overallStatus = 'error';
-  }
+  const overallStatus = item.overall_status || 'processing';
   
   return { steps, completedSteps, isComplete, currentStep, progressPercent, overallStatus };
-}
-
-// Truncate text for display
-function truncateText(text: string, maxLength: number) {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + "...";
 }
 
 // Format time difference
@@ -96,12 +113,12 @@ export default function GenerationCard({
   userNames?: Record<string, string>;
 }) {
   const status = getGenerationStatus(item);
-  const displayTitle = item.title || "Đang tạo khóa học...";
-  const displayDesc = item.description ? truncateText(item.description, 120) : null;
-  const timeElapsed = getTimeElapsed(item.updated_at);
+  const displayTitle = item.planning_course_title || "Đang tạo khóa học...";
+  const displayDesc = item.error_message || null;
+  const timeElapsed = getTimeElapsed(item.last_updated);
   const creatorName = item.user_id && userNames?.[item.user_id] ? userNames[item.user_id] : getUserDisplayName(item.user_id);
-  const lessonsInfo = item.lessons_planned 
-    ? `${item.lessons_count || 0}/${item.lessons_planned}` 
+  const lessonsInfo = item.lessons_total 
+    ? `${item.lessons_completed || 0}/${item.lessons_total}` 
     : null;
 
   return (

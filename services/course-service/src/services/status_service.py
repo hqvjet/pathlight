@@ -60,20 +60,63 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
         item = resp.get("Item")
         if not item:
             return None
-        plan = bool(item.get("title_ready", False))
-        lessons = bool(item.get("lessons_ready", False))
-        final = bool(item.get("final_ready", False))
-        vectorized = bool(item.get("vectorized", False))
-        overall = plan and lessons and final
+        
+        # Extract status fields
+        vectorization_status = "done" if bool(item.get("vectorized", False)) else "pending"
+        planning_status = "done" if bool(item.get("title_ready", False)) else "pending"
+        lessons_status = "done" if bool(item.get("lessons_ready", False)) else "pending"
+        tests_status = "done" if bool(item.get("tests_ready", False)) else "pending"
+        
+        # Calculate overall status
+        all_done = (
+            vectorization_status == "done" and
+            planning_status == "done" and
+            lessons_status == "done" and
+            tests_status == "done"
+        )
+        overall_status = "done" if all_done else "processing"
+        if item.get("error_message"):
+            overall_status = "error"
+        
+        # Build lessons list
+        lessons_list = []
+        lessons_completed = 0
+        lessons_total = item.get("lessons_count") or item.get("roadmap_count") or 0
+        
+        if item.get("lessons_data"):
+            for lesson in item.get("lessons_data", []):
+                lessons_list.append({
+                    "id": lesson.get("id", ""),
+                    "title": lesson.get("title", "")
+                })
+                if lesson.get("completed"):
+                    lessons_completed += 1
+        else:
+            lessons_completed = lessons_total if lessons_status == "done" else 0
+        
         return {
-            "status": overall,
-            "vectorized": vectorized,
-            "generated_plan": plan,
-            "generated_lessons": lessons,
-            "generated_final_test": final,
-            # Optional extras to help the UI if needed
-            "progress": item.get("progress"),
-            "updated_at": item.get("updated_at"),
+            "overall_status": overall_status,
+            "error_message": item.get("error_message", ""),
+            
+            "vectorization_status": vectorization_status,
+            "vectorization_chunks": item.get("vectorization_chunks", 0),
+            
+            "planning_status": planning_status,
+            "planning_course_title": item.get("title", ""),
+            "planning_roadmap_count": item.get("roadmap_count", 0),
+            
+            "lessons_status": lessons_status,
+            "lessons_completed": lessons_completed,
+            "lessons_total": lessons_total,
+            "lessons_list": lessons_list,
+            
+            "tests_status": tests_status,
+            "tests_completed": lessons_total if tests_status == "done" else 0,
+            "tests_total": lessons_total,
+            
+            "start_timestamp": item.get("start_timestamp"),
+            "last_updated": item.get("updated_at"),
+            "end_timestamp": item.get("end_timestamp"),
         }
     except (ClientError, BotoCoreError) as e:
         logger.error("DynamoDB get_item error: %s", e)
@@ -106,25 +149,65 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
         # Normalize a subset of fields for frontend
         normalized: List[Dict[str, Any]] = []
         for it in items:
-            normalized.append(
-                {
-                    "course_id": it.get("course_id"),
-                    "user_id": it.get("user_id"),
-                    "title": it.get("title"),
-                    "description": it.get("description"),
-                    "progress": it.get("progress"),
-                    "title_ready": bool(it.get("title_ready", False)),
-                    "lessons_ready": bool(it.get("lessons_ready", False)),
-                    "tests_ready": bool(it.get("tests_ready", False)),
-                    "final_ready": bool(it.get("final_ready", False)),
-                    "vectorized": bool(it.get("vectorized", False)),
-                    "lessons_count": it.get("lessons_count"),
-                    "lessons_planned": it.get("lessons_planned"),
-                    "roadmap_count": it.get("roadmap_count"),
-                    "tests_count": it.get("lessons_count"),
-                    "updated_at": it.get("updated_at"),
-                }
+            # Extract status fields
+            vectorization_status = "done" if bool(it.get("vectorized", False)) else "pending"
+            planning_status = "done" if bool(it.get("title_ready", False)) else "pending"
+            lessons_status = "done" if bool(it.get("lessons_ready", False)) else "pending"
+            tests_status = "done" if bool(it.get("tests_ready", False)) else "pending"
+            
+            # Calculate overall status
+            all_done = (
+                vectorization_status == "done" and
+                planning_status == "done" and
+                lessons_status == "done" and
+                tests_status == "done"
             )
+            overall_status = "done" if all_done else "processing"
+            if it.get("error_message"):
+                overall_status = "error"
+            
+            # Build lessons list
+            lessons_list = []
+            lessons_completed = 0
+            lessons_total = it.get("lessons_count") or it.get("roadmap_count") or 0
+            
+            if it.get("lessons_data"):
+                for lesson in it.get("lessons_data", []):
+                    lessons_list.append({
+                        "id": lesson.get("id", ""),
+                        "title": lesson.get("title", "")
+                    })
+                    if lesson.get("completed"):
+                        lessons_completed += 1
+            else:
+                lessons_completed = lessons_total if lessons_status == "done" else 0
+            
+            normalized.append({
+                "course_id": it.get("course_id"),
+                "user_id": it.get("user_id"),
+                "overall_status": overall_status,
+                "error_message": it.get("error_message", ""),
+                
+                "vectorization_status": vectorization_status,
+                "vectorization_chunks": it.get("vectorization_chunks", 0),
+                
+                "planning_status": planning_status,
+                "planning_course_title": it.get("title", ""),
+                "planning_roadmap_count": it.get("roadmap_count", 0),
+                
+                "lessons_status": lessons_status,
+                "lessons_completed": lessons_completed,
+                "lessons_total": lessons_total,
+                "lessons_list": lessons_list,
+                
+                "tests_status": tests_status,
+                "tests_completed": lessons_total if tests_status == "done" else 0,
+                "tests_total": lessons_total,
+                
+                "start_timestamp": it.get("start_timestamp"),
+                "last_updated": it.get("updated_at"),
+                "end_timestamp": it.get("end_timestamp"),
+            })
         return normalized
     except (ClientError, BotoCoreError) as e:
         logger.error("DynamoDB scan error: %s", e)
