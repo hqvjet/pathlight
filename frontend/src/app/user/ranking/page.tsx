@@ -11,7 +11,7 @@ export default function RankingPage() {
   const handleLogout = useCallback(() => router.push('/auth/login'), [router]);
   const { user, dashboardData, loading } = useDashboard(handleLogout);
 
-  const users = dashboardData?.info?.user_top_rank || [];
+  const users = useMemo(() => dashboardData?.info?.user_top_rank || [], [dashboardData]);
   
   // Find competitors (user + 1 above + 1 below)
   const competitors = useMemo(() => {

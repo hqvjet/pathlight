@@ -80,6 +80,10 @@ def fetch_generation_status(quiz_id: str) -> Optional[Dict[str, Any]]:
         plan_ready = bool(item.get("plan_ready", False) or item.get("title_ready", False))
         questions_ready = bool(item.get("questions_ready", False) or item.get("cards_ready", False))
         
+        # If questions started, vectorization must be done
+        if questions_ready:
+            vectorized = True
+        
         # Status from agentic-service tracking
         status = item.get("status", "unknown")
         progress_percentage = int(item.get("progress_percentage", 0))
@@ -147,6 +151,10 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
             vectorized = bool(it.get("vectorized", False))
             plan_ready = bool(it.get("plan_ready", False) or it.get("title_ready", False))
             questions_ready = bool(it.get("questions_ready", False) or it.get("cards_ready", False))
+            
+            # If questions started, vectorization must be done
+            if questions_ready:
+                vectorized = True
             
             normalized.append({
                 "quiz_id": it.get("quiz_id"),

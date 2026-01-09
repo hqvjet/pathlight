@@ -23,6 +23,7 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
+  const [pollStartTime, setPollStartTime] = useState<number | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastActivityRef = useRef<number>(Date.now());
@@ -73,8 +74,27 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
   useEffect(() => {
     if (!pendingChatId) return;
 
+    const POLLING_TIMEOUT = 180000; // 3 minutes (longer timeout for when course generation is running)
+    
     const pollAnswer = async () => {
       try {
+        // Check timeout
+        if (pollStartTime && Date.now() - pollStartTime > POLLING_TIMEOUT) {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: pendingChatId,
+              role: 'assistant',
+              content: 'Xin lỗi, hệ thống đang bận xử lý. Câu hỏi này có thể mất vài phút để trả lời. Bạn vui lòng thử lại sau nhé! 🙏',
+              timestamp: new Date(),
+            },
+          ]);
+          setPendingChatId(null);
+          setIsLoading(false);
+          setPollStartTime(null);
+          return;
+        }
+
         const response = await chatbotApi.getAnswer(pendingChatId);
         const data = response.data;
         
@@ -90,6 +110,7 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
           ]);
           setPendingChatId(null);
           setIsLoading(false);
+          setPollStartTime(null);
         } else if (data.status === 500) {
           const errorMessage = data.message || 'Xin lỗi, mình gặp lỗi khi xử lý câu hỏi của bạn. Bạn có thể thử lại không?';
           setMessages(prev => [
@@ -103,11 +124,21 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
           ]);
           setPendingChatId(null);
           setIsLoading(false);
+          setPollStartTime(null);
         }
-      } catch (error) {
+        // For 202 (processing) or 404 (not yet created), continue polling
+      } catch (error: unknown) {
+        // If 404, treat as still processing (Lambda hasn't created record yet)
+        if (error && typeof error === 'object' && 'response' in error) {
+          const err = error as { response?: { status?: number } };
+          if (err.response?.status === 404) {
+            return; // Continue polling
+          }
+        }
         console.error('Error polling answer:', error);
         setPendingChatId(null);
         setIsLoading(false);
+        setPollStartTime(null);
       }
     };
 
@@ -116,10 +147,11 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
 
     return () => {
       if (pollingIntervalRef.current) {
+    setPollStartTime(Date.now()); // Start timeout timer
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [pendingChatId]);
+  }, [pendingChatId, pollStartTime]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
