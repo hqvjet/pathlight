@@ -12,15 +12,21 @@ export interface QuizGenerationCardProps {
 function getQuizStatus(item: QuizGenerationItem) {
   const steps = [
     { 
-      key: 'plan', 
+      key: 'vectorized', 
+      label: 'Vectorized', 
+      done: item.vectorized ?? false,
+      count: null
+    },
+    { 
+      key: 'plan_ready', 
       label: 'Plan', 
-      done: item.plan_ready ?? item.title_ready ?? false,
+      done: item.plan_ready ?? false,
       count: item.ideas_count
     },
     { 
-      key: 'questions', 
+      key: 'questions_ready', 
       label: 'Questions', 
-      done: item.questions_ready ?? item.cards_ready ?? false,
+      done: item.questions_ready ?? false,
       count: item.questions_count
     },
   ];
@@ -31,7 +37,7 @@ function getQuizStatus(item: QuizGenerationItem) {
   const progressPercent = item.progress_percentage ?? (completedSteps / steps.length) * 100;
   
   let overallStatus: 'done' | 'processing' | 'error' = 'processing';
-  if (isComplete) {
+  if (isComplete || item.final_ready === true) {
     overallStatus = 'done';
   } else if (item.status === 'error' || item.status === 'failed') {
     overallStatus = 'error';
