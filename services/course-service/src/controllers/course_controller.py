@@ -1391,7 +1391,7 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 				continue
 			selected = int(ans.answer)
 			db_answer = cast(int, getattr(qa, "answer"))
-			correct = (db_answer % 4) + 1
+			correct = db_answer
 			is_correct = selected == correct
 			if is_correct:
 				correct_count += 1
