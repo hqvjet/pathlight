@@ -21,7 +21,7 @@ LESSON_GENERATION_TIMEOUT = 90  # Timeout for single lesson generation (seconds)
 # LLM max_tokens settings per agent type
 # CRITICAL: Must be tuned to prevent truncation while avoiding excessive tokens
 LLM_MAX_TOKENS_PLANNER = None  # No limit - needs full roadmap JSON
-LLM_MAX_TOKENS_LESSON = None   # No limit - let LLM decide based on prompt guidance
+LLM_MAX_TOKENS_LESSON = 14000   # FIXED: Limit to prevent token overflow (was None causing 16K+ outputs)
 LLM_MAX_TOKENS_TEST = 1500     # 4-6 assessments
 LLM_MAX_TOKENS_QUESTIONER = 2000  # Quiz question generation
 
