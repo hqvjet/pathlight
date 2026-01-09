@@ -54,8 +54,6 @@ class EmbeddingService:
             EmbeddingResult
         """
         try:
-            logger.info(f"Creating embedding for chunk {chunk_idx} of {filename}")
-            
             embedding_data = self.openai_client.create_embedding(chunk["chunk_text"])
             
             chunk_data = ChunkData(
@@ -146,7 +144,6 @@ class EmbeddingService:
         
         for filename, content in file_contents.items():
             try:
-                logger.info(f"Creating chunks for {filename}")
                 file_chunks = split_into_chunks(
                     content, 
                     source_info=filename, 
@@ -171,7 +168,6 @@ class EmbeddingService:
                         chunks=chunks
                     ))
                     count += 1
-                    logger.info(f"Successfully created {len(chunks)} embeddings for {filename}")
                 else:
                     error_msg = f"No valid chunks with embeddings created for {filename}"
                     logger.warning(error_msg)

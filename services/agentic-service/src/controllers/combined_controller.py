@@ -76,10 +76,39 @@ class CombinedController:
             self.logger.warning(f"DynamoDB status tracking unavailable: {e}")
 
         # 1) Vectorize (must index to OpenSearch successfully)
+        try:
+            status.update_item(course_id, {
+                "status": "vectorizing",
+                "progress_percentage": 5,
+                "current_step": "Xử lý tài liệu",
+                "current_step_detail": "Đang phân tích và vector hóa tài liệu..."
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to update status: {e}")
+        
         s3 = self.files.get_files_by_names(s3_keys)
         vect_resp = self.files.vectorize_files(
             s3.file_streams, material_id=course_id, category=0
         )
+        
+        self.logger.info(f"Vectorization completed: {vect_resp.total_chunks} chunks indexed")
+        
+        try:
+            status.update_item(course_id, {
+                "status": "vectorized",
+                "progress_percentage": 10,
+                "current_step": "Tài liệu đã sẵn sàng",
+                "current_step_detail": f"Đã xử lý {vect_resp.total_chunks} đoạn văn bản"
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to update status: {e}")
+        
+        # CRITICAL: Ensure OpenSearch index is refreshed before querying
+        # This makes indexed data immediately searchable
+        from infrastructure.clients import clients as shared_clients
+        if shared_clients.opensearch and shared_clients.opensearch.is_available():
+            self.logger.info("Ensuring index refresh before agent starts...")
+            shared_clients.opensearch.refresh_index(config.OPENSEARCH_INDEX_NAME)
         
         # In production/Lambda, verify OpenSearch indexing
         # In local mode, skip if OpenSearch is not available

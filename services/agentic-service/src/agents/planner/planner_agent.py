@@ -72,13 +72,43 @@ class PlannerAgent(BaseAgent):
         except Exception:
             pass
 
-        history: List = [
-            SystemMessage(
-                content=self.prompt_manager.get_prompt(self.name).format(
-                    id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
-                )
-            )
-        ]
+        # PROGRESSIVE RETRIEVAL: Execute 3-layer retrieval BEFORE LLM
+        from agents.base.progressive_retrieval import execute_progressive_retrieval
+        
+        tracer.record("retrieval", "starting progressive 3-layer retrieval")
+        
+        # Create retrieval function wrapper
+        def retrieval_func(query: str, material_id: str, k: int = 5):
+            tool = self.tools.get("retrieval_tool")
+            if not tool:
+                raise ValueError("retrieval_tool not found!")
+            result = tool._run(id=material_id, query=query, k=k)
+            return result
+        
+        # Execute progressive retrieval
+        retrieval_results = execute_progressive_retrieval(
+            retrieval_tool_func=retrieval_func,
+            material_id=state.id,
+            context_title="",  # No title yet for planner
+            k=5
+        )
+        
+        self.logger.info(f"[PLANNER] Progressive retrieval: L1={retrieval_results['layer1_query'][:30]}... | L2={retrieval_results['layer2_query'][:30]}... | L3={retrieval_results['layer3_query'][:30]}...")
+        tracer.record("retrieval", "completed 3 layers", 
+                     layer1_query=retrieval_results['layer1_query'],
+                     layer2_query=retrieval_results['layer2_query'],
+                     layer3_query=retrieval_results['layer3_query'])
+        
+        # Build initial prompt WITH retrieval results pre-loaded
+        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+            id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
+        )
+        
+        # Add retrieval context to prompt
+        initial_prompt += f"\n\n=== RETRIEVED CONTEXT (3 LAYERS) ===\n{retrieval_results['all_text']}\n\n"
+        initial_prompt += "=== INSTRUCTION ===\nNow create the course roadmap JSON based on the above retrieved context. Do NOT call any tools."
+        
+        history: List = [SystemMessage(content=initial_prompt)]
 
         ai: AIMessage = self.chain.invoke(
             {
@@ -92,102 +122,12 @@ class PlannerAgent(BaseAgent):
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
         count = 1
-        previous_queries = []  # Track queries to detect loops
-        query_keywords_seen = set()  # Track unique keywords across all queries
-        consecutive_same_query = 0  # Track consecutive identical/similar queries
         
-        def normalize_query_for_comparison(q: str) -> str:
-            """Normalize query for comparison."""
-            return " ".join(sorted(set(q.lower().split())))
-        
-        def get_query_keywords(q: str) -> set:
-            """Extract keywords from query."""
-            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
-            return set(q.lower().split()) - stopwords
-        
-        while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
-            
-            # CRITICAL: Smart loop detection with keyword similarity
-            current_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
-            
-            # Check for repetition using multiple methods
-            is_repetition = False
-            repetition_reason = ""
-            
-            for cq in current_queries:
-                cq_normalized = normalize_query_for_comparison(cq)
-                cq_keywords = get_query_keywords(cq)
-                
-                # Method 1: Exact normalized match
-                for prev in previous_queries:
-                    if normalize_query_for_comparison(prev) == cq_normalized:
-                        is_repetition = True
-                        repetition_reason = "exact_match"
-                        break
-                
-                # Method 2: High keyword overlap (>70%)
-                if not is_repetition and query_keywords_seen:
-                    overlap = len(cq_keywords & query_keywords_seen) / len(cq_keywords) if cq_keywords else 0
-                    if overlap > 0.7:
-                        is_repetition = True
-                        repetition_reason = f"keyword_overlap_{overlap:.0%}"
-                
-                # Update keyword tracking
-                query_keywords_seen.update(cq_keywords)
-            
-            if is_repetition:
-                consecutive_same_query += 1
-                self.logger.warning(f"Planner repeating query (count={consecutive_same_query}, reason={repetition_reason}) at iteration {count}")
-                tracer.record("warn", "query repetition detected", iteration=count, repetition_count=consecutive_same_query, reason=repetition_reason, query=current_queries[0][:100])
-                
-                # Force stop after 1 repetition (stricter than before)
-                if consecutive_same_query >= 1:
-                    self.logger.warning(f"Planner detected loop after {consecutive_same_query} repetitions, forcing final output")
-                    tracer.record("warn", "detected query loop - stopping immediately", iteration=count)
-                    break  # Exit loop to force final JSON output
-            else:
-                consecutive_same_query = 0
-            
-            previous_queries.extend(current_queries)
-            
-            for tool_call in ai.tool_calls:
-                tool_name = tool_call["name"]
-                tool_call_id = tool_call["id"]
-                args = tool_call["args"]
-                if tool_name not in self.tools:
-                    raise ValueError(f"Tool {tool_name} not found in tools.")
-
-                result = self.tool_manager.execute_tool_sync(tool_name, args)
-                history.append(
-                    ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
-                )
-                # Token optimization: Trim history to prevent explosion
-                history = trim_history(history)
-                tracer.record(
-                    "tool_result",
-                    f"{tool_name} executed",
-                    args=args,
-                    result_preview=str(result)[:200],
-                )
-
-                ai = self.chain.invoke(
-                    {
-                        "id": state.id,
-                        "history": history,
-                        "difficulty": state.difficulty,
-                        "duration": str(state.duration),
-                    }
-                )
-            # CRITICAL FIX: Append the new AI message to history for the NEXT iteration
-            # This ensures the LLM knows what it just asked for and what tools it called
-            history.append(ai)
-            count += 1
-
-        # CRITICAL FIX: Force final JSON output after hitting max tool calls OR detecting loop
-        if count > MAX_TOOL_CALLS_PER_AGENT or (ai.tool_calls and len(ai.tool_calls) > 0):
-            tracer.record("warn", f"Forcing final output (count={count}, max={MAX_TOOL_CALLS_PER_AGENT})")
-            self.logger.warning(f"Planner forcing final output: count={count}/{MAX_TOOL_CALLS_PER_AGENT}")
+        # Since retrieval is done, LLM should NOT call tools
+        # If it does, force immediate JSON output
+        if ai.tool_calls and len(ai.tool_calls) > 0:
+            self.logger.warning(f"Planner called tools despite having retrieval context. Forcing JSON output.")
+            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON")
             
             # Add VERY explicit instruction to force JSON output with available context
             # Remove any tool call messages from history to prevent confusion
@@ -303,6 +243,29 @@ class PlannerAgent(BaseAgent):
             ]
             tracer.record("warn", "using fallback roadmap", num_items=len(course_roadmap))
             self.logger.warning(f"Generated fallback roadmap with {len(course_roadmap)} items")
+        
+        # CRITICAL: Validate each roadmap item has "description" field
+        for idx, item in enumerate(course_roadmap):
+            if not isinstance(item, dict):
+                self.logger.error(f"Roadmap item {idx} is not a dict: {item}")
+                raise ValueError(f"Roadmap item {idx} must be a dictionary")
+            
+            if "description" not in item or not item.get("description"):
+                self.logger.error(f"⚠️ ROADMAP ITEM {idx} MISSING DESCRIPTION!")
+                self.logger.error(f"   Title: {item.get('title', 'NO TITLE')}")
+                self.logger.error(f"   Item keys: {list(item.keys())}")
+                # Add a generic description as fallback
+                item["description"] = f"Chi tiết về {item.get('title', f'module {idx+1}')}"
+                self.logger.warning(f"   → Added fallback description: {item['description']}")
+        
+        # Log all descriptions for debugging
+        self.logger.info("=" * 60)
+        self.logger.info("📋 ROADMAP DESCRIPTIONS VALIDATION:")
+        for idx, item in enumerate(course_roadmap):
+            desc = item.get("description", "")
+            self.logger.info(f"  [{idx+1}] {item.get('title', 'NO TITLE')}")
+            self.logger.info(f"      → Description ({len(desc)} chars): {desc[:100]}...")
+        self.logger.info("=" * 60)
         
         # CRITICAL FIX: Validate roadmap length
         roadmap_len = len(course_roadmap)

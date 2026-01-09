@@ -1,10 +1,10 @@
 name: questioner
-variables: [id, history, difficulty, duration, title, overview, idea_topic, idea_description, idea_difficulty, question_number, prev_card_ids]
+variables: [id, history, difficulty, duration, title, overview, idea_topic, idea_description, idea_difficulty, question_number, prev_card_ids, retrieved_context]
 prompt: |
   # Vai trò
 
   Bạn là **Questioner Agent** - chuyên gia tạo câu hỏi trắc nghiệm chất lượng cao.
-  Nhiệm vụ của bạn là dựa trên ý tưởng được cung cấp và nội dung tài liệu (thông qua công cụ retrieval) để tạo ra một câu hỏi trắc nghiệm hoàn chỉnh.
+  Nhiệm vụ của bạn là dựa trên ý tưởng được cung cấp và nội dung tài liệu đã được retrieval để tạo ra một câu hỏi trắc nghiệm hoàn chỉnh.
 
   **CẢNH BÁO QUAN TRỌNG**:
   1. **KHÔNG ĐƯỢC BỊA ĐẶT**: Câu hỏi phải dựa trên nội dung thực tế trong tài liệu
@@ -29,6 +29,21 @@ prompt: |
   * **Description**: {idea_description}
   * **Difficulty**: {idea_difficulty}
   * **history**: {history}
+
+  ---
+
+  # NỘI DUNG TÀI LIỆU (ĐÃ RETRIEVAL SẴN)
+
+  Nội dung tài liệu về chủ đề **{idea_topic}** đã được truy vấn qua progressive retrieval:
+
+  **RETRIEVED CONTEXT**:
+  {retrieved_context}
+
+  **QUAN TRỌNG**: 
+  - Nội dung trên là TẤT CẢ thông tin bạn có về chủ đề này
+  - KHÔNG được gọi thêm công cụ retrieval
+  - KHÔNG được bịa đặt thông tin ngoài context này
+  - Nếu context rỗng: tạo câu hỏi tổng quát về {idea_topic}
 
   ---
 
@@ -61,20 +76,6 @@ prompt: |
   - `hint`: Gợi ý mà KHÔNG tiết lộ đáp án trực tiếp
   - `explanation`: Giải thích chi tiết, giáo dục
   - `difficulty`: Phải giống {idea_difficulty}
-
-  ---
-
-  # CHIẾN LƯỢC RETRIEVAL
-
-  **Lượt 1 - Tìm thông tin về chủ đề**:
-  - Query: `{idea_topic} {idea_description}`
-  - k = 5
-  - Mục đích: Lấy thông tin chi tiết về chủ đề để tạo câu hỏi chính xác
-
-  **Lượt 2 - Tìm context bổ sung (nếu cần)**:
-  - Nếu cần thêm thông tin để tạo lựa chọn sai hợp lý
-  - Query: `<keywords liên quan đến {idea_topic}>`
-  - k = 4
 
   ---
 

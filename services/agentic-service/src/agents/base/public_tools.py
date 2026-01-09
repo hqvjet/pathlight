@@ -9,6 +9,9 @@ import asyncio
 from infrastructure.clients import clients as shared_clients
 from config import config
 from schemas.agent_schemas import RetrievalArgs
+from core.logging import setup_logger
+
+logger = setup_logger(__name__)
 
 class RetrievalTool(BaseTool):
     """
@@ -49,28 +52,42 @@ class RetrievalTool(BaseTool):
         # Limit k to max 8 to prevent token explosion
         k = min(k, 8)
         
-        # Preferred: legacy-compatible KNN with post_filter by id (id is keyword per mapping)
+        # FIX: Filter first, then KNN on filtered results
         body_legacy = {
             "size": k,
             "query": {
-                "knn": {
-                    "documents.chunks.embedding": {
-                        "vector": embedding,
-                        "k": k
+                "bool": {
+                    "filter": {
+                        "term": {
+                            "id": id
+                        }
+                    },
+                    "must": {
+                        "knn": {
+                            "documents.chunks.embedding": {
+                                "vector": embedding,
+                                "k": 10000  # High k to search all filtered docs
+                            }
+                        }
                     }
                 }
             },
-            "post_filter": {"term": {"id": id}},
             "_source": [
                 "documents.chunks.chunk_text"
             ],
         }
-
+        
+        # Execute search with filter
         result = shared_clients.opensearch.search(
             index=config.OPENSEARCH_INDEX_NAME,
             body=body_legacy,
         )
         
+        total_hits = result.get("hits", {}).get("total", {}).get("value", 0)
+        
+        if total_hits == 0:
+            logger.warning(f"No chunks found for material_id={id}")
+
         # Extract ONLY text chunks to reduce tokens (10k → 2k)
         chunks = []
         for hit in result.get("hits", {}).get("hits", []):
@@ -87,6 +104,9 @@ class RetrievalTool(BaseTool):
         # Limit total characters to prevent token overflow
         MAX_CHARS = 6000  # ~1500 tokens
         combined = "\n\n---\n\n".join(chunks)
+        
+        logger.info(f"Retrieved {len(chunks)} chunks for query: {query[:60]}...")
+        
         if len(combined) > MAX_CHARS:
             combined = combined[:MAX_CHARS] + "\n\n[... truncated for token optimization ...]"
         

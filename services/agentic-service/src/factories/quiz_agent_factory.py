@@ -26,9 +26,10 @@ class QuizAgentFactory:
         tool_manager = ToolManager()
         
         self.orchestrator = QuizOrchestrator()
+        # QUALITY: Use GPT-4o for quiz planner to generate better quiz structure
         self.quiz_planner_agent = QuizPlannerAgent(
             name=QUIZ_PLANNER_AGENT_NAME,
-            foundation_model="gpt-4o-mini",
+            foundation_model="gpt-4o",
             prompt_manager=prompt_manager,
             llm_manager=llm_manager,
             tool_manager=tool_manager

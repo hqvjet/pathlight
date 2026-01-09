@@ -29,9 +29,10 @@ class CourseAgentFactory:
         tool_manager = ToolManager()
         
         self.orchestrator = Orchestrator()
+        # QUALITY FIX: Use GPT-4o for planner to generate better roadmaps
         self.planner_agent = PlannerAgent(
             name=PLANNER_AGENT_NAME, 
-            foundation_model="gpt-4o-mini", 
+            foundation_model="gpt-4o", 
             prompt_manager=prompt_manager,
             llm_manager=llm_manager,
             tool_manager=tool_manager

@@ -13,6 +13,8 @@ Schema (DynamoDB Item):
 - title_ready: bool
 - lessons_ready: bool
 - tests_ready: bool
+- vectorized: bool (true when content is indexed in vector DB)
+- final_ready: bool (true when entire course generation is completed)
 - title: string
 - description: string
 - roadmap_count: int
@@ -37,7 +39,8 @@ Usage:
 - status_tracker.mark_lessons_progress(course_id, have, planned)
 - status_tracker.mark_lessons_ready(course_id, count)
 - status_tracker.mark_tests_ready(course_id)
-- status_tracker.mark_completed(course_id)
+- status_tracker.mark_vectorized(course_id, ok=True)
+- status_tracker.mark_completed(course_id)  # Sets final_ready=True
 - status_tracker.mark_failed(course_id, error)
 """
 
@@ -59,6 +62,10 @@ def _calculate_progress_percentage(status: str, lessons_have: int = 0, lessons_t
     """Calculate progress percentage based on current status and lesson progress."""
     if status == "initializing":
         return 0
+    elif status == "vectorizing":
+        return 5
+    elif status == "vectorized":
+        return 10
     elif status == "planning":
         return 20
     elif status == "creating_lessons":
@@ -124,6 +131,8 @@ def start(course_id: str, user_id: str, strict: bool = True) -> None:
         "title_ready": False,
         "lessons_ready": False,
         "tests_ready": False,
+        "vectorized": False,  # Add vectorized boolean field
+        "final_ready": False,  # Add final_ready boolean field
         "start_timestamp": int(time.time()),
     }
     
@@ -234,6 +243,7 @@ def mark_completed(course_id: str) -> None:
             "current_step": "Hoàn thành",
             "current_step_detail": "Khóa học đã được tạo thành công!",
             "estimated_time_remaining_seconds": 0,
+            "final_ready": True,  # Add final_ready boolean field
             "end_timestamp": int(time.time()),
         },
     )
@@ -283,6 +293,8 @@ def start_quiz(quiz_id: str, user_id: str, strict: bool = True) -> None:
         "user_id": str(user_id),
         "plan_ready": False,
         "questions_ready": False,
+        "vectorized": False,  # Track if quiz content is indexed in vector DB
+        "final_ready": False,  # Track if entire quiz generation is completed
         "start_timestamp": int(time.time()),
     }
     
@@ -377,6 +389,7 @@ def mark_quiz_completed(quiz_id: str) -> None:
             "progress_percentage": 100,
             "current_step": "Hoàn thành",
             "current_step_detail": "Quiz đã được tạo thành công!",
+            "final_ready": True,  # Set final_ready when quiz is fully completed
             "end_timestamp": int(time.time()),
         },
         table_name=QUIZ_TRACKING_TABLE,
@@ -400,3 +413,12 @@ def mark_quiz_failed(quiz_id: str, error_message: str) -> None:
         pk_name="quiz_id",
     )
 
+
+def mark_quiz_vectorized(quiz_id: str, ok: bool = True) -> None:
+    """Mark that quiz content has been indexed in vector DB."""
+    update_item_strict(
+        quiz_id, 
+        {"vectorized": bool(ok)},
+        table_name=QUIZ_TRACKING_TABLE,
+        pk_name="quiz_id"
+    )
