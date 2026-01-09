@@ -132,7 +132,23 @@ BẠN VỪA NHẬN ĐƯỢC retrieval context phía trên.
         
         history: List = [SystemMessage(content=initial_prompt)]
 
-        ai: AIMessage = self.chain.invoke(
+        # CRITICAL FIX: Since we pre-loaded retrieval context,
+        # invoke LLM WITHOUT tools to prevent it from calling retrieval_tool again
+        # This forces LLM to use the pre-loaded context only
+        from langchain_openai import ChatOpenAI
+        from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
+        
+        no_tools_llm = ChatOpenAI(
+            model_name=self.foundation_model,
+            openai_api_key=self.llm.openai_api_key,
+            temperature=0.3,
+            request_timeout=LLM_REQUEST_TIMEOUT,
+            max_tokens=LLM_MAX_TOKENS_PLANNER,
+            model_kwargs={"response_format": {"type": "json_object"}}
+        )
+        no_tools_chain = self.build_chain(no_tools_llm)
+        
+        ai: AIMessage = no_tools_chain.invoke(
             {
                 "id": state.id,
                 "history": history,
@@ -141,66 +157,13 @@ BẠN VỪA NHẬN ĐƯỢC retrieval context phía trên.
             }
         )
         history.append(ai)
-        tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
-
-        count = 1
+        tracer.record("llm", "response with pre-loaded context", content_preview=str(ai.content)[:200])
         
-        # Since retrieval is done, LLM should NOT call tools
-        # If it does, force immediate JSON output
+        # Since LLM was invoked without tools, ai.tool_calls should be empty
+        # If somehow it still has tool calls (shouldn't happen), log warning
         if ai.tool_calls and len(ai.tool_calls) > 0:
-            self.logger.warning(f"Planner called tools despite having retrieval context. Forcing JSON output.")
-            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON")
-            
-            # Add VERY explicit instruction to force JSON output with available context
-            # Remove any tool call messages from history to prevent confusion
-            force_instruction = SystemMessage(
-                content=(
-                    "=== CRITICAL INSTRUCTION - MUST FOLLOW ==="
-                    "\n\nSTOP using tools NOW. You have gathered enough context.\n\n"
-                    "REQUIRED ACTION: Generate the final JSON output RIGHT NOW based on the information you have retrieved.\n\n"
-                    "If the context is not detailed enough, create a GENERAL roadmap based on what you know.\n\n"
-                    "You MUST output ONLY valid JSON in this exact format:\n"
-                    "{{\n"
-                    '  "course_name": "Course title from document or general topic",\n'
-                    '  "course_description": "2-3 sentence description",\n'
-                    '  "course_roadmap": [\n'
-                    '    {{"title": "Module 1", "description": "Description"}},\n'
-                    '    {{"title": "Module 2", "description": "Description"}},\n'
-                    '    {{"title": "Module 3", "description": "Description"}}\n'
-                    "  ]\n"
-                    "}}\n\n"
-                    "IMPORTANT: course_roadmap MUST contain at least 2-3 items.\n"
-                    "DO NOT call any more tools. DO NOT add any text outside the JSON."
-                )
-            )
-            history.append(force_instruction)
-            
-            # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
-            # JSON mode is still enabled, so output will be JSON
-            from langchain_openai import ChatOpenAI
-            from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
-            final_llm = ChatOpenAI(
-                model_name=self.foundation_model,
-                openai_api_key=self.llm.openai_api_key,
-                temperature=0.3,
-                request_timeout=LLM_REQUEST_TIMEOUT,
-                max_tokens=LLM_MAX_TOKENS_PLANNER,
-                model_kwargs={"response_format": {"type": "json_object"}}
-            )
-            final_chain = self.build_chain(final_llm)
-            
-            try:
-                ai = final_chain.invoke({
-                    "id": state.id,
-                    "history": history,
-                    "difficulty": state.difficulty,
-                    "duration": str(state.duration),
-                })
-            except Exception as e:
-                tracer.record("error", "final JSON invoke failed", error=str(e))
-                raise ValueError(f"Planner: Failed to get final JSON output - {str(e)}")
-
-        tracer.record("llm", "final response", content_preview=str(ai.content)[:200])
+            self.logger.error(f"UNEXPECTED: LLM called tools despite no-tools invocation!")
+            tracer.record("error", "unexpected tool calls from no-tools LLM")
         
         # CRITICAL FIX: Validate content before parsing
         if not ai.content or not ai.content.strip():
