@@ -56,34 +56,42 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
     if table is None:
         return None
     try:
-        resp = table.get_item(Key={"course_id": course_id})
+        resp = table.get_item(Key={"course_id": course_id}, ConsistentRead=True)
         item = resp.get("Item")
         if not item:
             return None
         
-        # Extract status fields
-        vectorization_status = "done" if bool(item.get("vectorized", False)) else "pending"
-        planning_status = "done" if bool(item.get("title_ready", False)) else "pending"
-        lessons_status = "done" if bool(item.get("lessons_ready", False)) else "pending"
-        tests_status = "done" if bool(item.get("tests_ready", False)) else "pending"
+        # Extract status fields - read directly from new schema
+        vectorization_status = item.get("vectorization_status", "pending")
+        planning_status = item.get("planning_status", "pending")
+        lessons_status = item.get("lessons_status", "pending")
+        tests_status = item.get("tests_status", "pending")
         
-        # Calculate overall status
-        all_done = (
-            vectorization_status == "done" and
-            planning_status == "done" and
-            lessons_status == "done" and
-            tests_status == "done"
-        )
-        overall_status = "done" if all_done else "processing"
-        if item.get("error_message"):
-            overall_status = "error"
+        # If tests are done, vectorization must be done
+        if tests_status == "done":
+            vectorization_status = "done"
+        
+        # Read overall_status directly from DynamoDB if available
+        overall_status = item.get("overall_status")
+        if not overall_status:
+            # Fallback: calculate from individual statuses
+            all_done = (
+                vectorization_status == "done" and
+                planning_status == "done" and
+                lessons_status == "done" and
+                tests_status == "done"
+            )
+            overall_status = "done" if all_done else "processing"
+            if item.get("error_message"):
+                overall_status = "error"
         
         # Build lessons list
-        lessons_list = []
-        lessons_completed = 0
-        lessons_total = item.get("lessons_count") or item.get("roadmap_count") or 0
+        lessons_list = item.get("lessons_list", [])
+        lessons_completed = item.get("lessons_completed", 0)
+        lessons_total = item.get("lessons_total") or item.get("roadmap_count") or 0
         
-        if item.get("lessons_data"):
+        # Fallback: calculate from lessons_data if lessons_list is empty
+        if not lessons_list and item.get("lessons_data"):
             for lesson in item.get("lessons_data", []):
                 lessons_list.append({
                     "id": lesson.get("id", ""),
@@ -91,8 +99,8 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
                 })
                 if lesson.get("completed"):
                     lessons_completed += 1
-        else:
-            lessons_completed = lessons_total if lessons_status == "done" else 0
+        elif not lessons_completed and lessons_status == "done":
+            lessons_completed = lessons_total
         
         return {
             "overall_status": overall_status,
@@ -102,8 +110,8 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
             "vectorization_chunks": item.get("vectorization_chunks", 0),
             
             "planning_status": planning_status,
-            "planning_course_title": item.get("title", ""),
-            "planning_roadmap_count": item.get("roadmap_count", 0),
+            "planning_course_title": item.get("planning_course_title") or item.get("title", ""),
+            "planning_roadmap_count": item.get("planning_roadmap_count") or item.get("roadmap_count", 0),
             
             "lessons_status": lessons_status,
             "lessons_completed": lessons_completed,
@@ -111,8 +119,8 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
             "lessons_list": lessons_list,
             
             "tests_status": tests_status,
-            "tests_completed": lessons_total if tests_status == "done" else 0,
-            "tests_total": lessons_total,
+            "tests_completed": item.get("tests_completed") or (lessons_total if tests_status == "done" else 0),
+            "tests_total": item.get("tests_total") or lessons_total,
             
             "start_timestamp": item.get("start_timestamp"),
             "updated_at": item.get("updated_at"),
@@ -150,29 +158,37 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
         # Normalize a subset of fields for frontend
         normalized: List[Dict[str, Any]] = []
         for it in items:
-            # Extract status fields
-            vectorization_status = "done" if bool(it.get("vectorized", False)) else "pending"
-            planning_status = "done" if bool(it.get("title_ready", False)) else "pending"
-            lessons_status = "done" if bool(it.get("lessons_ready", False)) else "pending"
-            tests_status = "done" if bool(it.get("tests_ready", False)) else "pending"
+            # Extract status fields - read directly from new schema
+            vectorization_status = it.get("vectorization_status", "pending")
+            planning_status = it.get("planning_status", "pending")
+            lessons_status = it.get("lessons_status", "pending")
+            tests_status = it.get("tests_status", "pending")
             
-            # Calculate overall status
-            all_done = (
-                vectorization_status == "done" and
-                planning_status == "done" and
-                lessons_status == "done" and
-                tests_status == "done"
-            )
-            overall_status = "done" if all_done else "processing"
-            if it.get("error_message"):
-                overall_status = "error"
+            # If tests are done, vectorization must be done
+            if tests_status == "done":
+                vectorization_status = "done"
+            
+            # Read overall_status directly from DynamoDB if available
+            overall_status = it.get("overall_status")
+            if not overall_status:
+                # Fallback: calculate from individual statuses
+                all_done = (
+                    vectorization_status == "done" and
+                    planning_status == "done" and
+                    lessons_status == "done" and
+                    tests_status == "done"
+                )
+                overall_status = "done" if all_done else "processing"
+                if it.get("error_message"):
+                    overall_status = "error"
             
             # Build lessons list
-            lessons_list = []
-            lessons_completed = 0
-            lessons_total = it.get("lessons_count") or it.get("roadmap_count") or 0
+            lessons_list = it.get("lessons_list", [])
+            lessons_completed = it.get("lessons_completed", 0)
+            lessons_total = it.get("lessons_total") or it.get("roadmap_count") or 0
             
-            if it.get("lessons_data"):
+            # Fallback: calculate from lessons_data if lessons_list is empty
+            if not lessons_list and it.get("lessons_data"):
                 for lesson in it.get("lessons_data", []):
                     lessons_list.append({
                         "id": lesson.get("id", ""),
@@ -180,8 +196,8 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                     })
                     if lesson.get("completed"):
                         lessons_completed += 1
-            else:
-                lessons_completed = lessons_total if lessons_status == "done" else 0
+            elif not lessons_completed and lessons_status == "done":
+                lessons_completed = lessons_total
             
             normalized.append({
                 "course_id": it.get("course_id"),
@@ -193,8 +209,8 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 "vectorization_chunks": it.get("vectorization_chunks", 0),
                 
                 "planning_status": planning_status,
-                "planning_course_title": it.get("title", ""),
-                "planning_roadmap_count": it.get("roadmap_count", 0),
+                "planning_course_title": it.get("planning_course_title") or it.get("title", ""),
+                "planning_roadmap_count": it.get("planning_roadmap_count") or it.get("roadmap_count", 0),
                 
                 "lessons_status": lessons_status,
                 "lessons_completed": lessons_completed,
@@ -202,8 +218,8 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 "lessons_list": lessons_list,
                 
                 "tests_status": tests_status,
-                "tests_completed": lessons_total if tests_status == "done" else 0,
-                "tests_total": lessons_total,
+                "tests_completed": it.get("tests_completed") or (lessons_total if tests_status == "done" else 0),
+                "tests_total": it.get("tests_total") or lessons_total,
                 
                 "start_timestamp": it.get("start_timestamp"),
                 "updated_at": it.get("updated_at"),

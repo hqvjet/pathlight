@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { CourseDraftState } from '@/types/create-course';
 import { AgenticCourseResponse, AgenticCreateCourseResponse } from '@/lib/api/agentic';
 import { courseApi } from '@/lib/api/course';
-import { CheckCircle, Clock, Zap, FileText, Hash } from 'lucide-react';
+import { CheckCircle, Clock, Zap, FileText, Hash, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SuccessStepProps {
   draft: CourseDraftState;
@@ -17,70 +17,75 @@ interface SuccessStepProps {
 
 type GenerationStatus = {
   course_id: string;
+  user_id?: string;
+  overall_status?: 'processing' | 'done' | 'error';
+  error_message?: string;
+  
   title?: string;
   description?: string;
-  progress?: string;
-  title_ready?: boolean;
-  lessons_ready?: boolean;
-  final_ready?: boolean;
-  vectorized?: boolean;
-  lessons_count?: number;
-  lessons_planned?: number;
-  roadmap_count?: number;
-  final_count?: number;
+  vectorization_status?: string;
+  vectorization_chunks?: number;
+  
+  planning_status?: string;
+  planning_course_title?: string;
+  planning_roadmap_count?: number;
+  
+  lessons_status?: string;
+  lessons_completed?: number;
+  lessons_total?: number;
+  lessons_list?: Array<{ id: string; title: string }>;
+  
+  tests_status?: string;
+  tests_completed?: number;
+  tests_total?: number;
+  
+  start_timestamp?: number;
   updated_at?: string;
+  last_updated?: string;
+  end_timestamp?: number;
 };
 
 function getGenerationStatus(status: GenerationStatus | null) {
-  // Always show 4 steps with default values, update when API returns
   const steps = [
     { 
-      key: 'vectorized', 
+      key: 'vectorization', 
       label: 'Phân tích tài liệu', 
-      done: status?.vectorized || false,
-      description: 'Vectorize và index tài liệu vào OpenSearch',
-      count: null,
+      done: status?.vectorization_status === 'done',
+      description: `Vectorize và index tài liệu vào OpenSearch${status?.vectorization_chunks ? ` (${status.vectorization_chunks} chunks)` : ''}`,
+      count: status?.vectorization_chunks,
       icon: FileText
     },
     { 
-      key: 'title_ready', 
-      label: 'Tạo kế hoạch', 
-      done: status?.title_ready || false,
-      description: 'Sinh tiêu đề, mô tả và roadmap học tập',
-      count: status?.roadmap_count,
+      key: 'planning', 
+      label: 'Tạo kế hoạch khóa học', 
+      done: status?.planning_status === 'done',
+      description: `Sinh tiêu đề, mô tả và roadmap học tập${status?.planning_roadmap_count ? ` (${status.planning_roadmap_count} modules)` : ''}`,
+      count: status?.planning_roadmap_count,
       icon: Zap
     },
     { 
-      key: 'lesson_planned', 
-      label: 'Lập kế hoạch bài học', 
-      done: (status?.title_ready && status?.lessons_planned) || false,
-      description: `Xác định số lượng bài học cần tạo${status?.lessons_planned ? ` (${status.lessons_planned} bài)` : ''}`,
-      count: status?.lessons_planned,
-      icon: Clock
+      key: 'lessons', 
+      label: 'Tạo nội dung bài học', 
+      done: status?.lessons_status === 'done',
+      description: `Sinh nội dung chi tiết cho từng bài học${status?.lessons_completed && status?.lessons_total ? ` (${status.lessons_completed}/${status.lessons_total} bài)` : ''}`,
+      count: status?.lessons_completed && status?.lessons_total ? `${status.lessons_completed}/${status.lessons_total}` : status?.lessons_total,
+      icon: CheckCircle
     },
     { 
-      key: 'lessons_ready', 
-      label: 'Tạo nội dung bài học', 
-      done: status?.lessons_ready || false,
-      description: `Sinh nội dung chi tiết cho từng bài học${status?.lessons_count ? ` (${status.lessons_count}/${status.lessons_planned || 0} bài)` : ''}`,
-      count: status?.lessons_count,
-      icon: CheckCircle
+      key: 'tests', 
+      label: 'Tạo câu hỏi kiểm tra', 
+      done: status?.tests_status === 'done',
+      description: `Sinh câu hỏi trắc nghiệm cho từng bài học${status?.tests_completed && status?.tests_total ? ` (${status.tests_completed}/${status.tests_total} bài)` : ''}`,
+      count: status?.tests_completed && status?.tests_total ? `${status.tests_completed}/${status.tests_total}` : status?.tests_total,
+      icon: Clock
     },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;
-  const isComplete = completedSteps === steps.length;
+  const isComplete = status?.overall_status === 'done';
   const currentStep = steps.find(s => !s.done);
   const progressPercent = (completedSteps / steps.length) * 100;
-  
-  let overallStatus: 'done' | 'processing' | 'error' = 'processing';
-  if (status) {
-    if (isComplete || status.final_ready === true) {
-      overallStatus = 'done';
-    } else if (status.final_ready === false && status.progress?.includes('error')) {
-      overallStatus = 'error';
-    }
-  }
+  const overallStatus = status?.overall_status || 'processing';
   
   return { steps, completedSteps, isComplete, currentStep, progressPercent, overallStatus };
 }
@@ -101,6 +106,7 @@ const isCourseResponse = (value: AgenticCreateCourseResponse | null): value is A
 export function SuccessStep({ draft, result, onRestart, onGoToCourses }: SuccessStepProps) {
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [isLessonsExpanded, setIsLessonsExpanded] = useState(false);
   
   const lessons = useMemo(() => (isCourseResponse(result) ? result.course_lessons : []), [result]);
   const hasResult = isCourseResponse(result);
@@ -218,9 +224,9 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
           </div>
 
           {/* Course Info - only show if loaded */}
-          {generationStatus?.title && (
+          {(generationStatus?.planning_course_title || generationStatus?.title) && (
             <div className="space-y-2">
-              <h4 className="font-bold text-gray-900">{generationStatus.title}</h4>
+              <h4 className="font-bold text-gray-900">{generationStatus.planning_course_title || generationStatus.title}</h4>
               {generationStatus.description && (
                 <p className="text-sm text-gray-600">{generationStatus.description}</p>
               )}
@@ -232,6 +238,19 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
               <span>Đang tải thông tin khóa học...</span>
+            </div>
+          )}
+
+          {/* Error state */}
+          {status.overallStatus === 'error' && generationStatus?.error_message && (
+            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="w-5 h-5 text-red-600" />
+                <h4 className="font-semibold text-red-800">Lỗi xảy ra</h4>
+              </div>
+              <p className="text-red-700 font-medium">Quá trình tạo khóa học gặp sự cố</p>
+              <p className="text-sm text-red-600 mt-2 italic">&ldquo;{generationStatus.error_message}&rdquo;</p>
+              <p className="text-sm text-red-600 mt-1">Vui lòng thử lại hoặc liên hệ hỗ trợ</p>
             </div>
           )}
 
@@ -251,6 +270,9 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
           <div className="space-y-3">
             {status.steps.map((step) => {
               const Icon = step.icon;
+              const isLessonsStep = step.key === 'lessons';
+              const hasLessons = isLessonsStep && generationStatus?.lessons_list && generationStatus.lessons_list.length > 0;
+              
               return (
                 <div 
                   key={step.key}
@@ -291,6 +313,49 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
                       )}
                     </div>
                     <p className="text-xs text-gray-600 mt-1">{step.description}</p>
+                    
+                    {/* Lessons List Expandable Section */}
+                    {hasLessons && (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => setIsLessonsExpanded(!isLessonsExpanded)}
+                          className="flex items-center gap-2 text-sm font-medium text-emerald-700 hover:text-emerald-800 transition-colors"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>
+                            Xem danh sách bài học ({generationStatus.lessons_list?.length} bài)
+                          </span>
+                          {isLessonsExpanded ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </button>
+                        
+                        {isLessonsExpanded && (
+                          <div className="mt-3 space-y-2 pl-2 border-l-2 border-emerald-300">
+                            {generationStatus.lessons_list?.map((lesson, idx) => (
+                              <div
+                                key={lesson.id}
+                                className="flex items-start gap-2 p-2 bg-white rounded border border-emerald-100 hover:border-emerald-200 transition-colors"
+                              >
+                                <div className="flex-shrink-0 w-6 h-6 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                                  {idx + 1}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                                    {lesson.title}
+                                  </p>
+                                  <p className="text-xs text-gray-500 font-mono mt-0.5 truncate" title={lesson.id}>
+                                    {lesson.id}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex-shrink-0">
                     {step.done ? (
@@ -316,24 +381,24 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
                   {courseId}
                 </code>
               </div>
-              {generationStatus.roadmap_count && (
+              {generationStatus.planning_roadmap_count && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-600">Roadmap:</span>
-                  <span className="font-medium">{generationStatus.roadmap_count} bước</span>
+                  <span className="font-medium">{generationStatus.planning_roadmap_count} modules</span>
                 </div>
               )}
-              {generationStatus.lessons_planned && (
+              {generationStatus.lessons_total && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-600">Số bài học:</span>
                   <span className="font-medium text-orange-600">
-                    {generationStatus.lessons_count || 0}/{generationStatus.lessons_planned} bài
+                    {generationStatus.lessons_completed || 0}/{generationStatus.lessons_total} bài
                   </span>
                 </div>
               )}
-              {generationStatus.final_count && (
+              {generationStatus.tests_total && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-600">Tổng nội dung:</span>
-                  <span className="font-medium">{generationStatus.final_count} items</span>
+                  <span className="text-gray-600">Câu hỏi kiểm tra:</span>
+                  <span className="font-medium text-purple-600">{generationStatus.tests_total} bài</span>
                 </div>
               )}
             </div>
