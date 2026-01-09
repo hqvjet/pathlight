@@ -144,7 +144,8 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
     } else {
       setIsPolling(false);
     }
-  }, [courseId, status.overallStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, status.overallStatus]); // fetchGenerationStatus intentionally omitted to prevent re-creation loop
 
 
   const renderContent = (content: string) => {

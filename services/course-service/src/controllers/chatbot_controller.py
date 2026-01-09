@@ -62,8 +62,8 @@ class ChatbotController:
                     "error_message": {"S": ""},
                 }
                 
-                # Add context_chunks as empty list
-                item["context_chunks"] = {"L": []}
+                # Add context_chunks as empty list in DynamoDB attribute value format
+                item["context_chunks"] = {"L": []}  # type: ignore
                 
                 print(f"Creating placeholder record for chat_id: {chat_id} in table: {table_name}")
                 dynamodb.put_item(

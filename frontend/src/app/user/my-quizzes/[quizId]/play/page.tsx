@@ -227,7 +227,8 @@ export default function QuizPlayPage({ params }: PageProps) {
     };
     load();
     return () => { cancelled = true; };
-  }, [quizId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizId]); // answerDisplayMode intentionally omitted
 
   const handleTimeUp = useCallback(() => {
     // Prevent duplicate execution
@@ -269,7 +270,8 @@ export default function QuizPlayPage({ params }: PageProps) {
       // Reset flag after transition
       isProcessingTimeout.current = false;
     }, 1500);
-  }, [quiz, currentIndex, answers, timePerQuestion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz, currentIndex, answers, timePerQuestion]); // handleSubmit intentionally omitted to avoid circular dependency
 
   // Timer countdown
   useEffect(() => {

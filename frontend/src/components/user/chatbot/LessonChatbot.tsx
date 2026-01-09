@@ -127,10 +127,13 @@ export default function LessonChatbot({ lessonId, courseId }: ChatbotProps) {
           setPollStartTime(null);
         }
         // For 202 (processing) or 404 (not yet created), continue polling
-      } catch (error: any) {
+      } catch (error: unknown) {
         // If 404, treat as still processing (Lambda hasn't created record yet)
-        if (error?.response?.status === 404) {
-          return; // Continue polling
+        if (error && typeof error === 'object' && 'response' in error) {
+          const err = error as { response?: { status?: number } };
+          if (err.response?.status === 404) {
+            return; // Continue polling
+          }
         }
         console.error('Error polling answer:', error);
         setPendingChatId(null);

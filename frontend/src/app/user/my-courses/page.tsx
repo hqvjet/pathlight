@@ -175,7 +175,8 @@ function MyCoursesContent() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated]); // Removed selectedId to prevent infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated]); // selectedId intentionally omitted to prevent infinite loop
 
   // Load recommended courses immediately on mount
   useEffect(() => {
