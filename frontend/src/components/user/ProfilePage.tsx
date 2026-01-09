@@ -193,20 +193,20 @@ export default function ProfilePage() {
   return (
     <>
       <div className="min-h-screen bg-[#f5f7fb]">
-        <div className="max-w-[1330px] mx-auto px-3 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12">
-          <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-4 sm:p-6 md:p-8 lg:p-10">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <div className="max-w-[1330px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-12">
+          <div className="bg-white/90 backdrop-blur rounded-xl sm:rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-3 sm:p-4 md:p-6 lg:p-8">
+            <div className="flex flex-col gap-2 sm:gap-3 mb-4 sm:mb-6">
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-[26px] font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
+                <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900 leading-tight">Thông Tin Hồ Sơ</h1>
               </div>
             </div>
 
           {user && (
-            <div className="mb-6 sm:mb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3 sm:gap-4">
+            <div className="mb-4 sm:mb-6 md:mb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3 sm:gap-4">
               {/* Avatar section - shows first on mobile */}
               <div className="w-full lg:hidden flex justify-center">
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6 flex flex-col items-center gap-3 sm:gap-4 w-full max-w-[280px]">
-                  <div className="w-full aspect-[1/1.02] min-h-[200px] sm:min-h-[240px] rounded-lg bg-gray-50/60 border border-dashed border-gray-200 relative">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4 md:p-6 flex flex-col items-center gap-3 sm:gap-4 w-full max-w-[280px]">
+                  <div className="w-full aspect-[1/1.02] min-h-[180px] sm:min-h-[200px] md:min-h-[240px] rounded-lg bg-gray-50/60 border border-dashed border-gray-200 relative">
                     <ProfileAvatar user={user} uploading={uploading} avatarLoading={avatarLoading} avatarKey={avatarKey} onUpload={uploadAvatar} />
                     {!user && (
                       <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">Đang tải ảnh...</div>
@@ -221,35 +221,36 @@ export default function ProfilePage() {
               </div>
 
               {/* Stats card */}
-              <div className="p-4 sm:p-5 md:p-6 rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm text-gray-900 lg:col-span-1">
+              <div className="p-3 sm:p-4 md:p-5 lg:p-6 rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm text-gray-900 lg:col-span-1">
                 <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
                   <div>
-                    <p className="text-base sm:text-lg font-semibold text-gray-900">Hành trình của bạn</p>
+                    <p className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Hành trình của bạn</p>
                   </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-gray-700">
-                    <div className="px-2 sm:px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Rank #{user.rank ?? '—'}</div>
-                    <div className="px-2 sm:px-3 py-1 rounded-full bg-gray-100 border border-gray-200">Lv {user.level || 1}</div>
+                  <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 text-xs sm:text-sm font-semibold text-gray-700">
+                    <div className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full bg-gray-100 border border-gray-200 text-[10px] sm:text-xs">Rank #{user.rank ?? '—'}</div>
+                    <div className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full bg-gray-100 border border-gray-200 text-[10px] sm:text-xs">Lv {user.level || 1}</div>
                   </div>
                 </div>
-                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                <div className="h-2.5 sm:h-3 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                   <div className="h-full bg-orange-500" style={{ width: `${expPercent}%` }} />
                 </div>
-                <div className="mt-2 flex justify-between text-xs text-gray-600">
+                <div className="mt-1.5 sm:mt-2 flex justify-between text-[10px] sm:text-xs text-gray-600">
                   <span>{currentExp} / {requireExp || 0} EXP</span>
-                  <span>Còn {remainingExp} EXP lên Lv {nextLevelLabel}</span>
+                  <span className="hidden sm:inline">Còn {remainingExp} EXP lên Lv {nextLevelLabel}</span>
+                  <span className="sm:hidden">{remainingExp} EXP</span>
                 </div>
-                <div className="mt-3 sm:mt-4 grid grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm text-gray-800">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <div className="text-[11px] text-gray-500">Khóa học</div>
-                    <div className="font-semibold text-gray-900">{courseCount}</div>
+                <div className="mt-3 sm:mt-4 grid grid-cols-3 gap-1.5 sm:gap-2 md:gap-3 text-xs sm:text-sm text-gray-800">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div className="text-[10px] sm:text-[11px] text-gray-500">Khóa học</div>
+                    <div className="font-semibold text-gray-900 text-xs sm:text-sm">{courseCount}</div>
                   </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <div className="text-[11px] text-gray-500">Bài học</div>
-                    <div className="font-semibold text-gray-900">{lessonCount}</div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div className="text-[10px] sm:text-[11px] text-gray-500">Bài học</div>
+                    <div className="font-semibold text-gray-900 text-xs sm:text-sm">{lessonCount}</div>
                   </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <div className="text-[11px] text-gray-500">Khóa đã hoàn thành</div>
-                    <div className="font-semibold text-gray-900">{completedCourses}</div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div className="text-[10px] sm:text-[11px] text-gray-500 leading-tight">Khóa đã hoàn thành</div>
+                    <div className="font-semibold text-gray-900 text-xs sm:text-sm">{completedCourses}</div>
                   </div>
                 </div>
 

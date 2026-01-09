@@ -76,6 +76,7 @@ def fetch_generation_status(quiz_id: str) -> Optional[Dict[str, Any]]:
             return None
         
         # Check both old and new field names for compatibility
+        vectorized = bool(item.get("vectorized", False))
         plan_ready = bool(item.get("plan_ready", False) or item.get("title_ready", False))
         questions_ready = bool(item.get("questions_ready", False) or item.get("cards_ready", False))
         
@@ -89,6 +90,7 @@ def fetch_generation_status(quiz_id: str) -> Optional[Dict[str, Any]]:
             "progress_percentage": progress_percentage,
             "current_step": item.get("current_step"),
             "current_step_detail": item.get("current_step_detail"),
+            "vectorized": vectorized,
             "plan_ready": plan_ready,
             "questions_ready": questions_ready,
             "title": item.get("title"),
@@ -142,6 +144,7 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
         # Normalize fields for frontend (all items are quizzes in this table)
         normalized: List[Dict[str, Any]] = []
         for it in items:
+            vectorized = bool(it.get("vectorized", False))
             plan_ready = bool(it.get("plan_ready", False) or it.get("title_ready", False))
             questions_ready = bool(it.get("questions_ready", False) or it.get("cards_ready", False))
             
@@ -152,6 +155,7 @@ def fetch_user_quiz_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 "progress_percentage": int(it.get("progress_percentage", 0)),
                 "current_step": it.get("current_step"),
                 "current_step_detail": it.get("current_step_detail"),
+                "vectorized": vectorized,
                 "plan_ready": plan_ready,
                 "questions_ready": questions_ready,
                 "title": it.get("title"),

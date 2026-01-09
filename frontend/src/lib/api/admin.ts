@@ -102,7 +102,7 @@ export const adminApi = {
     apiClient.delete<{ status: number; message?: string }>(`/course/admin/courses/${courseId}`),
   
   toggleCourseVisibility: (courseId: string, publish: boolean) =>
-    apiClient.put<{ status: number; message?: string }>(`/course/admin/courses/${courseId}/visibility`, { publish }),
+    apiClient.put<{ status: number; message?: string }>(`/course/admin/courses/${courseId}/visibility`, { course_id: courseId, is_public: publish }),
 
   // Quiz management
   listAllQuizzes: (params?: { page?: number; limit?: number; search?: string }) => {
@@ -120,7 +120,7 @@ export const adminApi = {
     apiClient.delete<{ status: number; message?: string }>(`/quiz/admin/quizzes/${quizId}`),
   
   toggleQuizVisibility: (quizId: string, publish: boolean) =>
-    apiClient.put<{ status: number; message?: string }>(`/quiz/admin/quizzes/${quizId}/visibility`, { publish }),
+    apiClient.put<{ status: number; message?: string }>(`/quiz/admin/quizzes/${quizId}/visibility`, { quiz_id: quizId, is_public: publish }),
 
   // System monitoring
   getCosts: () =>

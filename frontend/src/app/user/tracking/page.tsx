@@ -73,6 +73,7 @@ function TrackingInner() {
           progress_percentage: typeof r.progress_percentage === 'number' ? r.progress_percentage : undefined,
           current_step: r.current_step ? String(r.current_step) : undefined,
           current_step_detail: r.current_step_detail ? String(r.current_step_detail) : undefined,
+          vectorized: r.vectorized !== undefined ? Boolean(r.vectorized) : undefined,
           plan_ready: r.plan_ready !== undefined ? Boolean(r.plan_ready) : undefined,
           questions_ready: r.questions_ready !== undefined ? Boolean(r.questions_ready) : undefined,
           title: r.title ? String(r.title) : undefined,
@@ -132,41 +133,41 @@ function TrackingInner() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="space-y-1 sm:space-y-2">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-purple-500" />
-            <span className="text-sm font-medium text-purple-600 uppercase tracking-wide">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" />
+            <span className="text-xs sm:text-sm font-medium text-purple-600 uppercase tracking-wide">
               Generation Tracking
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Theo dõi tiến trình tạo nội dung</h1>
-          <p className="text-gray-600 max-w-2xl">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Theo dõi tiến trình tạo nội dung</h1>
+          <p className="text-xs sm:text-sm md:text-base text-gray-600">
             Theo dõi chi tiết quá trình AI tạo khóa học và quiz tự động của bạn.
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <Button 
             variant="outline" 
             onClick={handleRefresh} 
             disabled={loading}
-            className="border-gray-200"
+            className="border-gray-200 text-sm w-full sm:w-auto"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
           </Button>
           {activeTab === 'courses' ? (
             <>
-              <Link href="/user/my-courses">
-                <Button variant="outline" className="border-gray-200">
+              <Link href="/user/my-courses" className="w-full sm:w-auto">
+                <Button variant="outline" className="border-gray-200 text-sm w-full">
                   Khóa học của tôi
                 </Button>
               </Link>
-              <Link href="/user/create-course">
-                <Button className="bg-orange-500 hover:bg-orange-600">
+              <Link href="/user/create-course" className="w-full sm:w-auto">
+                <Button className="bg-orange-500 hover:bg-orange-600 text-sm w-full">
                   <Plus className="w-4 h-4 mr-2" />
                   Tạo khóa học mới
                 </Button>
@@ -174,13 +175,13 @@ function TrackingInner() {
             </>
           ) : (
             <>
-              <Link href="/user/my-quizzes">
-                <Button variant="outline" className="border-gray-200">
+              <Link href="/user/my-quizzes" className="w-full sm:w-auto">
+                <Button variant="outline" className="border-gray-200 text-sm w-full">
                   Quiz của tôi
                 </Button>
               </Link>
-              <Link href="/user/create-quiz">
-                <Button className="bg-green-500 hover:bg-green-600">
+              <Link href="/user/create-quiz" className="w-full sm:w-auto">
+                <Button className="bg-green-500 hover:bg-green-600 text-sm w-full">
                   <Plus className="w-4 h-4 mr-2" />
                   Tạo Quiz mới
                 </Button>
@@ -191,10 +192,10 @@ function TrackingInner() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-200">
+      <div className="flex items-center gap-1 sm:gap-2 border-b border-gray-200 overflow-x-auto">
         <button
           onClick={() => handleTabChange('courses')}
-          className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 font-medium transition-all text-sm sm:text-base whitespace-nowrap ${
             activeTab === 'courses'
               ? 'text-orange-600 border-b-2 border-orange-600'
               : 'text-gray-600 hover:text-gray-900'

@@ -12,15 +12,21 @@ export interface QuizGenerationCardProps {
 function getQuizStatus(item: QuizGenerationItem) {
   const steps = [
     { 
-      key: 'plan', 
+      key: 'vectorized', 
+      label: 'Vectorized', 
+      done: Boolean(item.vectorized),
+      count: null
+    },
+    { 
+      key: 'plan_ready', 
       label: 'Plan', 
-      done: item.plan_ready ?? item.title_ready ?? false,
+      done: Boolean(item.plan_ready),
       count: item.ideas_count
     },
     { 
-      key: 'questions', 
+      key: 'questions_ready', 
       label: 'Questions', 
-      done: item.questions_ready ?? item.cards_ready ?? false,
+      done: Boolean(item.questions_ready),
       count: item.questions_count
     },
   ];
@@ -31,7 +37,7 @@ function getQuizStatus(item: QuizGenerationItem) {
   const progressPercent = item.progress_percentage ?? (completedSteps / steps.length) * 100;
   
   let overallStatus: 'done' | 'processing' | 'error' = 'processing';
-  if (isComplete) {
+  if (isComplete || item.final_ready === true) {
     overallStatus = 'done';
   } else if (item.status === 'error' || item.status === 'failed') {
     overallStatus = 'error';
@@ -89,15 +95,15 @@ export default function QuizGenerationCard({ item, onClick, userNames }: {
 
   return (
     <Card 
-      className="group p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-green-300 bg-white h-full flex flex-col"
+      className="group p-4 sm:p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-green-300 bg-white h-full flex flex-col"
       onClick={onClick}
     >
-      <div className="space-y-4 flex-1 flex flex-col">
+      <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col">
         {/* Header with Status Badge */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="flex-1 min-w-0">
             <h3 
-              className="font-bold text-lg text-gray-900 group-hover:text-green-600 transition-colors leading-tight mb-1 line-clamp-2" 
+              className="font-bold text-base sm:text-lg text-gray-900 group-hover:text-green-600 transition-colors leading-tight mb-1 line-clamp-1" 
               title={item.title}
             >
               {displayTitle}
@@ -183,17 +189,17 @@ export default function QuizGenerationCard({ item, onClick, userNames }: {
         )}
 
         {/* Todo List Style Steps */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 lg:gap-5">
           {status.steps.map((step) => (
-            <div key={step.key} className="flex flex-col items-center gap-1.5">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+            <div key={step.key} className="flex flex-col items-center gap-1 sm:gap-1.5">
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
                 step.done 
                   ? 'bg-green-500 text-white shadow-md scale-105' 
                   : 'bg-gray-200 text-gray-600'
               }`}>
-                {step.done ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-4 h-4" />}
+                {step.done ? <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               </div>
-              <span className={`text-xs text-center leading-tight ${
+              <span className={`text-[10px] sm:text-xs text-center leading-tight ${
                 step.done ? 'text-green-700 font-medium' : 'text-gray-600'
               }`}>
                 {step.label}

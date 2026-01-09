@@ -14,13 +14,13 @@ export interface CourseDraftDocumentMeta {
   size: number;
   type: string;
   uploadedAt: Date;
-  url?: string; // local object URL for preview if needed
-  s3Key?: string; // backend-returned S3 key for this file
+  url?: string;
+  s3Key?: string;
 }
 
 export interface CourseDraftState {
   step: number;
-  courseId?: string; // server-side identifier for tracking status
+  courseId?: string;
   documents: CourseDraftDocumentMeta[];
   uploading: UploadingFile[];
   meta: {
@@ -47,7 +47,7 @@ export const createEmptyDraft = (): CourseDraftState => ({
   documents: [],
   uploading: [],
   meta: {
-    userPosition: '',
+    userPosition: 'Sinh viên',
     shortPrompt: '',
     durationDays: 7,
     courseLevel: 'overview',
@@ -56,7 +56,6 @@ export const createEmptyDraft = (): CourseDraftState => ({
   modules: [],
 });
 
-// In-memory ephemeral store (simple, replace with context/store later)
 let _draft: CourseDraftState = createEmptyDraft();
 
 export function getDraft(): CourseDraftState {

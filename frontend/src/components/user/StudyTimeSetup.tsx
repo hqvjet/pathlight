@@ -48,11 +48,7 @@ export default function StudyTimeSetup({ onComplete, onSkip }: StudyTimeSetupPro
         return;
       }
 
-      console.log('Setting reminder time:', selectedTime);
-
       const response = await api.user.setNotifyTime({ remind_time: selectedTime }) as NotifyTimeResponse;
-
-      console.log('Response:', response);
 
       if (response.status === 200) {
         // Mark setup as completed

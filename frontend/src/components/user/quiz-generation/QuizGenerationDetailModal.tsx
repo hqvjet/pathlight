@@ -13,25 +13,25 @@ import { QuizGenerationItem } from "./QuizGenerationList";
 function getDetailedStatus(item: QuizGenerationItem) {
   const steps = [
     { 
-      key: 'khoi_tao', 
-      label: 'Khởi tạo Quiz', 
-      done: item.plan_ready ?? item.title_ready ?? false,
-      description: 'Tạo tiêu đề, tổng quan và lập kế hoạch quiz',
+      key: 'vectorized', 
+      label: 'Vectorized', 
+      done: Boolean(item.vectorized),
+      description: 'Vector hóa tài liệu để chuẩn bị dữ liệu cho AI',
+      count: null
+    },
+    { 
+      key: 'plan_ready', 
+      label: 'Lập kế hoạch Quiz', 
+      done: Boolean(item.plan_ready),
+      description: `Tạo tiêu đề, tổng quan và lập kế hoạch quiz${item.ideas_count ? ` (${item.ideas_count} ý tưởng)` : ''}`,
       count: item.ideas_count
     },
     { 
-      key: 'questions', 
+      key: 'questions_ready', 
       label: 'Tạo câu hỏi', 
-      done: item.questions_ready ?? item.cards_ready ?? false,
+      done: Boolean(item.questions_ready),
       description: `Sinh câu hỏi và đáp án chi tiết${item.questions_count ? ` (${item.questions_count} câu)` : ''}`,
       count: item.questions_count
-    },
-    { 
-      key: 'hoan_thien', 
-      label: 'Hoàn thiện và xuất bản', 
-      done: item.status === 'completed',
-      description: 'Kiểm tra chất lượng và xuất bản quiz',
-      count: null
     },
   ];
   

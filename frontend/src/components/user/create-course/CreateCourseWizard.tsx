@@ -152,7 +152,6 @@ export function CreateCourseWizard() {
   const validateMeta = (meta: CourseDraftState['meta']) => {
     const missing: string[] = [];
     if (!meta.userPosition.trim()) missing.push('Vị trí người học');
-    if (!meta.shortPrompt.trim()) missing.push('Prompt ngắn');
     if (!meta.courseLevel) missing.push('Trình độ khóa học');
     if (!meta.courseConstraint) missing.push('Văn phong khóa học');
     if (!meta.durationDays || meta.durationDays < 1) missing.push('Thời lượng (ngày)');
@@ -214,13 +213,9 @@ export function CreateCourseWizard() {
 
       if (resp?.status === 202 && isQueuedCreateResponse(data)) {
         const courseId = data.course_id || payload.id;
-        const messageId = data.sqs_message_id;
 
         showToast.success('Đã gửi yêu cầu tạo khóa học thành công!');
         setDraft((d) => ({ ...d, step: 4, courseId }));
-        if (courseId) {
-          console.log('Course submitted:', { courseId, messageId });
-        }
       } else if (data && isCourseResponse(data)) {
         setResult(data);
         setDraft((d) => ({ ...d, step: 4, courseId: payload.id }));

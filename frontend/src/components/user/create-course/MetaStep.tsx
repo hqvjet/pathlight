@@ -46,7 +46,6 @@ export function MetaStep({ meta, onChange, onBack, onNext }: MetaStepProps) {
 
   const isValid = Boolean(
     meta.userPosition.trim() &&
-    meta.shortPrompt.trim() &&
     meta.durationDays >= 1 &&
     meta.courseLevel &&
     meta.courseConstraint
@@ -56,7 +55,7 @@ export function MetaStep({ meta, onChange, onBack, onNext }: MetaStepProps) {
     <div className="mx-auto max-w-3xl">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-semibold text-gray-900">Thông tin bắt buộc</h2>
-        <p className="text-sm text-gray-600">Nhập đủ Vị trí người học, Prompt ngắn, Thời lượng (ngày), Trình độ và Văn phong để multi-agent tạo khóa học chính xác.</p>
+        <p className="text-sm text-gray-600">Nhập đủ Vị trí người học, Thời lượng (ngày), Trình độ và Văn phong để multi-agent tạo khóa học chính xác.</p>
       </div>
 
       <div className="mt-10 space-y-6">
@@ -139,7 +138,7 @@ export function MetaStep({ meta, onChange, onBack, onNext }: MetaStepProps) {
 
         <div className="sm:col-span-2">
           <label htmlFor="shortPrompt" className="block text-sm font-medium text-gray-700 mb-1">
-            Prompt ngắn <span className="text-red-500">*</span>
+            Prompt ngắn
           </label>
           <textarea
             id="shortPrompt"

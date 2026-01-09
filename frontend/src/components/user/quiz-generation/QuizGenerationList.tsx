@@ -14,6 +14,7 @@ export interface QuizGenerationItem {
   progress_percentage?: number;
   current_step?: string;
   current_step_detail?: string;
+  vectorized?: boolean;
   plan_ready?: boolean;
   questions_ready?: boolean;
   title?: string;
