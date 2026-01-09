@@ -99,14 +99,36 @@ class PlannerAgent(BaseAgent):
                      layer2_query=retrieval_results['layer2_query'],
                      layer3_query=retrieval_results['layer3_query'])
         
-        # Build initial prompt WITH retrieval results pre-loaded
-        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+        # CRITICAL FIX: Put retrieved context FIRST, then instruction
+        # This ensures LLM pays attention to the actual content
+        base_instruction = self.prompt_manager.get_prompt(self.name).format(
             id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
         )
         
-        # Add retrieval context to prompt
-        initial_prompt += f"\n\n=== RETRIEVED CONTEXT (3 LAYERS) ===\n{retrieval_results['all_text']}\n\n"
-        initial_prompt += "=== INSTRUCTION ===\nNow create the course roadmap JSON based on the above retrieved context. Do NOT call any tools."
+        # Build prompt with context BEFORE final instruction
+        initial_prompt = base_instruction + f"""
+
+=== 📚 TÀI LIỆU GỐC (RETRIEVED CONTEXT - 3 LAYERS) ===
+
+{retrieval_results['all_text']}
+
+=== ⚠️ CRITICAL INSTRUCTION ===
+
+BẠN VỪA NHẬN ĐƯỢC retrieval context phía trên.
+
+**BƯỚC 1**: Đọc KỸ retrieval context và XÁC ĐỊNH CHỦ ĐỀ CHÍNH:
+   - Tài liệu nói về chủ đề gì? (VD: "brain reading", "Python programming", "marketing", etc.)
+   - Những khái niệm/keywords chính là gì?
+
+**BƯỚC 2**: Tạo course roadmap JSON CHỈ VỀ CHỦ ĐỀ ĐÃ XÁC ĐỊNH:
+   - Course name PHẢI khớp 100% với chủ đề trong retrieval
+   - Mỗi lesson description PHẢI trích xuất từ retrieval, KHÔNG tự bịa
+   - Nếu retrieval về "não bộ" → course về "não bộ", KHÔNG phải "lãnh đạo"!
+
+**OUTPUT**: JSON format như đã hướng dẫn phía trên.
+
+**DO NOT call any tools. Generate JSON directly.**
+"""
         
         history: List = [SystemMessage(content=initial_prompt)]
 
