@@ -28,6 +28,7 @@ interface ApiCourseSummary {
   user_id?: string;
   owner_id?: string;
   owner_name?: string;
+  recommendation_score?: number;
 }
 
 interface ApiCourseListResponse {
@@ -78,6 +79,7 @@ const mapApiToCard = (c: ApiCourseSummary): CourseCardData & CourseHeroData => {
     isPublic: !!c.publish,
     ownerId,
     ownerName,
+    recommendation_score: c.recommendation_score,
   };
 };
 
