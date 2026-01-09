@@ -194,10 +194,6 @@ export default function QuizPlayPage({ params }: PageProps) {
           const responseData = userInfoResp?.data as { Info?: { current_exp?: number; subscription?: number }; info?: { current_exp?: number; subscription?: number } } | undefined;
           // Try both Info (capital) and info (lowercase) for compatibility
           const userInfo = responseData?.Info || responseData?.info;
-          console.log('User info response:', responseData);
-          console.log('Extracted user info:', userInfo);
-          console.log('Current EXP:', userInfo?.current_exp);
-          console.log('Subscription:', userInfo?.subscription);
           
           const exp = userInfo?.current_exp || 0;
           const subscription = userInfo?.subscription || 0;
@@ -594,13 +590,11 @@ export default function QuizPlayPage({ params }: PageProps) {
       
       // Calculate average score for saving as previous_score
       const avgScore = quiz ? Math.round(actualTotalScore / quiz.cards.length) : 0;
-      console.log('Average score for quiz:', avgScore);
       
       // Update previous_score if this score is higher
       if (avgScore > (quiz.previous_score || 0)) {
         try {
           await quizApi.updatePreviousScore(quizId, avgScore);
-          console.log('Updated previous_score to:', avgScore);
         } catch (updateError) {
           console.error('Failed to update previous_score:', updateError);
           // Don't show error to user, just log it

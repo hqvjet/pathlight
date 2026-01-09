@@ -360,7 +360,6 @@ export default function LessonDetailPage({ params }: PageProps) {
         console.warn('⚠️ Backend did not fully award exp, attempting direct user-service call...');
         try {
           await userApi.addExperience({ exp: awardedExp });
-          console.log('✅ Successfully awarded exp via fallback mechanism');
         } catch (fallbackError) {
           console.error('❌ Fallback exp award also failed:', fallbackError);
           showToast.error('Không thể cộng điểm kinh nghiệm. Vui lòng kiểm tra lại sau.');

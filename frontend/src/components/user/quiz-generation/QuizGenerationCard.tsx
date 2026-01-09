@@ -10,15 +10,6 @@ export interface QuizGenerationCardProps {
 }
 
 function getQuizStatus(item: QuizGenerationItem) {
-  // Debug logging
-  console.log('[QuizGenerationCard] Item data:', {
-    quiz_id: item.quiz_id,
-    vectorized: item.vectorized,
-    plan_ready: item.plan_ready,
-    questions_ready: item.questions_ready,
-    status: item.status
-  });
-  
   const steps = [
     { 
       key: 'vectorized', 

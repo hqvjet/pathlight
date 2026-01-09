@@ -3,13 +3,6 @@ import { UserProfile } from './types';
 
 interface StatDef { label: string; value: number | string; color: string; icon: React.ReactNode }
 export const StatsGrid: React.FC<{ user: UserProfile }> = ({ user }) => {
-  console.log('📊 StatsGrid received user:', {
-    total_courses: user.total_courses,
-    completed_courses: user.completed_courses,
-    total_lessons: user.total_lessons,
-    total_quizzes: user.total_quizzes,
-  });
-  
   const totalCourses = user.total_courses || 0;
   const completedCourses = user.completed_courses || 0;
   const totalQuizzes = user.total_quizzes || 0;

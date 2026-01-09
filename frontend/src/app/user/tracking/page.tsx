@@ -66,7 +66,6 @@ function TrackingInner() {
     try {
       const resp = await quizApi.listMyGenerations();
       if (resp.status === 200 && Array.isArray(resp.data?.items)) {
-        console.log('[Quiz Tracking] Raw API response:', resp.data.items);
         const mapped = (resp.data.items as unknown as Array<Record<string, unknown>>).map((r) => ({
           quiz_id: String(r.quiz_id ?? ""),
           user_id: r.user_id ? String(r.user_id) : undefined,
@@ -94,7 +93,6 @@ function TrackingInner() {
           return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
         });
         
-        console.log('[Quiz Tracking] Mapped items:', mapped);
         setQuizItems(mapped);
       } else if (resp.status === 401) {
         showToast.error("Bạn cần đăng nhập để xem tiến trình.");

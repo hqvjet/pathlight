@@ -22,15 +22,6 @@ export type GenerationItem = {
 };
 
 function getGenerationStatus(item: GenerationItem) {
-  console.log('[GenerationCard] Item data:', {
-    course_id: item.course_id,
-    vectorized: item.vectorized,
-    title_ready: item.title_ready,
-    lessons_ready: item.lessons_ready,
-    tests_ready: item.tests_ready,
-    final_ready: item.final_ready
-  });
-  
   const steps = [
     { key: 'vectorized', label: 'Vectorized', done: Boolean(item.vectorized), count: null },
     { key: 'title_ready', label: 'Plan', done: Boolean(item.title_ready), count: item.roadmap_count },

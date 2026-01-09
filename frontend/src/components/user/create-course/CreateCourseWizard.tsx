@@ -214,13 +214,9 @@ export function CreateCourseWizard() {
 
       if (resp?.status === 202 && isQueuedCreateResponse(data)) {
         const courseId = data.course_id || payload.id;
-        const messageId = data.sqs_message_id;
 
         showToast.success('Đã gửi yêu cầu tạo khóa học thành công!');
         setDraft((d) => ({ ...d, step: 4, courseId }));
-        if (courseId) {
-          console.log('Course submitted:', { courseId, messageId });
-        }
       } else if (data && isCourseResponse(data)) {
         setResult(data);
         setDraft((d) => ({ ...d, step: 4, courseId: payload.id }));
