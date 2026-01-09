@@ -86,6 +86,14 @@ class TestCreatorAgent(BaseAgent):
                 tracer.record("error", "test generation failed", lesson_id=lesson.lesson_id, error=str(e), traceback=error_detail[:500])
                 self.logger.error(f"Test generation failed for {lesson.lesson_id}: {error_detail}")
                 # Continue to next lesson instead of stopping
+            else:
+                # Update progress after successful test generation
+                try:
+                    tests_done = sum(1 for l in state.lessons if getattr(l, "assessments", None))
+                    status.update_tests(state.id, status="processing", completed=tests_done, total=len(state.lessons))
+                    tracer.record("status_update", f"tests progress: {tests_done}/{len(state.lessons)}")
+                except Exception as e:
+                    self.logger.error(f"Failed to update tests progress: {e}")
 
         tracer.record("done", "tests generation completed", failures=failures)
         try:
@@ -96,6 +104,8 @@ class TestCreatorAgent(BaseAgent):
             status.mark_tests_ready(state.id)
         except Exception:
             pass
+        
+        return state
 
     def _generate_single_lesson_tests(self, state: State, lesson) -> None:
         """Generate tests for a single lesson, with tool-call cap and forced finalization."""

@@ -117,9 +117,10 @@ def build_layer2_query(layer1_text: str, context_title: str = "") -> str:
             secondary_topic = layer1_topics[0] if layer1_topics else main_topic
             
             # Build query combining lesson-specific topic + Layer 1 context
+            # FOCUS ON CONCEPT/PURPOSE, NOT IMPLEMENTATION DETAILS
             return (
-                f'"{main_topic}" "{secondary_topic}" "definition" "explanation" "details" '
-                f'"architecture" "structure" "how it works" "components"'
+                f'"{main_topic}" "{secondary_topic}" "what is" "purpose" "definition" '
+                f'"goals" "benefits" "overview" "introduction" "motivation"'
             )
     
     # PRIORITY 2: Fallback to Layer 1 extraction if no meaningful context_title
@@ -131,10 +132,10 @@ def build_layer2_query(layer1_text: str, context_title: str = "") -> str:
     
     main_topic = topics[0]
     
-    # Build query focusing on main topic details
+    # Build query focusing on main topic CONCEPT (not implementation)
     return (
-        f'"{main_topic}" "definition" "explanation" "details" '
-        f'"architecture" "structure" "how it works" "components"'
+        f'"{main_topic}" "what is" "purpose" "definition" "overview" '
+        f'"introduction" "motivation" "goals" "benefits"'
     )
 
 
@@ -163,10 +164,10 @@ def build_layer3_query(layer1_text: str, layer2_query: str, context_title: str =
             break
     
     if secondary_topic:
-        # Strategy A: Dig into secondary topic
+        # Strategy A: Dig into secondary topic (AVOID IMPLEMENTATION DETAILS)
         return (
-            f'"{secondary_topic}" "explanation" "details" '
-            f'"use cases" "implementation" "examples"'
+            f'"{secondary_topic}" "explanation" "details" "what is" '
+            f'"use cases" "examples" "applications"'
         )
     else:
         # Strategy B: Get examples/applications of main topic

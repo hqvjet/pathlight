@@ -3,50 +3,62 @@
 Provides real-time progress tracking for course generation workflow.
 Frontend can poll this to show detailed progress to users.
 
-Schema (DynamoDB Item):
-- course_id (PK)
-- user_id: string (owner)
-- status: string (enum: "initializing", "planning", "creating_lessons", "creating_tests", "finalizing", "completed", "failed")
-- progress_percentage: int (0-100)
-- current_step: string (human-readable current step)
-- current_step_detail: string (detailed info about current step)
-- title_ready: bool
-- lessons_ready: bool
-- tests_ready: bool
-- vectorized: bool (true when content is indexed in vector DB)
-- final_ready: bool (true when entire course generation is completed)
-- title: string
-- description: string
-- roadmap_count: int
-- lessons_count: int
-- lessons_planned: int
-- estimated_time_remaining_seconds: int (optional)
-- error_message: string (if failed)
-- updated_at: iso8601 (auto)
+REDESIGNED Schema for Better UI Tracking:
 
-Progress Flow:
-1. initializing (0%) - Starting workflow
-2. planning (20%) - Creating course plan & roadmap
-3. creating_lessons (40-80%) - Generating lessons sequentially
-4. creating_tests (85%) - Adding assessments (if needed)
-5. finalizing (95%) - Final validation
-6. completed (100%) - Done!
+{
+    "course_id": "xxx",  # PK
+    "user_id": "xxx",
+    
+    # Overall status: "processing" | "done" | "error"
+    "overall_status": "processing",
+    "error_message": "",  # If overall_status = "error"
+    
+    # Step 1: Vectorization
+    "vectorization_status": "done" | "processing" | "error",
+    "vectorization_chunks": 46,
+    "vectorization_error": "",
+    
+    # Step 2: Planning  
+    "planning_status": "done" | "processing" | "error",
+    "planning_course_title": "Hệ thống học tập tự định hướng Pathlight",
+    "planning_roadmap_count": 6,
+    "planning_error": "",
+    
+    # Step 3: Lessons
+    "lessons_status": "processing" | "done" | "error",
+    "lessons_completed": 2,
+    "lessons_total": 6,
+    "lessons_list": [
+        {"id": "L1", "title": "Giới thiệu về Pathlight"},
+        {"id": "L2", "title": "RAG Module"}
+    ],
+    "lessons_error": "",
+    
+    # Step 4: Tests/Assessments
+    "tests_status": "processing" | "done" | "error",
+    "tests_completed": 0,
+    "tests_total": 6,
+    "tests_error": "",
+    
+    # Timestamps
+    "start_timestamp": 1234567890,
+    "last_updated": 1234567890,
+    "end_timestamp": 0,  # Set when overall_status = "done" or "error"
+}
 
 Usage:
 - status_tracker.start(course_id, user_id)
-- status_tracker.mark_planning()
-- status_tracker.mark_plan_ready(course_id, title, desc, roadmap_count)
-- status_tracker.mark_lessons_progress(course_id, have, planned)
-- status_tracker.mark_lessons_ready(course_id, count)
-- status_tracker.mark_tests_ready(course_id)
-- status_tracker.mark_vectorized(course_id, ok=True)
-- status_tracker.mark_completed(course_id)  # Sets final_ready=True
-- status_tracker.mark_failed(course_id, error)
+- status_tracker.update_vectorization(course_id, status="done", chunks=46)
+- status_tracker.update_planning(course_id, status="done", title="...", roadmap_count=6)
+- status_tracker.update_lessons(course_id, status="processing", completed=2, total=6, lessons=[...])
+- status_tracker.update_tests(course_id, status="done", completed=6, total=6)
+- status_tracker.mark_error(course_id, step="lessons", error="...")
+- status_tracker.mark_completed(course_id)
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import time
 
 from infrastructure.aws.dynamo_client import (
@@ -85,22 +97,218 @@ def _calculate_progress_percentage(status: str, lessons_have: int = 0, lessons_t
     return 0
 
 
-def _estimate_time_remaining(status: str, lessons_have: int, lessons_total: int, start_time: Optional[float] = None) -> Optional[int]:
-    """Estimate remaining time in seconds based on current progress.
+# ============================================================================
+# NEW SCHEMA FUNCTIONS - Redesigned for Better UI Tracking
+# ============================================================================
+
+def start(course_id: str, user_id: str, strict: bool = True) -> None:
+    """Initialize course generation tracking with new schema."""
+    if not user_id or not str(user_id).strip():
+        raise ValueError("user_id is required for status tracking")
     
-    Assumptions:
-    - Planning: ~30 seconds
-    - Each lesson: ~45 seconds
-    - Tests: ~20 seconds
-    - Finalizing: ~10 seconds
+    now = int(time.time())
+    updates = {
+        "user_id": str(user_id),
+        "overall_status": "processing",
+        "error_message": "",
+        
+        # Vectorization (Step 1)
+        "vectorization_status": "processing",
+        "vectorization_chunks": 0,
+        "vectorization_error": "",
+        
+        # Planning (Step 2)  
+        "planning_status": "processing",
+        "planning_course_title": "",
+        "planning_roadmap_count": 0,
+        "planning_error": "",
+        
+        # Lessons (Step 3)
+        "lessons_status": "processing",
+        "lessons_completed": 0,
+        "lessons_total": 0,
+        "lessons_list": [],
+        "lessons_error": "",
+        
+        # Tests (Step 4)
+        "tests_status": "processing",
+        "tests_completed": 0,
+        "tests_total": 0,
+        "tests_error": "",
+        
+        # Timestamps
+        "start_timestamp": now,
+        "last_updated": now,
+        "end_timestamp": 0,
+    }
+    
+    if strict:
+        ensure_table(strict=True)
+        update_item_strict(course_id, updates)
+    else:
+        update_item(course_id, updates)
+
+
+def update_vectorization(course_id: str, status: str, chunks: int = 0, error: str = "") -> None:
+    """Update vectorization step status.
+    
+    Args:
+        status: "processing" | "done" | "error"
+        chunks: Number of chunks indexed
+        error: Error message if status="error"
     """
+    update_item(course_id, {
+        "vectorization_status": status,
+        "vectorization_chunks": chunks,
+        "vectorization_error": error,
+        "last_updated": int(time.time()),
+    })
+
+
+def update_planning(course_id: str, status: str, title: str = "", roadmap_count: int = 0, error: str = "") -> None:
+    """Update planning step status.
+    
+    Args:
+        status: "processing" | "done" | "error"
+        title: Course title
+        roadmap_count: Number of roadmap items
+        error: Error message if status="error"
+    """
+    update_item(course_id, {
+        "planning_status": status,
+        "planning_course_title": title,
+        "planning_roadmap_count": roadmap_count,
+        "planning_error": error,
+        "last_updated": int(time.time()),
+    })
+
+
+def update_lessons(
+    course_id: str, 
+    status: str, 
+    completed: int = 0, 
+    total: int = 0, 
+    lessons: Optional[List[Dict[str, str]]] = None,
+    error: str = ""
+) -> None:
+    """Update lessons step status.
+    
+    Args:
+        status: "processing" | "done" | "error"
+        completed: Number of lessons completed
+        total: Total lessons expected
+        lessons: List of {"id": "L1", "title": "..."}
+        error: Error message if status="error"
+    """
+    updates = {
+        "lessons_status": status,
+        "lessons_completed": completed,
+        "lessons_total": total,
+        "lessons_error": error,
+        "last_updated": int(time.time()),
+    }
+    
+    if lessons is not None:
+        updates["lessons_list"] = lessons
+    
+    update_item(course_id, updates)
+
+
+def update_tests(course_id: str, status: str, completed: int = 0, total: int = 0, error: str = "") -> None:
+    """Update tests step status.
+    
+    Args:
+        status: "processing" | "done" | "error"
+        completed: Number of lessons with tests completed
+        total: Total lessons needing tests
+        error: Error message if status="error"
+    """
+    update_item(course_id, {
+        "tests_status": status,
+        "tests_completed": completed,
+        "tests_total": total,
+        "tests_error": error,
+        "last_updated": int(time.time()),
+    })
+
+
+def mark_error(course_id: str, step: str, error: str) -> None:
+    """Mark a specific step as error and set overall status to error.
+    
+    Args:
+        step: "vectorization" | "planning" | "lessons" | "tests"
+        error: Error message
+    """
+    now = int(time.time())
+    updates = {
+        "overall_status": "error",
+        "error_message": error,
+        "last_updated": now,
+        "end_timestamp": now,
+    }
+    
+    # Update specific step status
+    if step == "vectorization":
+        updates["vectorization_status"] = "error"
+        updates["vectorization_error"] = error
+    elif step == "planning":
+        updates["planning_status"] = "error"
+        updates["planning_error"] = error
+    elif step == "lessons":
+        updates["lessons_status"] = "error"
+        updates["lessons_error"] = error
+    elif step == "tests":
+        updates["tests_status"] = "error"
+        updates["tests_error"] = error
+    
+    update_item(course_id, updates)
+
+
+def mark_completed(course_id: str) -> None:
+    """Mark overall course generation as completed successfully."""
+    now = int(time.time())
+    update_item(course_id, {
+        "overall_status": "done",
+        "last_updated": now,
+        "end_timestamp": now,
+    })
+
+
+# ============================================================================
+# LEGACY FUNCTIONS - Kept for backward compatibility
+# ============================================================================
+
+def _calculate_progress_percentage(status: str, lessons_have: int = 0, lessons_total: int = 0) -> int:
+    """Calculate progress percentage based on current status and lesson progress."""
+    if status == "initializing":
+        return 0
+    elif status == "vectorizing":
+        return 5
+    elif status == "vectorized":
+        return 10
+    elif status == "planning":
+        return 20
+    elif status == "creating_lessons":
+        if lessons_total > 0:
+            # 40% to 80% range for lessons
+            lesson_progress = (lessons_have / lessons_total) * 40
+            return int(40 + lesson_progress)
+        return 40
+    elif status == "creating_tests":
+        return 85
+    elif status == "finalizing":
+        return 95
+
+
+def _estimate_time_remaining(status: str, lessons_have: int, lessons_total: int, start_time: Optional[float] = None) -> Optional[int]:
+    """Estimate remaining time in seconds based on current progress."""
     if status == "completed" or status == "failed":
         return 0
     
     remaining = 0
     
     if status == "initializing":
-        remaining = 30 + (lessons_total * 45) + 20 + 10  # Everything ahead
+        remaining = 30 + (lessons_total * 45) + 20 + 10
     elif status == "planning":
         remaining = 30 + (lessons_total * 45) + 20 + 10
     elif status == "creating_lessons":
@@ -114,158 +322,57 @@ def _estimate_time_remaining(status: str, lessons_have: int, lessons_total: int,
     return remaining if remaining > 0 else None
 
 
-def start(course_id: str, user_id: str, strict: bool = True) -> None:
-    """Initialize course generation tracking.
-    
-    Sets status to 'initializing' with 0% progress.
-    """
-    if not user_id or not str(user_id).strip():
-        raise ValueError("user_id is required for status tracking")
-    
-    updates = {
-        "status": "initializing",
-        "progress_percentage": 0,
-        "current_step": "Khởi tạo",
-        "current_step_detail": "Đang khởi tạo workflow tạo khóa học...",
-        "user_id": str(user_id),
-        "title_ready": False,
-        "lessons_ready": False,
-        "tests_ready": False,
-        "vectorized": False,  # Add vectorized boolean field
-        "final_ready": False,  # Add final_ready boolean field
-        "start_timestamp": int(time.time()),
-    }
-    
-    if strict:
-        ensure_table(strict=True)
-        update_item_strict(course_id, updates)
-    else:
-        update_item(course_id, updates)
-
-
+# Legacy - kept for compatibility
 def mark_planning(course_id: str) -> None:
-    """Mark that planning phase has started."""
-    update_item(
-        course_id,
-        {
-            "status": "planning",
-            "progress_percentage": 20,
-            "current_step": "Lập kế hoạch",
-            "current_step_detail": "Đang phân tích yêu cầu và tạo roadmap khóa học...",
-        },
-    )
+    """Legacy: Mark that planning phase has started."""
+    update_planning(course_id, status="processing")
 
 
 def mark_plan_ready(course_id: str, title: Optional[str], description: Optional[str], roadmap_count: int) -> None:
-    """Mark that course plan is ready.
-    
-    Updates status to indicate planning is complete and lesson creation is about to start.
-    """
-    update_item(
-        course_id,
-        {
-            "status": "creating_lessons",
-            "progress_percentage": 40,
-            "current_step": "Tạo bài học",
-            "current_step_detail": f"Đã hoàn thành roadmap với {roadmap_count} bài học. Bắt đầu tạo nội dung...",
-            "title_ready": True,
-            "title": title or "",
-            "description": description or "",
-            "roadmap_count": roadmap_count,
-            "lessons_planned": roadmap_count,
-        },
-    )
+    """Legacy: Mark that course plan is ready."""
+    update_planning(course_id, status="done", title=title or "", roadmap_count=roadmap_count)
+    update_lessons(course_id, status="processing", total=roadmap_count)
 
 
 def mark_lessons_progress(course_id: str, have: int, planned: int) -> None:
-    """Update lesson creation progress.
-    
-    This is called after each lesson is created successfully.
-    Progress: 40% (start) to 80% (all lessons done)
-    """
-    progress_pct = _calculate_progress_percentage("creating_lessons", have, planned)
-    time_remaining = _estimate_time_remaining("creating_lessons", have, planned)
-    
-    updates = {
-        "status": "creating_lessons",
-        "progress_percentage": progress_pct,
-        "current_step": f"Tạo bài học {have}/{planned}",
-        "current_step_detail": f"Đang tạo nội dung chi tiết cho bài học thứ {have}...",
-        "lessons_count": have,
-        "lessons_planned": planned,
-    }
-    
-    if time_remaining:
-        updates["estimated_time_remaining_seconds"] = time_remaining
-    
-    update_item(course_id, updates)
+    """Legacy: Update lesson creation progress."""
+    update_lessons(course_id, status="processing", completed=have, total=planned)
 
 
 def mark_lessons_ready(course_id: str, count: int) -> None:
-    """Mark that all lessons are created.
-    
-    Moves to tests creation phase or finalizing.
-    """
-    update_item(
-        course_id,
-        {
-            "status": "creating_tests",
-            "progress_percentage": 85,
-            "current_step": "Tạo bài kiểm tra",
-            "current_step_detail": f"Đã hoàn thành {count} bài học. Đang tạo câu hỏi đánh giá...",
-            "lessons_ready": True,
-            "lessons_count": count,
-        },
-    )
+    """Legacy: Mark that all lessons are created."""
+    update_lessons(course_id, status="done", completed=count, total=count)
+    update_tests(course_id, status="processing", total=count)
 
 
 def mark_tests_ready(course_id: str) -> None:
-    """Mark that tests/assessments are ready."""
-    update_item(
-        course_id,
-        {
-            "status": "finalizing",
-            "progress_percentage": 95,
-            "current_step": "Hoàn thiện",
-            "current_step_detail": "Đang hoàn thiện và lưu khóa học...",
-            "tests_ready": True,
-        },
-    )
-
-
-def mark_completed(course_id: str) -> None:
-    """Mark course generation as completed successfully."""
-    update_item(
-        course_id,
-        {
-            "status": "completed",
-            "progress_percentage": 100,
-            "current_step": "Hoàn thành",
-            "current_step_detail": "Khóa học đã được tạo thành công!",
-            "estimated_time_remaining_seconds": 0,
-            "final_ready": True,  # Add final_ready boolean field
-            "end_timestamp": int(time.time()),
-        },
-    )
+    """Legacy: Mark that tests/assessments are ready."""
+    # Read current item to get tests_total, then mark done with completed=total
+    from infrastructure.aws.dynamo_client import _resource, _ensure_table, _table_name
+    resource = _resource()
+    table_name = _table_name()
+    table = _ensure_table(resource, table_name) if resource else None
+    
+    tests_total = 0
+    if table:
+        try:
+            resp = table.get_item(Key={"course_id": course_id})
+            item = resp.get("Item", {})
+            tests_total = item.get("tests_total", 0)
+        except Exception:
+            pass
+    
+    # Mark as done with completed = total
+    update_tests(course_id, status="done", completed=tests_total, total=tests_total)
 
 
 def mark_failed(course_id: str, error_message: str) -> None:
-    """Mark course generation as failed with error message."""
-    update_item(
-        course_id,
-        {
-            "status": "failed",
-            "progress_percentage": 0,
-            "current_step": "Thất bại",
-            "current_step_detail": "Đã xảy ra lỗi trong quá trình tạo khóa học",
-            "error_message": error_message,
-            "end_timestamp": int(time.time()),
-        },
-    )
+    """Legacy: Mark course generation as failed with error message."""
+    mark_error(course_id, step="", error=error_message)
 
 
 def mark_final_ready(course_id: str, count: int) -> None:
-    """Legacy compatibility - marks final tests ready."""
+    """Legacy: marks final tests ready."""
     mark_tests_ready(course_id)
 
 

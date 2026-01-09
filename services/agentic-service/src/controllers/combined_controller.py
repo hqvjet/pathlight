@@ -62,46 +62,44 @@ class CombinedController:
         )
 
     def run(self, course_id: str, s3_keys: List[str], difficulty: str, duration: int, user_id: str) -> None:
+        """Run vectorization + course generation pipeline with proper status tracking."""
+        print(f"🚀 CombinedController.run STARTED: course_id={course_id}, files={len(s3_keys or [])}")
         self.logger.info(
             "CombinedController.run: course_id=%s user_id=%s files=%d",
             course_id,
             user_id,
             len(s3_keys or []),
         )
-        # 0) Strictly ensure Dynamo entry exists before any work (attach user_id for tracking)
-        # For local test: use strict=False to skip DynamoDB
-        try:
-            status.start(course_id, user_id=user_id, strict=False)
-        except Exception as e:
-            self.logger.warning(f"DynamoDB status tracking unavailable: {e}")
-
-        # 1) Vectorize (must index to OpenSearch successfully)
-        try:
-            status.update_item(course_id, {
-                "status": "vectorizing",
-                "progress_percentage": 5,
-                "current_step": "Xử lý tài liệu",
-                "current_step_detail": "Đang phân tích và vector hóa tài liệu..."
-            })
-        except Exception as e:
-            self.logger.warning(f"Failed to update status: {e}")
         
+        # 0) Initialize DynamoDB tracking (MUST succeed to create item with all fields)
+        try:
+            print(f"📊 Initializing DynamoDB tracking...")
+            status.start(course_id, user_id=user_id, strict=False)
+            print(f"✅ DynamoDB tracking initialized")
+        except Exception as e:
+            print(f"❌ CRITICAL: Failed to initialize DynamoDB: {e}")
+            self.logger.error(f"CRITICAL: Failed to initialize DynamoDB tracking: {e}")
+
+        # 1) Vectorize documents to OpenSearch
+        print(f"📄 Starting vectorization: {len(s3_keys)} files...")
         s3 = self.files.get_files_by_names(s3_keys)
         vect_resp = self.files.vectorize_files(
             s3.file_streams, material_id=course_id, category=0
         )
         
-        self.logger.info(f"Vectorization completed: {vect_resp.total_chunks} chunks indexed")
+        chunks_count = vect_resp.total_chunks
+        print(f"✅ Vectorization completed: {chunks_count} chunks indexed")
+        self.logger.info(f"Vectorization completed: {chunks_count} chunks indexed")
         
+        # 2) Update vectorization status in DynamoDB
+        print(f"📊 Updating vectorization status: chunks={chunks_count}")
         try:
-            status.update_item(course_id, {
-                "status": "vectorized",
-                "progress_percentage": 10,
-                "current_step": "Tài liệu đã sẵn sàng",
-                "current_step_detail": f"Đã xử lý {vect_resp.total_chunks} đoạn văn bản"
-            })
+            status.update_vectorization(course_id, status="done", chunks=chunks_count)
+            print(f"✅ Vectorization status updated: chunks={chunks_count}")
+            self.logger.info(f"Vectorization status updated successfully: chunks={chunks_count}")
         except Exception as e:
-            self.logger.warning(f"Failed to update status: {e}")
+            print(f"❌ CRITICAL: Failed to update vectorization status: {e}")
+            self.logger.error(f"CRITICAL: Failed to update vectorization status: {e}")
         
         # CRITICAL: Ensure OpenSearch index is refreshed before querying
         # This makes indexed data immediately searchable
@@ -123,10 +121,6 @@ class CombinedController:
                 )
             # Strictly verify in OpenSearch before marking vectorized
             self._assert_indexed(course_id, vect_resp.total_chunks)
-            try:
-                status.mark_vectorized(course_id, True)
-            except Exception as e:
-                self.logger.warning(f"Failed to update DynamoDB status: {e}")
         else:
             # Local/Dev: skip OpenSearch verification if not available
             self.logger.info(f"Vectorization completed in {env} mode - skipping OpenSearch verification")

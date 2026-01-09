@@ -102,7 +102,8 @@ class LessonCreatorAgent(BaseAgent):
             tracer.record("done", "lesson appended", lesson_id=lessons[-1].lesson_id, next_index=state.next_lesson_index)
             # Track progress AFTER successfully creating lesson
             try:
-                status.mark_lessons_progress(state.id, len(lessons), planned_total)
+                lessons_list = [{"id": l.lesson_id, "title": l.title} for l in lessons]
+                status.update_lessons(state.id, status="processing", completed=len(lessons), total=planned_total, lessons=lessons_list)
             except Exception:
                 pass
             return state
@@ -118,7 +119,8 @@ class LessonCreatorAgent(BaseAgent):
         tracer.record("done", "single lesson appended", lesson_id=lessons[-1].lesson_id, next_index=state.next_lesson_index)
         try:
             planned = planned_total or len(state.roadmap or []) if 'planned_total' in locals() else len(state.roadmap or [])
-            status.mark_lessons_progress(state.id, len(lessons), planned)
+            lessons_list = [{"id": l.lesson_id, "title": l.title} for l in lessons]
+            status.update_lessons(state.id, status="processing", completed=len(lessons), total=planned, lessons=lessons_list)
         except Exception:
             pass
         return state
@@ -388,8 +390,8 @@ class LessonCreatorAgent(BaseAgent):
                      layer2_query=retrieval_results['layer2_query'],
                      layer3_query=retrieval_results['layer3_query'])
         
-        # Build initial prompt WITH retrieval results pre-loaded
-        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+        # CoT: Build context and instruction messages
+        base_instruction = self.prompt_manager.get_prompt(self.name).format(
             id=state.id,
             history=[],
             difficulty=state.difficulty,
@@ -402,202 +404,70 @@ class LessonCreatorAgent(BaseAgent):
             prev_lessons=prev_lessons,
         )
         
-        # Add retrieval context to prompt
-        initial_prompt += f"\n\n=== RETRIEVED CONTEXT (3 LAYERS) ===\n{retrieval_results['all_text']}\n\n"
-        initial_prompt += "=== INSTRUCTION ===\nNow write the lesson JSON based on the above retrieved context. Do NOT call any tools."
+        context_msg = SystemMessage(content=f"""
+⚠️ RETRIEVED CONTEXT FOR LESSON {index} ⚠️
 
-        history: List = [SystemMessage(content=initial_prompt)]
+Topic: {target_lesson_title}
+Description: {target_lesson_description}
 
-        ai: AIMessage = self.chain.invoke(
-            {
-                "id": state.id,
-                "history": history,
-                "difficulty": state.difficulty,
-                "duration": str(state.duration),
-                "title": state.title,
-                "description": state.description,
-                "roadmap": slim_roadmap or state.roadmap,
-                "lessons_expected": state.lessons_expected or "",
-                "next_lesson_index": str(index),
-                "prev_lessons": prev_lessons,
-            }
+{retrieval_results['all_text']}
+
+Use ONLY this context to create the lesson content.
+""")
+        
+        task_msg = SystemMessage(content=base_instruction + "\n\nAnalyze the retrieved context and create lesson content following the step-by-step reasoning process.")
+        history: List = [context_msg, task_msg]
+        
+        # CoT: Use structured output instead of free-form JSON
+        from langchain_openai import ChatOpenAI
+        from constant import LLM_MAX_TOKENS_LESSON, LLM_REQUEST_TIMEOUT, LLM_TEMPERATURE
+        from schemas.context import LessonAnalysis
+        
+        cot_llm = ChatOpenAI(
+            model_name=self.foundation_model,
+            openai_api_key=self.llm.openai_api_key,
+            temperature=LLM_TEMPERATURE,
+            request_timeout=LLM_REQUEST_TIMEOUT,
+            max_tokens=LLM_MAX_TOKENS_LESSON
         )
-        # CRITICAL FIX: Append initial AI message to history
-        history.append(ai)
-        tracer.record("llm", "initial response", index=index, content_preview=str(ai.content)[:200])
-
-        count = 1
+        structured_llm = cot_llm.with_structured_output(LessonAnalysis)
         
-        # Since retrieval is done, LLM should NOT call tools
-        # If it does, force immediate JSON output (don't execute tools)
-        if ai.tool_calls and len(ai.tool_calls) > 0:
-            self.logger.warning(f"Lesson Creator called tools despite having retrieval context. Forcing JSON output.")
-            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON", index=index)
-
-        # CRITICAL FIX: Force final JSON output if tools were called
-        if getattr(ai, "tool_calls", None):
-            tracer.record(
-                "warn",
-                "tool budget exhausted; forcing final JSON output",
-                index=index,
-                rounds=count - 1,
-                max_rounds=MAX_TOOL_CALLS_PER_AGENT,
-            )
-            self.logger.warning(f"Lesson Creator hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
-            # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
-            from langchain_openai import ChatOpenAI
-            from constant import LLM_MAX_TOKENS_LESSON, LLM_REQUEST_TIMEOUT, LLM_TEMPERATURE
-            final_llm = ChatOpenAI(
-                model_name=self.foundation_model,
-                openai_api_key=self.llm.openai_api_key,
-                temperature=LLM_TEMPERATURE,  # CRITICAL: 0 for deterministic output
-                request_timeout=LLM_REQUEST_TIMEOUT,
-                max_tokens=LLM_MAX_TOKENS_LESSON,
-                model_kwargs={"response_format": {"type": "json_object"}}
-            )
-            final_chain = self.build_chain(final_llm)
-            
-            try:
-                ai = final_chain.invoke(
-                    {
-                        "id": state.id,
-                        "history": history,
-                        "difficulty": state.difficulty,
-                        "duration": str(state.duration),
-                        "title": state.title,
-                        "description": state.description,
-                        "roadmap": slim_roadmap or state.roadmap,
-                        "lessons_expected": state.lessons_expected or "",
-                        "next_lesson_index": str(index),
-                        "prev_lessons": prev_lessons,
-                    }
-                )
-            except Exception as e:
-                # Handle LengthFinishReasonError
-                if "LengthFinishReasonError" in str(type(e).__name__) or "length limit" in str(e).lower():
-                    tracer.record("error", "hit token limit even after forcing short output", index=index, error=str(e))
-                    raise ValueError(
-                        f"Lesson {index}: LLM exceeded token limit even with shortened instructions. "
-                        "Try reducing content requirements further or increasing max_tokens."
-                    )
-                raise
-
-        # CRITICAL FIX: Validate content before parsing
-        if not ai.content or not ai.content.strip():
-            tracer.record("error", "empty content", index=index, has_tool_calls=bool(getattr(ai, 'tool_calls', None)))
+        analysis: LessonAnalysis = structured_llm.invoke(history)
+        
+        # Log CoT reasoning (minimal)
+        self.logger.info(f"[LESSON {index} CoT] Topic: {analysis.lesson_topic}")
+        self.logger.info(f"[LESSON {index} CoT] Key points: {', '.join(analysis.key_points)}")
+        tracer.record("cot_lesson", "reasoning completed", index=index,
+                     topic=analysis.lesson_topic,
+                     points_count=len(analysis.key_points))
+        tracer.record("llm", "CoT structured output", index=index, 
+                     title=analysis.lesson_title[:50] if analysis.lesson_title else "(no title)",
+                     content_length=len(analysis.lesson_content) if analysis.lesson_content else 0)
+        
+        # Validate structured output
+        if not analysis.lesson_title or not analysis.lesson_content:
+            tracer.record("error", "incomplete CoT output", index=index,
+                         has_title=bool(analysis.lesson_title),
+                         has_content=bool(analysis.lesson_content))
             raise ValueError(
-                f"Lesson {index}: LLM returned empty content. "
-                f"Has tool_calls: {bool(getattr(ai, 'tool_calls', None))}"
+                f"Lesson {index}: Incomplete CoT output - "
+                f"title={bool(analysis.lesson_title)}, content={bool(analysis.lesson_content)}"
             )
         
-        # Log content for debugging
-        self.logger.debug(f"Lesson {index} LLM content (first 1000 chars): {ai.content[:1000]}")
-        
-        # Parse JSON robustly and build a single Lesson
-        try:
-            json_content = json.loads(ai.content)
-        except Exception as e:
-            tracer.record("error", "failed to parse ai json", index=index, error=str(e), content=ai.content[:500])
-            self.logger.error(f"Lesson {index} JSON parse error. Content: {ai.content[:1000]}")
-            raise ValueError(f"Lesson {index}: Failed to parse LLM JSON response - {str(e)}")
-
-        # CRITICAL FIX: Strict JSON structure validation
-        lessons_array = json_content.get("lessons")
-        if not lessons_array:
-            tracer.record("error", "no 'lessons' field in response", index=index, keys=list(json_content.keys()))
-            raise ValueError(f"Lesson {index}: LLM response missing 'lessons' field. Got keys: {list(json_content.keys())}")
-        
-        if not isinstance(lessons_array, list) or len(lessons_array) == 0:
-            tracer.record("error", "lessons field is not a non-empty list", index=index, type=type(lessons_array))
-            raise ValueError(f"Lesson {index}: 'lessons' must be non-empty list, got {type(lessons_array)}")
-
-        obj = lessons_array[0]
-        
-        # CRITICAL FIX: Strict field validation
-        lesson_id = obj.get("lesson_id") or f"{state.id}-L{index}"
-        title = obj.get("title")
-        if not title:
-            tracer.record("error", "missing title", index=index)
-            raise ValueError(f"Lesson {index}: missing required field 'title'")
-        
-        overview = obj.get("overview") or "Bài học này sẽ giúp bạn hiểu rõ về chủ đề."
-        
-        content = obj.get("content") or ""
-        from constant import MIN_CONTENT_LENGTH
-        if not content or len(content.strip()) < MIN_CONTENT_LENGTH:
-            tracer.record("warn", "content shorter than recommended", index=index, length=len(content) if content else 0, min=MIN_CONTENT_LENGTH)
-        
-        # Truncate if too long (safety)
-        from constant import MAX_CONTENT_LENGTH
-        if len(content) > MAX_CONTENT_LENGTH:
-            tracer.record("warn", "content truncated", index=index, original_len=len(content), max=MAX_CONTENT_LENGTH)
-            content = content[:MAX_CONTENT_LENGTH]
-        
-        duration = obj.get("duration") or 30
-        
-        # Parse assessments with strict validation
-        assessments_raw = obj.get("assessments") or []
-        assessments = []
-        for qa_idx, qa in enumerate(assessments_raw):
-            try:
-                # CRITICAL FIX: Validate answer format
-                answer = qa.get("answer")
-                if isinstance(answer, str):
-                    # Try to extract number from string like "1", "A", "option 1"
-                    import re
-                    match = re.search(r'\d+', str(answer))
-                    if match:
-                        answer = int(match.group())
-                    else:
-                        # If no number found, try to map A/B/C/D to 1/2/3/4
-                        answer_upper = answer.strip().upper()
-                        if answer_upper in ['A', 'B', 'C', 'D']:
-                            answer = ord(answer_upper) - ord('A') + 1
-                        else:
-                            tracer.record("warn", f"assessment {qa_idx}: invalid answer format", answer=answer)
-                            continue  # Skip invalid assessment
-                elif not isinstance(answer, int):
-                    tracer.record("warn", f"assessment {qa_idx}: answer not int or string", type=type(answer))
-                    continue
-                
-                # Validate answer range
-                if not (1 <= answer <= 4):
-                    tracer.record("warn", f"assessment {qa_idx}: answer out of range", answer=answer)
-                    continue
-                
-                # Validate options
-                options = qa.get("options", [])
-                if not isinstance(options, list) or len(options) != 4:
-                    tracer.record("warn", f"assessment {qa_idx}: invalid options", count=len(options) if isinstance(options, list) else "not list")
-                    continue
-                
-                assessments.append({
-                    "question": qa.get("question", ""),
-                    "options": options,
-                    "answer": answer,
-                    "hint": qa.get("hint", ""),
-                    "explanation": qa.get("explanation", ""),
-                    "difficulty": qa.get("difficulty", "medium")
-                })
-            except Exception as e:
-                tracer.record("warn", f"assessment {qa_idx}: parse error", error=str(e))
-                continue
-        
-        # Log warning if not exactly 3 assessments but don't reject
-        from constant import MIN_ASSESSMENTS_COUNT
-        if len(assessments) != MIN_ASSESSMENTS_COUNT:
-            tracer.record("warn", "assessment count not ideal", index=index, valid=len(assessments), recommended=MIN_ASSESSMENTS_COUNT)
-        
+        # Return the structured output
+        # Convert to Lesson object
+        lesson_id = f"{state.id}-L{index}"
         lesson = Lesson(
             lesson_id=lesson_id,
-            title=title,
-            overview=overview,
-            content=content,
-            duration=duration,
-            assessments=assessments if assessments else None
+            title=analysis.lesson_title,
+            overview="Bài học này sẽ giúp bạn hiểu rõ về chủ đề.",
+            content=analysis.lesson_content,
+            duration=30,
+            assessments=None
         )
 
         tracer.record("done", "single lesson generated", index=index, lesson_id=lesson.lesson_id, 
-                     content_length=len(content), assessments_count=len(assessments))
+                     content_length=len(analysis.lesson_content))
         
         return lesson
+

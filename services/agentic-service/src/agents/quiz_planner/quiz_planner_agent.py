@@ -93,133 +93,81 @@ class QuizPlannerAgent(BaseAgent):
         # Format retrieved context
         retrieved_context = retrieval_results['all_text']
         
-        # Build initial prompt WITH retrieval results pre-loaded
-        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+        # CoT: Build context and instruction messages
+        base_instruction = self.prompt_manager.get_prompt(self.name).format(
             id=state.id,
             history=[],
             difficulty=state.difficulty,
             duration=str(state.duration),
             num_questions=state.num_questions,
-            retrieved_context=retrieved_context,
+            retrieved_context="",
         )
+        
+        context_msg = SystemMessage(content=f"""
+⚠️ RETRIEVED CONTEXT FOR QUIZ GENERATION ⚠️
 
-        history: List = [SystemMessage(content=initial_prompt)]
+{retrieved_context}
 
-        ai: AIMessage = self.chain.invoke(
-            {
-                "id": state.id,
-                "history": history,
-                "difficulty": state.difficulty,
-                "duration": str(state.duration),
-                "num_questions": state.num_questions,
-                "retrieved_context": retrieved_context,
-            }
+Use ONLY this context to create quiz questions.
+""")
+        
+        task_msg = SystemMessage(content=base_instruction + "\\n\\nAnalyze the retrieved context and create a quiz plan following the step-by-step reasoning process.")
+        history: List = [context_msg, task_msg]
+        
+        # CoT: Use structured output instead of free-form JSON
+        from langchain_openai import ChatOpenAI
+        from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
+        from schemas.context import QuizPlanAnalysis
+        
+        cot_llm = ChatOpenAI(
+            model_name=self.foundation_model,
+            openai_api_key=self.llm.openai_api_key,
+            temperature=0.3,
+            request_timeout=LLM_REQUEST_TIMEOUT,
+            max_tokens=LLM_MAX_TOKENS_PLANNER
         )
-        history.append(ai)
-        tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
-
-        # FORCE JSON OUTPUT if LLM tries to call tools despite having retrieval context
-        if ai.tool_calls:
-            self.logger.warning("QuizPlanner called tools despite having retrieval context. Forcing JSON output.")
-            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON")
-            
-            # Remove tools and force JSON
-            force_instruction = SystemMessage(
-                content=(
-                    "You already have ALL retrieval context above. "
-                    "DO NOT call any more tools. Output ONLY the quiz plan JSON now:\n"
-                    '{"quiz_title": "...", "quiz_overview": "...", "quiz_ideas": [...]}'
-                )
-            )
-            history.append(force_instruction)
-            
-            from langchain_openai import ChatOpenAI
-            from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
-            final_llm = ChatOpenAI(
-                model_name=self.foundation_model,
-                openai_api_key=self.llm.openai_api_key,
-                temperature=0.3,
-                request_timeout=LLM_REQUEST_TIMEOUT,
-                max_tokens=LLM_MAX_TOKENS_PLANNER,
-                model_kwargs={"response_format": {"type": "json_object"}}
-            )
-            final_chain = self.build_chain(final_llm)
-            
-            try:
-                ai = final_chain.invoke({
-                    "id": state.id,
-                    "history": history,
-                    "difficulty": state.difficulty,
-                    "duration": str(state.duration),
-                    "num_questions": state.num_questions,
-                    "retrieved_context": retrieved_context,
-                })
-            except Exception as e:
-                tracer.record("error", "final JSON invoke failed", error=str(e))
-                raise ValueError(f"QuizPlanner: Failed to get final JSON output - {str(e)}")
-
-        tracer.record("llm", "final response", content_preview=str(ai.content)[:200])
+        structured_llm = cot_llm.with_structured_output(QuizPlanAnalysis)
         
-        # Validate content before parsing
-        if not ai.content or not ai.content.strip():
-            tracer.record("error", "empty content", has_tool_calls=bool(getattr(ai, 'tool_calls', None)))
-            raise ValueError("QuizPlanner: LLM returned empty content")
+        analysis: QuizPlanAnalysis = structured_llm.invoke(history)
         
-        self.logger.debug(f"QuizPlanner LLM content (first 1000 chars): {ai.content[:1000]}")
+        # Log CoT reasoning (minimal)
+        self.logger.info(f"[QUIZ PLANNER CoT] Main topics: {', '.join(analysis.main_topics)}")
+        tracer.record("cot_quiz_plan", "reasoning completed",
+                     topics_count=len(analysis.main_topics),
+                     ideas_count=len(analysis.quiz_ideas))
+        tracer.record("llm", "CoT structured output",
+                     title=analysis.quiz_title[:50] if analysis.quiz_title else "(no title)",
+                     ideas_count=len(analysis.quiz_ideas))
         
-        # Parse JSON
-        try:
-            json_content = json.loads(ai.content)
-        except json.JSONDecodeError as e:
-            tracer.record("error", "failed to parse JSON", error=str(e), content=str(ai.content)[:500])
-            self.logger.error(f"QuizPlanner JSON parse error. Content: {ai.content[:1000]}")
-            raise ValueError(f"QuizPlanner: Failed to parse LLM JSON response - {str(e)}")
+        # Validate structured output
+        if not analysis.quiz_title:
+            tracer.record("error", "missing quiz_title")
+            raise ValueError("QuizPlanner: Missing quiz_title in structured output")
         
-        # Validate required fields
-        quiz_title = json_content.get("quiz_title")
-        if not quiz_title:
-            tracer.record("error", "missing quiz_title", keys=list(json_content.keys()))
-            raise ValueError("QuizPlanner: LLM response missing 'quiz_title' field")
-        
-        quiz_overview = json_content.get("quiz_overview")
-        if not quiz_overview:
+        if not analysis.quiz_overview:
             tracer.record("error", "missing quiz_overview")
-            raise ValueError("QuizPlanner: LLM response missing 'quiz_overview' field")
+            raise ValueError("QuizPlanner: Missing quiz_overview in structured output")
         
-        quiz_ideas = json_content.get("quiz_ideas")
-        if not quiz_ideas or not isinstance(quiz_ideas, list):
-            tracer.record("error", "invalid quiz_ideas", type=type(quiz_ideas))
-            raise ValueError("QuizPlanner: 'quiz_ideas' must be a list")
+        if not analysis.quiz_ideas or not isinstance(analysis.quiz_ideas, list):
+            tracer.record("error", "invalid quiz_ideas", type=type(analysis.quiz_ideas))
+            raise ValueError("QuizPlanner: quiz_ideas must be a list")
         
         # Validate ideas count matches num_questions
-        if len(quiz_ideas) != state.num_questions:
-            tracer.record("warn", "ideas count mismatch", expected=state.num_questions, got=len(quiz_ideas))
-            # Adjust to match num_questions
-            if len(quiz_ideas) < state.num_questions:
-                raise ValueError(f"QuizPlanner: Expected {state.num_questions} ideas, got {len(quiz_ideas)}")
+        if len(analysis.quiz_ideas) != state.num_questions:
+            tracer.record("warn", "ideas count mismatch", expected=state.num_questions, got=len(analysis.quiz_ideas))
+            if len(analysis.quiz_ideas) < state.num_questions:
+                raise ValueError(f"QuizPlanner: Expected {state.num_questions} ideas, got {len(analysis.quiz_ideas)}")
             else:
-                quiz_ideas = quiz_ideas[:state.num_questions]
+                # Trim to match
+                analysis.quiz_ideas = analysis.quiz_ideas[:state.num_questions]
         
-        # Convert to QuizIdea objects
-        ideas = []
-        for i, idea_data in enumerate(quiz_ideas):
-            try:
-                idea = QuizIdea(
-                    topic=idea_data.get("topic", f"Topic {i+1}"),
-                    description=idea_data.get("description", ""),
-                    difficulty=idea_data.get("difficulty", state.difficulty),
-                )
-                ideas.append(idea)
-            except Exception as e:
-                tracer.record("error", f"Failed to parse idea {i}", error=str(e), data=idea_data)
-                raise ValueError(f"QuizPlanner: Failed to parse idea {i}: {str(e)}")
-        
-        state.title = quiz_title
-        state.overview = quiz_overview
-        state.ideas = ideas
-        state.ideas_expected = len(ideas)
-        state.next_card_index = 0  # Start from first question
-        state.retrieved_context = retrieved_context  # Store context for questioner to reuse
+        # Store in state
+        state.title = analysis.quiz_title
+        state.overview = analysis.quiz_overview
+        state.ideas = analysis.quiz_ideas  # Already QuizIdea objects from Pydantic
+        state.ideas_expected = len(analysis.quiz_ideas)
+        state.next_card_index = 0
+        state.retrieved_context = retrieved_context
         
         tracer.record(
             "done",
