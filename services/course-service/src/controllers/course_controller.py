@@ -1466,7 +1466,7 @@ def submit_assessment_controller(request: Request, course_id: str, lesson_id: st
 					"require_exp": None,
 					"exp_needed_for_next": None,
 					"rank": None,
-					"award_failed": True,  # Signal to FE that exp wasn't saved
+					"award_failed": True,
 				}
 		elif passed and not is_newly_completed:
 			logger.info(f"⚠️ Lesson {lesson_id} retaken for practice - no exp awarded (already completed before)")

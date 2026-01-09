@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Clock, Zap, Calendar, Hash, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
+import { CheckCircle, Clock, Zap, Calendar, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
 import { GenerationItem } from "./GenerationCard";
 
 function getDetailedStatus(item: GenerationItem) {
@@ -17,8 +17,8 @@ function getDetailedStatus(item: GenerationItem) {
       key: 'vectorization', 
       label: 'Phân tích tài liệu', 
       done: item.vectorization_status === 'done',
-      description: `Vectorize và index tài liệu vào OpenSearch${item.vectorization_chunks ? ` (${item.vectorization_chunks} chunks)` : ''}`,
-      count: item.vectorization_chunks
+      description: 'Vectorize và index tài liệu vào OpenSearch',
+      count: null
     },
     { 
       key: 'planning', 
@@ -103,25 +103,18 @@ export default function GenerationDetailModal({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Hash className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-600">Course ID:</span>
-              <code className="text-xs font-mono bg-white px-2 py-1 rounded border truncate max-w-[200px]" title={item.course_id}>
-                {item.course_id}
-              </code>
-            </div>
+            {item.planning_roadmap_count && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Roadmap:</span>
+                <span className="text-sm font-medium">{item.planning_roadmap_count} modules</span>
+              </div>
+            )}
             {item.lessons_total && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Số bài học:</span>
                 <span className="text-sm font-medium text-orange-600">
                   {item.lessons_completed || 0}/{item.lessons_total} bài
                 </span>
-              </div>
-            )}
-            {item.planning_roadmap_count && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Roadmap:</span>
-                <span className="text-sm font-medium">{item.planning_roadmap_count} modules</span>
               </div>
             )}
             {item.tests_total !== undefined && (
@@ -289,15 +282,12 @@ export default function GenerationDetailModal({
                                     key={lesson.id}
                                     className="flex items-start gap-2 p-2 bg-white rounded border border-green-100 hover:border-green-200 transition-colors"
                                   >
-                                    <div className="flex-shrink-0 w-6 h-6 rounded bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">
+                                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">
                                       {idx + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm font-medium text-gray-900 line-clamp-2">
                                         {lesson.title}
-                                      </p>
-                                      <p className="text-xs text-gray-500 font-mono mt-0.5 truncate" title={lesson.id}>
-                                        {lesson.id}
                                       </p>
                                     </div>
                                   </div>

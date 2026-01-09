@@ -39,7 +39,7 @@ function getGenerationStatus(item: GenerationItem) {
       key: 'vectorization', 
       label: 'Vectorized', 
       done: item.vectorization_status === 'done', 
-      count: item.vectorization_chunks 
+      count: null
     },
     { 
       key: 'planning', 

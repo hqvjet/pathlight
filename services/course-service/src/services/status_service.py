@@ -67,8 +67,8 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
         lessons_status = item.get("lessons_status", "pending")
         tests_status = item.get("tests_status", "pending")
         
-        # If tests are done, vectorization must be done
-        if tests_status == "done":
+        # If planning or lessons started, vectorization must be done
+        if planning_status == "pending" or lessons_status != "pending":
             vectorization_status = "done"
         
         # Read overall_status directly from DynamoDB if available
@@ -150,28 +150,22 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
         scan_kwargs = {"FilterExpression": Attr("user_id").eq(str(user_id))}
         resp = table.scan(**scan_kwargs)
         items.extend(resp.get("Items", []) or [])
-        # Handle pagination
         while "LastEvaluatedKey" in resp:
             resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], **scan_kwargs)
             items.extend(resp.get("Items", []) or [])
 
-        # Normalize a subset of fields for frontend
         normalized: List[Dict[str, Any]] = []
         for it in items:
-            # Extract status fields - read directly from new schema
             vectorization_status = it.get("vectorization_status", "pending")
             planning_status = it.get("planning_status", "pending")
             lessons_status = it.get("lessons_status", "pending")
             tests_status = it.get("tests_status", "pending")
             
-            # If tests are done, vectorization must be done
-            if tests_status == "done":
+            if planning_status == "pending" or lessons_status != "pending":
                 vectorization_status = "done"
             
-            # Read overall_status directly from DynamoDB if available
             overall_status = it.get("overall_status")
             if not overall_status:
-                # Fallback: calculate from individual statuses
                 all_done = (
                     vectorization_status == "done" and
                     planning_status == "done" and

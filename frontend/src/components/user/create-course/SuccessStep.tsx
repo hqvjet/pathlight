@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { CourseDraftState } from '@/types/create-course';
 import { AgenticCourseResponse, AgenticCreateCourseResponse } from '@/lib/api/agentic';
 import { courseApi } from '@/lib/api/course';
-import { CheckCircle, Clock, Zap, FileText, Hash, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, Clock, Zap, FileText, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SuccessStepProps {
   draft: CourseDraftState;
@@ -51,8 +51,8 @@ function getGenerationStatus(status: GenerationStatus | null) {
       key: 'vectorization', 
       label: 'Phân tích tài liệu', 
       done: status?.vectorization_status === 'done',
-      description: `Vectorize và index tài liệu vào OpenSearch${status?.vectorization_chunks ? ` (${status.vectorization_chunks} chunks)` : ''}`,
-      count: status?.vectorization_chunks,
+      description: 'Vectorize và index tài liệu vào OpenSearch',
+      count: null,
       icon: FileText
     },
     { 
@@ -339,15 +339,12 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
                                 key={lesson.id}
                                 className="flex items-start gap-2 p-2 bg-white rounded border border-emerald-100 hover:border-emerald-200 transition-colors"
                               >
-                                <div className="flex-shrink-0 w-6 h-6 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
                                   {idx + 1}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900 line-clamp-2">
                                     {lesson.title}
-                                  </p>
-                                  <p className="text-xs text-gray-500 font-mono mt-0.5 truncate" title={lesson.id}>
-                                    {lesson.id}
                                   </p>
                                 </div>
                               </div>
@@ -372,37 +369,22 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
           </div>
 
           {/* Additional Info */}
-          {generationStatus && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-gray-200">
-              <div className="flex items-center gap-2 text-sm">
-                <Hash className="w-4 h-4 text-gray-500" />
-                <span className="text-gray-600">Course ID:</span>
-                <code className="text-xs font-mono bg-white px-2 py-1 rounded border truncate" title={courseId}>
-                  {courseId}
-                </code>
-              </div>
-              {generationStatus.planning_roadmap_count && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-600">Roadmap:</span>
-                  <span className="font-medium">{generationStatus.planning_roadmap_count} modules</span>
-                </div>
-              )}
-              {generationStatus.lessons_total && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-600">Số bài học:</span>
-                  <span className="font-medium text-orange-600">
-                    {generationStatus.lessons_completed || 0}/{generationStatus.lessons_total} bài
-                  </span>
-                </div>
-              )}
-              {generationStatus.tests_total && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-600">Câu hỏi kiểm tra:</span>
-                  <span className="font-medium text-purple-600">{generationStatus.tests_total} bài</span>
-                </div>
-              )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-gray-200">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">Roadmap:</span>
+              <span className="font-medium">{generationStatus?.planning_roadmap_count || '—'}</span>
             </div>
-          )}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">Số bài học:</span>
+              <span className="font-medium text-orange-600">
+                {generationStatus?.lessons_completed || 0}/{generationStatus?.lessons_total || '—'} bài
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">Câu hỏi kiểm tra:</span>
+              <span className="font-medium text-purple-600">{generationStatus?.tests_total || '—'} bài</span>
+            </div>
+          </div>
         </div>
       )}
 
