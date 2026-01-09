@@ -9,8 +9,8 @@ QUIZ_PLANNER_AGENT_NAME = "quiz_planner"
 QUESTIONER_AGENT_NAME = "questioner"
 QUIZ_ORCHESTRATOR_AGENT_NAME = "quiz_orchestrator"
 
-# Iteration limits - REDUCED to prevent timeout
-MAX_TOOL_CALLS_PER_AGENT = 3  # CRITICAL: Giảm từ 15→3 để tránh token explosion
+# Iteration limits - STRICT for token optimization
+MAX_TOOL_CALLS_PER_AGENT = 3  # CRITICAL: Agents should use 1-2 retrieval calls max, reduced from 5 to prevent loops
 MAX_GRAPH_ITERATIONS = 50  # Tăng để đủ cho lessons (orchestrator iterations)
 EARLY_STOP_NO_PROGRESS_LIMIT = 3  # Stop if no state change for N iterations
 
@@ -34,7 +34,7 @@ MAX_CONTENT_LENGTH = 10000    # Soft maximum (chỉ warning, không reject)
 MIN_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not >=3)
 MAX_ASSESSMENTS_COUNT = 3     # CRITICAL: EXACTLY 3 assessments per lesson (not <=3)
 MIN_ROADMAP_ITEMS = 2         # Minimum roadmap items
-MAX_ROADMAP_ITEMS = 10        # Maximum roadmap items (prevent too many lessons)
+MAX_ROADMAP_ITEMS = 8        # Maximum roadmap items (prevent too many lessons)
 
 # Recommendation System - OpenSearch indices
 COURSE_VECTOR_INDEX = "pathlight-course-vectors"  # Store course embeddings (title + description)

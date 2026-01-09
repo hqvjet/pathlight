@@ -57,6 +57,13 @@ class AgentController:
                 len(getattr(result, "roadmap", []) or []),
                 len(lessons),
             )
+            
+            # Update status to completed
+            try:
+                from core.status_tracker import mark_final_ready
+                mark_final_ready(request.id, len(lessons))
+            except Exception as e:
+                self.logger.warning(f"Failed to update final status: {e}")
         except Exception:
             pass
 

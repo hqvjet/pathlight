@@ -72,13 +72,43 @@ class PlannerAgent(BaseAgent):
         except Exception:
             pass
 
-        history: List = [
-            SystemMessage(
-                content=self.prompt_manager.get_prompt(self.name).format(
-                    id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
-                )
-            )
-        ]
+        # PROGRESSIVE RETRIEVAL: Execute 3-layer retrieval BEFORE LLM
+        from agents.base.progressive_retrieval import execute_progressive_retrieval
+        
+        tracer.record("retrieval", "starting progressive 3-layer retrieval")
+        
+        # Create retrieval function wrapper
+        def retrieval_func(query: str, material_id: str, k: int = 5):
+            tool = self.tools.get("retrieval_tool")
+            if not tool:
+                raise ValueError("retrieval_tool not found!")
+            result = tool._run(id=material_id, query=query, k=k)
+            return result
+        
+        # Execute progressive retrieval
+        retrieval_results = execute_progressive_retrieval(
+            retrieval_tool_func=retrieval_func,
+            material_id=state.id,
+            context_title="",  # No title yet for planner
+            k=5
+        )
+        
+        self.logger.info(f"[PLANNER] Progressive retrieval: L1={retrieval_results['layer1_query'][:30]}... | L2={retrieval_results['layer2_query'][:30]}... | L3={retrieval_results['layer3_query'][:30]}...")
+        tracer.record("retrieval", "completed 3 layers", 
+                     layer1_query=retrieval_results['layer1_query'],
+                     layer2_query=retrieval_results['layer2_query'],
+                     layer3_query=retrieval_results['layer3_query'])
+        
+        # Build initial prompt WITH retrieval results pre-loaded
+        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+            id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
+        )
+        
+        # Add retrieval context to prompt
+        initial_prompt += f"\n\n=== RETRIEVED CONTEXT (3 LAYERS) ===\n{retrieval_results['all_text']}\n\n"
+        initial_prompt += "=== INSTRUCTION ===\nNow create the course roadmap JSON based on the above retrieved context. Do NOT call any tools."
+        
+        history: List = [SystemMessage(content=initial_prompt)]
 
         ai: AIMessage = self.chain.invoke(
             {
@@ -92,42 +122,37 @@ class PlannerAgent(BaseAgent):
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
         count = 1
-        while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
-            for tool_call in ai.tool_calls:
-                tool_name = tool_call["name"]
-                tool_call_id = tool_call["id"]
-                args = tool_call["args"]
-                if tool_name not in self.tools:
-                    raise ValueError(f"Tool {tool_name} not found in tools.")
-
-                result = self.tool_manager.execute_tool_sync(tool_name, args)
-                history.append(
-                    ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
+        
+        # Since retrieval is done, LLM should NOT call tools
+        # If it does, force immediate JSON output
+        if ai.tool_calls and len(ai.tool_calls) > 0:
+            self.logger.warning(f"Planner called tools despite having retrieval context. Forcing JSON output.")
+            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON")
+            
+            # Add VERY explicit instruction to force JSON output with available context
+            # Remove any tool call messages from history to prevent confusion
+            force_instruction = SystemMessage(
+                content=(
+                    "=== CRITICAL INSTRUCTION - MUST FOLLOW ==="
+                    "\n\nSTOP using tools NOW. You have gathered enough context.\n\n"
+                    "REQUIRED ACTION: Generate the final JSON output RIGHT NOW based on the information you have retrieved.\n\n"
+                    "If the context is not detailed enough, create a GENERAL roadmap based on what you know.\n\n"
+                    "You MUST output ONLY valid JSON in this exact format:\n"
+                    "{{\n"
+                    '  "course_name": "Course title from document or general topic",\n'
+                    '  "course_description": "2-3 sentence description",\n'
+                    '  "course_roadmap": [\n'
+                    '    {{"title": "Module 1", "description": "Description"}},\n'
+                    '    {{"title": "Module 2", "description": "Description"}},\n'
+                    '    {{"title": "Module 3", "description": "Description"}}\n'
+                    "  ]\n"
+                    "}}\n\n"
+                    "IMPORTANT: course_roadmap MUST contain at least 2-3 items.\n"
+                    "DO NOT call any more tools. DO NOT add any text outside the JSON."
                 )
-                # Token optimization: Trim history to prevent explosion
-                history = trim_history(history)
-                tracer.record(
-                    "tool_result",
-                    f"{tool_name} executed",
-                    args=args,
-                    result_preview=str(result)[:200],
-                )
-
-                ai = self.chain.invoke(
-                    {
-                        "id": state.id,
-                        "history": history,
-                        "difficulty": state.difficulty,
-                        "duration": str(state.duration),
-                    }
-                )
-            count += 1
-
-        # CRITICAL FIX: Force final JSON output after hitting max tool calls
-        if count > MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("warn", f"Hit max tool calls limit: {MAX_TOOL_CALLS_PER_AGENT}")
-            self.logger.warning(f"Planner hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
+            )
+            history.append(force_instruction)
+            
             # CRITICAL: Create LLM WITHOUT tools binding to prevent further tool calls
             # JSON mode is still enabled, so output will be JSON
             from langchain_openai import ChatOpenAI
@@ -145,7 +170,7 @@ class PlannerAgent(BaseAgent):
             try:
                 ai = final_chain.invoke({
                     "id": state.id,
-                    "history": history,  # Use existing history, no modification
+                    "history": history,
                     "difficulty": state.difficulty,
                     "duration": str(state.duration),
                 })
@@ -172,23 +197,75 @@ class PlannerAgent(BaseAgent):
         except json.JSONDecodeError as e:
             tracer.record("error", "failed to parse JSON", error=str(e), content=str(ai.content)[:500])
             self.logger.error(f"Planner JSON parse error. Content: {ai.content[:1000]}")
-            raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
+            
+            # FALLBACK: Try to extract JSON from text if wrapped in markdown or has extra text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', ai.content)
+            if json_match:
+                try:
+                    json_content = json.loads(json_match.group(0))
+                    self.logger.warning("Successfully extracted JSON from wrapped content")
+                except:
+                    raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
+            else:
+                raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
         
-        # CRITICAL FIX: Validate required fields
+        # CRITICAL FIX: Validate required fields with detailed error messages
         course_name = json_content.get("course_name")
         if not course_name:
             tracer.record("error", "missing course_name", keys=list(json_content.keys()))
-            raise ValueError("Planner: LLM response missing 'course_name' field")
+            self.logger.error(f"Planner validation failed: missing course_name. JSON keys: {list(json_content.keys())}")
+            self.logger.error(f"Full JSON content: {json_content}")
+            raise ValueError(f"Planner: LLM response missing 'course_name' field. Available keys: {list(json_content.keys())}")
         
         course_description = json_content.get("course_description")
         if not course_description:
             tracer.record("error", "missing course_description")
-            raise ValueError("Planner: LLM response missing 'course_description' field")
+            self.logger.error(f"Planner validation failed: missing course_description. JSON: {json_content}")
+            raise ValueError(f"Planner: LLM response missing 'course_description' field. Available keys: {list(json_content.keys())}")
         
         course_roadmap = json_content.get("course_roadmap")
         if not course_roadmap or not isinstance(course_roadmap, list) or len(course_roadmap) == 0:
-            tracer.record("error", "invalid course_roadmap", type=type(course_roadmap))
-            raise ValueError("Planner: 'course_roadmap' must be non-empty list")
+            tracer.record("error", "invalid course_roadmap", type=type(course_roadmap), value=course_roadmap)
+            self.logger.error(f"Planner validation failed: invalid course_roadmap")
+            self.logger.error(f"Type: {type(course_roadmap)}, Value: {course_roadmap}")
+            self.logger.error(f"Full JSON: {json_content}")
+            
+            # ULTIMATE FALLBACK: Create a basic roadmap based on duration
+            self.logger.warning("Creating fallback roadmap due to invalid LLM output")
+            num_lessons = max(2, min(5, int(state.duration) // 20))  # 2-5 lessons based on duration
+            course_roadmap = [
+                {
+                    "title": f"Module {i+1}: {course_name} - Part {i+1}",
+                    "description": f"Learn key concepts and skills in this section of the course."
+                }
+                for i in range(num_lessons)
+            ]
+            tracer.record("warn", "using fallback roadmap", num_items=len(course_roadmap))
+            self.logger.warning(f"Generated fallback roadmap with {len(course_roadmap)} items")
+        
+        # CRITICAL: Validate each roadmap item has "description" field
+        for idx, item in enumerate(course_roadmap):
+            if not isinstance(item, dict):
+                self.logger.error(f"Roadmap item {idx} is not a dict: {item}")
+                raise ValueError(f"Roadmap item {idx} must be a dictionary")
+            
+            if "description" not in item or not item.get("description"):
+                self.logger.error(f"⚠️ ROADMAP ITEM {idx} MISSING DESCRIPTION!")
+                self.logger.error(f"   Title: {item.get('title', 'NO TITLE')}")
+                self.logger.error(f"   Item keys: {list(item.keys())}")
+                # Add a generic description as fallback
+                item["description"] = f"Chi tiết về {item.get('title', f'module {idx+1}')}"
+                self.logger.warning(f"   → Added fallback description: {item['description']}")
+        
+        # Log all descriptions for debugging
+        self.logger.info("=" * 60)
+        self.logger.info("📋 ROADMAP DESCRIPTIONS VALIDATION:")
+        for idx, item in enumerate(course_roadmap):
+            desc = item.get("description", "")
+            self.logger.info(f"  [{idx+1}] {item.get('title', 'NO TITLE')}")
+            self.logger.info(f"      → Description ({len(desc)} chars): {desc[:100]}...")
+        self.logger.info("=" * 60)
         
         # CRITICAL FIX: Validate roadmap length
         roadmap_len = len(course_roadmap)

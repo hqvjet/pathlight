@@ -68,13 +68,26 @@ class LessonCreatorAgent(BaseAgent):
 
         # Determine total planned lessons
         planned_total: Optional[int] = state.lessons_expected or (len(state.roadmap) if state.roadmap else None)
+        
+        # Get current lesson title from roadmap if available for better context
+        current_lesson_title = ""
+        next_idx = state.next_lesson_index or (len(lessons) + 1)
+        if state.roadmap and len(state.roadmap) >= next_idx:
+            try:
+                # Adjust index (roadmap is 0-indexed, next_lesson_index is 1-indexed usually)
+                roadmap_idx = next_idx - 1
+                if 0 <= roadmap_idx < len(state.roadmap):
+                    # Roadmap items are Pydantic objects, not dicts
+                    current_lesson_title = state.roadmap[roadmap_idx].title
+            except:
+                pass
 
         # SEQUENTIAL GENERATION - CRITICAL FIX for timeout
         # Generate ONE lesson at a time to prevent timeout and ensure quality
         if planned_total and len(lessons) < planned_total:
             # Use next_lesson_index from state (initialized by planner)
             start_index = state.next_lesson_index or (len(lessons) + 1)
-            tracer.record("single", "generate next lesson (sequential)", index=start_index, total=planned_total)
+            tracer.record("single", "generate next lesson (sequential)", index=start_index, total=planned_total, current_title=current_lesson_title)
             prev_ids = [l.lesson_id for l in lessons]
 
             result = self._generate_single_lesson(state, start_index, prev_ids)
@@ -148,8 +161,46 @@ class LessonCreatorAgent(BaseAgent):
         tracer.record("llm", "batch initial response", content_preview=str(ai.content)[:200])
 
         iteration = 1
+        previous_queries_batch = []  # Track queries for loop detection
+        query_keywords_seen_batch = set()
+        
+        def normalize_query_batch(q: str) -> str:
+            return " ".join(sorted(set(q.lower().split())))
+        
+        def get_query_keywords_batch(q: str) -> set:
+            stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+            return set(q.lower().split()) - stopwords
+        
         while getattr(ai, "tool_calls", None) and iteration <= MAX_TOOL_CALLS_PER_AGENT:
             tracer.record("tools", "batch llm requested tools", tool_calls=ai.tool_calls, iteration=iteration)
+            
+            # CRITICAL: Check for query loops before executing
+            current_queries_batch = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+            is_loop = False
+            
+            for cq in current_queries_batch:
+                cq_norm = normalize_query_batch(cq)
+                cq_kw = get_query_keywords_batch(cq)
+                
+                for prev in previous_queries_batch:
+                    if normalize_query_batch(prev) == cq_norm:
+                        is_loop = True
+                        break
+                
+                if not is_loop and query_keywords_seen_batch:
+                    overlap = len(cq_kw & query_keywords_seen_batch) / len(cq_kw) if cq_kw else 0
+                    if overlap > 0.7:
+                        is_loop = True
+                
+                query_keywords_seen_batch.update(cq_kw)
+            
+            if is_loop:
+                self.logger.warning(f"Batch lesson creator detected query loop at iteration {iteration}")
+                tracer.record("warn", "batch query loop detected - forcing output", iteration=iteration)
+                break
+            
+            previous_queries_batch.extend(current_queries_batch)
+            
             for tool_call in ai.tool_calls:
                 tool_name = tool_call["name"]
                 tool_call_id = tool_call["id"]
@@ -273,33 +324,89 @@ class LessonCreatorAgent(BaseAgent):
         return lessons
 
     def _generate_single_lesson(self, state: State, index: int, prev_lessons: List[str]) -> Optional[Lesson]:
-        """Generate one lesson for the given index, with tool-call loop and robust JSON parsing."""
+        """Generate one lesson for the given index, with progressive retrieval and robust JSON parsing."""
         tracer = StepTracer(self.name, state.id, logger=self.logger)
 
         # Keep roadmap minimal: only the current item to reduce tokens
+        # CRITICAL: Pass the specific title AND description of the lesson to be generated
+        target_lesson_title = f"Lesson {index}"
+        target_lesson_description = ""
         slim_roadmap = None
-        if state.roadmap and len(state.roadmap) >= index:
-            try:
-                slim_roadmap = [state.roadmap[index - 1]]
-            except Exception:
-                slim_roadmap = state.roadmap[:1]
+        if state.roadmap:
+            # Try to get the specific roadmap item for this lesson
+            roadmap_index = index - 1
+            if 0 <= roadmap_index < len(state.roadmap):
+                 try:
+                    target_item = state.roadmap[roadmap_index]
+                    # Roadmap items are Pydantic objects, not dicts
+                    slim_roadmap = [target_item]
+                    target_lesson_title = target_item.title
+                    target_lesson_description = target_item.description
+                    
+                    # DEBUG LOG
+                    self.logger.info(f"🎯 [LESSON {index}] Using roadmap item:")
+                    self.logger.info(f"   Index: {roadmap_index} (lesson {index})")
+                    self.logger.info(f"   Title: {target_lesson_title}")
+                    self.logger.info(f"   Description: {target_lesson_description}")
+                 except Exception as e:
+                    self.logger.error(f"Failed to extract roadmap item {roadmap_index}: {e}")
+                    slim_roadmap = state.roadmap[:1]
+            else:
+                 # Fallback if index out of range
+                 self.logger.warning(f"Index {index} out of range for roadmap (len={len(state.roadmap)})")
+                 slim_roadmap = state.roadmap[:1]
+        
+        # PROGRESSIVE RETRIEVAL: Execute 3-layer retrieval BEFORE LLM
+        from agents.base.progressive_retrieval import execute_progressive_retrieval
+        
+        # Use lesson description as seed (planner's outline) for query building
+        lesson_context = f"{target_lesson_title}. {target_lesson_description}" if target_lesson_description else target_lesson_title
+        
+        self.logger.info(f"🔍 [LESSON {index}] Retrieval seed: '{lesson_context}' (title='{target_lesson_title}', desc='{target_lesson_description}')")
+        
+        tracer.record("retrieval", f"starting progressive 3-layer retrieval for lesson {index}")
+        
+        # Create retrieval function wrapper
+        def retrieval_func(query: str, material_id: str, k: int = 5):
+            tool = self.tools.get("retrieval_tool")
+            if not tool:
+                raise ValueError("retrieval_tool not found!")
+            result = tool._run(id=material_id, query=query, k=k)
+            return result
+        
+        # Execute progressive retrieval with LESSON DESCRIPTION (planner's seed) as context
+        retrieval_results = execute_progressive_retrieval(
+            retrieval_tool_func=retrieval_func,
+            material_id=state.id,
+            context_title=lesson_context,  # SEED from planner: title + description
+            k=5
+        )
+        
+        self.logger.info(f"[LESSON {index}] Progressive retrieval: L1={retrieval_results['layer1_query'][:30]}... | L2={retrieval_results['layer2_query'][:30]}... | L3={retrieval_results['layer3_query'][:30]}...")
+        tracer.record("retrieval", f"completed 3 layers for lesson {index}",
+                     layer1_query=retrieval_results['layer1_query'],
+                     layer2_query=retrieval_results['layer2_query'],
+                     layer3_query=retrieval_results['layer3_query'])
+        
+        # Build initial prompt WITH retrieval results pre-loaded
+        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+            id=state.id,
+            history=[],
+            difficulty=state.difficulty,
+            duration=str(state.duration),
+            title=target_lesson_title,
+            description=state.description,
+            roadmap=slim_roadmap or state.roadmap,
+            lessons_expected=state.lessons_expected or "",
+            next_lesson_index=str(index),
+            prev_lessons=prev_lessons,
+        )
+        
+        # Add retrieval context to prompt
+        initial_prompt += f"\n\n=== RETRIEVED CONTEXT (3 LAYERS) ===\n{retrieval_results['all_text']}\n\n"
+        initial_prompt += "=== INSTRUCTION ===\nNow write the lesson JSON based on the above retrieved context. Do NOT call any tools."
 
-        history: List = [
-            SystemMessage(
-                content=self.prompt_manager.get_prompt(self.name).format(
-                    id=state.id,
-                    history=[],
-                    difficulty=state.difficulty,
-                    duration=str(state.duration),
-                    title=state.title,
-                    description=state.description,
-                    roadmap=slim_roadmap or state.roadmap,
-                    lessons_expected=state.lessons_expected or "",
-                    next_lesson_index=str(index),
-                    prev_lessons=prev_lessons,
-                )
-            )
-        ]
+        history: List = [SystemMessage(content=initial_prompt)]
 
         ai: AIMessage = self.chain.invoke(
             {
@@ -315,49 +422,19 @@ class LessonCreatorAgent(BaseAgent):
                 "prev_lessons": prev_lessons,
             }
         )
+        # CRITICAL FIX: Append initial AI message to history
+        history.append(ai)
         tracer.record("llm", "initial response", index=index, content_preview=str(ai.content)[:200])
 
         count = 1
-        while getattr(ai, "tool_calls", None) and count <= MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("tools", "llm requested tools", index=index, tool_calls=ai.tool_calls, iteration=count)
-            for tool_call in ai.tool_calls:
-                tool_name = tool_call["name"]
-                tool_call_id = tool_call["id"]
-                args = tool_call["args"]
-                if tool_name not in self.tools:
-                    raise ValueError(f"Tool {tool_name} not found in tools.")
+        
+        # Since retrieval is done, LLM should NOT call tools
+        # If it does, force immediate JSON output (don't execute tools)
+        if ai.tool_calls and len(ai.tool_calls) > 0:
+            self.logger.warning(f"Lesson Creator called tools despite having retrieval context. Forcing JSON output.")
+            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON", index=index)
 
-                result = self.tool_manager.execute_tool_sync(tool_name, args)
-                history.append(
-                    ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
-                )
-                # Token optimization: Trim history to prevent explosion
-                history = trim_history(history)
-                tracer.record(
-                    "tool_result",
-                    f"{tool_name} executed",
-                    index=index,
-                    args=args,
-                    result_preview=str(result)[:200],
-                )
-
-                ai = self.chain.invoke(
-                    {
-                        "id": state.id,
-                        "history": history,
-                        "difficulty": state.difficulty,
-                        "duration": str(state.duration),
-                        "title": state.title,
-                        "description": state.description,
-                        "roadmap": slim_roadmap or state.roadmap,
-                        "lessons_expected": state.lessons_expected or "",
-                        "next_lesson_index": str(index),
-                        "prev_lessons": prev_lessons,
-                    }
-                )
-            count += 1
-
-        # CRITICAL FIX: Force final JSON output after hitting max tool calls
+        # CRITICAL FIX: Force final JSON output if tools were called
         if getattr(ai, "tool_calls", None):
             tracer.record(
                 "warn",

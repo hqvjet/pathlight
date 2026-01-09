@@ -250,7 +250,28 @@ class OpenSearchClient:
                 # Unexpected error - don't retry
                 log_exception(logger, f"Failed to index document {doc_id}", e)
                 raise OpenSearchOperationError(f"Indexing failed: {str(e)}")
-
+    def refresh_index(self, index_name: str) -> Dict:
+        """Force refresh an index to make all recent changes searchable immediately.
+        
+        Args:
+            index_name: Index to refresh
+            
+        Returns:
+            OpenSearch response
+        """
+        if not self.is_available():
+            logger.warning("OpenSearch client not available - skipping refresh")
+            return {}
+        
+        try:
+            logger.info(f"Force refreshing index: {index_name}")
+            response = self.client.indices.refresh(index=index_name)
+            logger.info(f"Index {index_name} refreshed successfully")
+            return response
+        except Exception as e:
+            log_exception(logger, f"Failed to refresh index {index_name}", e)
+            # Don't raise - refresh failure is not critical
+            return {}
     def index_material_data(self, index_name: str, material_data: Dict[str, Any], material_id: str) -> None:
         """
         Index material data to OpenSearch if available.

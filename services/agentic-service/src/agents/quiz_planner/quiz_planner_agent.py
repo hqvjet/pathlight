@@ -63,17 +63,47 @@ class QuizPlannerAgent(BaseAgent):
             num_questions=state.num_questions,
         )
 
-        history: List = [
-            SystemMessage(
-                content=self.prompt_manager.get_prompt(self.name).format(
-                    id=state.id,
-                    history=[],
-                    difficulty=state.difficulty,
-                    duration=str(state.duration),
-                    num_questions=state.num_questions,
-                )
-            )
-        ]
+        # PROGRESSIVE RETRIEVAL: Execute 3-layer retrieval BEFORE LLM (like course planner)
+        from agents.base.progressive_retrieval import execute_progressive_retrieval
+        
+        tracer.record("retrieval", "starting progressive 3-layer retrieval for quiz")
+        
+        # Create retrieval function wrapper
+        def retrieval_func(query: str, material_id: str, k: int = 5):
+            tool = self.tools.get("retrieval_tool")
+            if not tool:
+                raise ValueError("retrieval_tool not found!")
+            result = tool._run(id=material_id, query=query, k=k)
+            return result
+        
+        # Execute progressive retrieval
+        retrieval_results = execute_progressive_retrieval(
+            retrieval_tool_func=retrieval_func,
+            material_id=state.id,
+            context_title="",  # No specific context for quiz planner
+            k=5
+        )
+        
+        self.logger.info(f"[QUIZ PLANNER] Progressive retrieval: L1={retrieval_results['layer1_query'][:30]}... | L2={retrieval_results['layer2_query'][:30]}... | L3={retrieval_results['layer3_query'][:30]}...")
+        tracer.record("retrieval", "completed 3 layers", 
+                     layer1_query=retrieval_results['layer1_query'],
+                     layer2_query=retrieval_results['layer2_query'],
+                     layer3_query=retrieval_results['layer3_query'])
+        
+        # Format retrieved context
+        retrieved_context = retrieval_results['all_text']
+        
+        # Build initial prompt WITH retrieval results pre-loaded
+        initial_prompt = self.prompt_manager.get_prompt(self.name).format(
+            id=state.id,
+            history=[],
+            difficulty=state.difficulty,
+            duration=str(state.duration),
+            num_questions=state.num_questions,
+            retrieved_context=retrieved_context,
+        )
+
+        history: List = [SystemMessage(content=initial_prompt)]
 
         ai: AIMessage = self.chain.invoke(
             {
@@ -82,49 +112,26 @@ class QuizPlannerAgent(BaseAgent):
                 "difficulty": state.difficulty,
                 "duration": str(state.duration),
                 "num_questions": state.num_questions,
+                "retrieved_context": retrieved_context,
             }
         )
         history.append(ai)
         tracer.record("llm", "initial response", content_preview=str(ai.content)[:200])
 
-        count = 1
-        while ai.tool_calls and count <= MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("tools", "llm requested tools", tool_calls=ai.tool_calls, iteration=count)
-            for tool_call in ai.tool_calls:
-                tool_name = tool_call["name"]
-                tool_call_id = tool_call["id"]
-                args = tool_call["args"]
-                
-                if tool_name not in self.tools:
-                    raise ValueError(f"Tool {tool_name} not found in tools.")
-
-                result = self.tool_manager.execute_tool_sync(tool_name, args)
-                history.append(
-                    ToolMessage(tool_call_id=tool_call_id, name=tool_name, content=result)
+        # FORCE JSON OUTPUT if LLM tries to call tools despite having retrieval context
+        if ai.tool_calls:
+            self.logger.warning("QuizPlanner called tools despite having retrieval context. Forcing JSON output.")
+            tracer.record("warn", "llm called tools despite pre-loaded context - forcing JSON")
+            
+            # Remove tools and force JSON
+            force_instruction = SystemMessage(
+                content=(
+                    "You already have ALL retrieval context above. "
+                    "DO NOT call any more tools. Output ONLY the quiz plan JSON now:\n"
+                    '{"quiz_title": "...", "quiz_overview": "...", "quiz_ideas": [...]}'
                 )
-                history = trim_history(history)
-                tracer.record(
-                    "tool_result",
-                    f"{tool_name} executed",
-                    args=args,
-                    result_preview=str(result)[:200],
-                )
-
-                ai = self.chain.invoke(
-                    {
-                        "id": state.id,
-                        "history": history,
-                        "difficulty": state.difficulty,
-                        "duration": str(state.duration),
-                        "num_questions": state.num_questions,
-                    }
-                )
-            count += 1
-
-        # Force final JSON output if max tool calls reached
-        if count > MAX_TOOL_CALLS_PER_AGENT:
-            tracer.record("warn", f"Hit max tool calls limit: {MAX_TOOL_CALLS_PER_AGENT}")
-            self.logger.warning(f"QuizPlanner hit max tool calls: {MAX_TOOL_CALLS_PER_AGENT}")
+            )
+            history.append(force_instruction)
             
             from langchain_openai import ChatOpenAI
             from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
@@ -145,6 +152,7 @@ class QuizPlannerAgent(BaseAgent):
                     "difficulty": state.difficulty,
                     "duration": str(state.duration),
                     "num_questions": state.num_questions,
+                    "retrieved_context": retrieved_context,
                 })
             except Exception as e:
                 tracer.record("error", "final JSON invoke failed", error=str(e))
@@ -211,6 +219,7 @@ class QuizPlannerAgent(BaseAgent):
         state.ideas = ideas
         state.ideas_expected = len(ideas)
         state.next_card_index = 0  # Start from first question
+        state.retrieved_context = retrieved_context  # Store context for questioner to reuse
         
         tracer.record(
             "done",

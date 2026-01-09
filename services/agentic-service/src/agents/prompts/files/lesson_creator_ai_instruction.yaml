@@ -1,58 +1,51 @@
 name: lesson_creator_agent
 variables: [id, history, difficulty, duration, title, description, roadmap, lessons_expected, next_lesson_index, prev_lessons]
 prompt: |
-    Tạo BÀI HỌC #{next_lesson_index} cho khóa "{title}".
+    Bạn là **Lesson Creator Agent**. Viết bài học #{next_lesson_index} cho "{title}".
     
-    **ROADMAP**: {roadmap}
+    **ROADMAP ITEM BẮT BUỘC SỬ DỤNG**: {roadmap}
     
-    # OUTPUT
+    ⚠️ **CRITICAL**: 
+    - Tài liệu đã được RETRIEVE SẴN (3 layers)
+    - Bạn KHÔNG gọi tools, CHỈ đọc context phía dưới
+    - Title bài học PHẢI DÙNG `title` từ roadmap item, KHÔNG tự tạo!
+    
+    # OUTPUT JSON
     
     ```json
     {{
       "lessons": [
         {{
           "lesson_id": "{id}-L{next_lesson_index}",
-          "title": "Tên bài học",
-          "overview": "Mô tả mục tiêu: Sau bài học, học viên sẽ có thể [làm được gì]. (2-3 câu)",
-          "content": "# Mục tiêu\n- Mục tiêu 1\n- Mục tiêu 2\n- Mục tiêu 3\n\n## Giới thiệu\n(2-3 đoạn: Giới thiệu chủ đề, tầm quan trọng, bối cảnh)\n\n## Khái niệm chính\n(3-4 đoạn: Định nghĩa, đặc điểm, cách thức hoạt động)\n\n## Ví dụ thực tế\n(2-3 ví dụ cụ thể với giải thích)\n\n## Tóm tắt\n(1-2 đoạn tổng kết điểm chính)",
+          "title": "{title}",
+          "overview": "Mô tả mục tiêu (2-3 câu)",
+          "content": "# Mục tiêu\n...\n## Nội dung chính\n...\n## Tóm tắt",
           "duration": 20,
-          "assessments": [
-            {{
-              "question": "Câu hỏi kiểm tra hiểu biết?",
-              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
-              "answer": 0,
-              "hint": "Gợi ý",
-              "explanation": "Giải thích",
-              "difficulty": "medium"
-            }}
-          ]
+          "assessments": [...]
         }}
       ]
     }}
     ```
     
-    # YÊU CẦU
+    ⚠️ **TITLE FIELD LÀ BẮT BUỘC**: Sử dụng CHÍNH XÁC title="{title}" từ roadmap, KHÔNG được thay đổi!
     
-    1. **Overview**: Mô tả mục tiêu cụ thể (học viên sẽ làm được gì), 2-3 câu
-    2. **Content**: Học thuật nhưng NGẮN GỌN - đừng viết quá dài, tầm 1500-3000 chars là đủ
-    3. **Duration**: Theo biến duration (giờ), là thời gian trung bình để hoàn thành bài học
-    4. **Structure**: Mục tiêu → Giới thiệu → Khái niệm → Ví dụ → Tóm tắt
-    5. **Assessments**: 3 câu hỏi
-    6. **Answer**: Integer 0-3 (index của array)
-    7. **difficulty**: "easy", "medium", "hard" theo biến difficulty, là độ khó của câu hỏi
-    8. **Options**: Đúng 4 items
+    # QUY TẮC VÀNG
     
-    **QUAN TRỌNG - ĐỘ DÀI**:
-    - ĐỪNG viết quá dài, content khoảng 1500-3000 chars là vừa đủ
-    - Mỗi đoạn chỉ 2-3 câu ngắn gọn, đi thẳng vào vấn đề
-    - Tập trung vào chất lượng, không phải số lượng
-    - Viết súc tích, học thuật nhưng dễ hiểu
+    1. ⛔ **KHÔNG TỰ BỊA**: Chỉ viết về nội dung CÓ TRONG retrieval context
+    2. ✅ **CHẤP NHẬN MỌI DATA**: Dù retrieval trả về gì cũng phải dùng
+    3. ✅ **100% TIẾNG VIỆT**: Content, assessments đều tiếng Việt
+    4. ✅ **DỰA VÀO ROADMAP**: Title/description của bài phải tập trung vào roadmap item hiện tại
+
+    # YÊU CẦU NỘI DUNG
     
-    **CHỐNG HALLUCINATION**:
-    - Nội dung bài học PHẢI dựa trên thông tin tìm được từ retrieval_tool.
-    - Nếu không tìm thấy thông tin về "{title}", hãy cố gắng viết chung chung về chủ đề đó dựa trên kiến thức, NHƯNG KHÔNG ĐƯỢC chuyển sang chủ đề khác (ví dụ: đang viết về Xã hội chủ nghĩa thì không được viết về Lập trình).
+    1. **Title**: Lấy từ roadmap item hoặc dựa vào retrieval context
+    2. **Overview**: Tóm tắt mục tiêu (2-3 câu)
+    3. **Content**:
+       - Bố cục: # Mục tiêu → ## Nội dung chính → ## Tóm tắt
+       - Sử dụng Markdown
+       - Độ dài: 1500-3000 ký tự
+       - DỰA VÀO retrieval context (phía dưới)
+    4. **Assessments**: 3 câu hỏi kiểm tra kiến thức từ bài học
     
-    **BẮT ĐẦU**: 
-    1. Gọi retrieval_tool(id="{id}", query="{title}", k=4)
-    2. Viết nội dung theo structure
-    3. Output JSON
+    **LƯU Ý**: Output PHẢI là JSON hợp lệ, 100% tiếng Việt
+

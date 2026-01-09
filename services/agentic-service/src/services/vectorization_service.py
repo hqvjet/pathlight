@@ -90,9 +90,6 @@ class VectorizationService:
                 documents=documents
             )
             
-            total_chunks = sum(len(doc.chunks) for doc in documents)
-            logger.info(f"Created MaterialData with {len(documents)} documents and {total_chunks} chunks")
-            
             return material_data
             
         except Exception as e:
@@ -121,8 +118,7 @@ class VectorizationService:
             HTTPException: If critical errors occur during processing
         """
         start_time = datetime.now()
-        logger.info(f"Starting vectorization process for {len(file_streams_dict)} files")
-        logger.info(f"Material ID: {material_id}, Category: {category}")
+        logger.info(f"Vectorizing {len(file_streams_dict)} files for material_id={material_id}")
 
         # Validate inputs
         self.validate_inputs(file_streams_dict, material_id)
@@ -130,13 +126,16 @@ class VectorizationService:
         # Process files and create embeddings
         try:
             file_contents, processing_errors = self.file_processor.process_multiple_files(file_streams_dict)
+            # File processing completed
         except FileProcessingError as e:
             # Re-raise as is – controller will map to HTTP 500
             log_exception(logger, "All files failed during processing", e)
             raise
 
         try:
+            logger.info(f"Creating embeddings for {len(file_contents)} documents...")
             documents, embedding_errors = self.embedding_service.create_document_embeddings(file_contents)
+            logger.info(f"Successfully created embeddings for {len(documents)} documents")
         except EmbeddingCreationError as e:
             log_exception(logger, "Embedding creation failed for all documents", e)
             raise
@@ -147,7 +146,7 @@ class VectorizationService:
             try:
                 def index_single_chunk(doc, chunk):
                     payload = {
-                        "id": str(material_data.id),
+                        "id": str(material_id),  # FIX: Use material_id parameter directly, not material_data.id
                         "category": int(material_data.category),
                         "documents": [
                             {
@@ -165,6 +164,7 @@ class VectorizationService:
                     }
                     # Composite _id ensures uniqueness per chunk
                     composite_id = f"{material_id}:{int(doc.document_id)}:{int(chunk.chunk_id)}"
+                    
                     return self.opensearch_client.index_document(
                         self.opensearch_index_name,
                         payload,
@@ -172,18 +172,33 @@ class VectorizationService:
                     )
 
                 # Index chunks sequentially
+                total_indexed = 0
+                total_chunks = sum(len(doc.chunks) for doc in material_data.documents)
+                logger.info(f"Indexing {total_chunks} chunks to OpenSearch...")
+                
                 for doc in material_data.documents:
                     for chunk in doc.chunks:
                         try:
                             index_single_chunk(doc, chunk)
+                            total_indexed += 1
+                            # Log progress every 5 chunks
+                            if total_indexed % 5 == 0 or total_indexed == total_chunks:
+                                logger.info(f"Indexed {total_indexed}/{total_chunks} chunks")
                         except Exception as e:
+                            logger.error(f"Failed to index chunk {chunk.chunk_id} from doc {doc.document_id}: {e}")
                             if not processing_errors:
                                 processing_errors = []
                             processing_errors.append({
                                 "opensearch": f"Indexing chunk failed: {str(e)}"
                             })
+                
+                logger.info(f"Indexed {total_indexed} chunks for material_id={material_id}")
+                
+                # Force refresh index to make data immediately searchable
+                self.opensearch_client.refresh_index(self.opensearch_index_name)
             except Exception as e:
-                log_exception(logger, "OpenSearch indexing failed", e)
+                log_exception(logger, f"OpenSearch indexing failed for material_id={material_id}", e)
+                logger.error(f"Full error: {type(e).__name__}: {str(e)}")
                 # Only add to warnings, don't fail the entire process unless in Lambda
                 if self.opensearch_client.environment == 'lambda':
                     # In Lambda/production, re-raise the exception
@@ -194,7 +209,8 @@ class VectorizationService:
                         processing_errors = []
                     processing_errors.append({"opensearch": f"Indexing failed: {str(e)}"})
         else:
-            logger.info("OpenSearch client not available - skipping indexing step")
+            logger.warning(f"=== OPENSEARCH SKIPPED === Client: {self.opensearch_client}, Available: {self.opensearch_client.is_available() if self.opensearch_client else 'N/A'}")
+            logger.warning("OpenSearch client not available - skipping indexing step")
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()

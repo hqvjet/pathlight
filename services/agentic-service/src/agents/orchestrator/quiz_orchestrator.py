@@ -47,16 +47,20 @@ class QuizOrchestrator:
 
         # 2) Generate quiz cards sequentially from ideas
         current_count = len(quiz_cards)
-        if current_count < num_questions:
+        ideas_count = len(ideas)
+        
+        # Stop when we have enough questions OR run out of ideas
+        if current_count < num_questions and current_count < ideas_count:
             tracer.record(
                 "decide",
                 "questioner needed (sequential)",
                 current=current_count,
                 expected=num_questions,
+                ideas_available=ideas_count,
             )
             return "create_quiz_question"
 
-        tracer.record("done", "quiz workflow complete")
+        tracer.record("done", "quiz workflow complete", final_count=current_count)
         # Mark as completed
         try:
             if title or overview:

@@ -69,7 +69,8 @@ class QuestionerAgent(BaseAgent):
         # Sequential generation: one question at a time
         next_index = state.next_card_index or 0
         
-        if next_index < len(ideas):
+        # Stop at num_questions, not len(ideas) - planner might generate more ideas than needed
+        if next_index < state.num_questions and next_index < len(ideas):
             idea = ideas[next_index]
             tracer.record("single", "generate question from idea", index=next_index, topic=idea.topic)
             
@@ -78,6 +79,7 @@ class QuestionerAgent(BaseAgent):
                 raise ValueError(f"Failed to generate question {next_index + 1}: LLM returned None or invalid JSON")
             
             quiz_cards.append(result)
+            state.quiz_cards = quiz_cards  # Assign back to state
             state.next_card_index = next_index + 1
             tracer.record("done", "question appended", card_id=result.card_id, next_index=state.next_card_index)
             
@@ -86,6 +88,40 @@ class QuestionerAgent(BaseAgent):
     def _generate_single_question(self, state: QuizState, idea, question_number: int, prev_ids: List[str]) -> QuizCard:
         """Generate a single quiz question based on an idea."""
         tracer = StepTracer(self.name, state.id, logger=self.logger)
+        
+        # REUSE PLANNER'S GENERAL CONTEXT
+        general_context = state.retrieved_context or ""
+        
+        # RETRIEVE SPECIFIC CONTEXT for this question idea (1 layer only)
+        query = f"{idea.topic} {idea.description}" if idea.description else idea.topic
+        tracer.record("retrieval", f"Retrieving specific context for question {question_number}", query=query[:50])
+        
+        try:
+            tool = self.tools.get("retrieval_tool")
+            if not tool:
+                raise ValueError("retrieval_tool not found!")
+            
+            specific_context = tool._run(id=state.id, query=query, k=3)  # k=3 for focused context
+            self.logger.info(f"[QUESTION {question_number}] Retrieved specific context: {len(specific_context)} chars for '{query[:40]}...'")
+        except Exception as e:
+            self.logger.warning(f"[QUESTION {question_number}] Failed to retrieve specific context: {e}")
+            specific_context = ""
+        
+        # COMBINE: general context + specific context for this question
+        if general_context and specific_context:
+            retrieved_context = f"=== GENERAL CONTEXT ===\n{general_context}\n\n=== SPECIFIC CONTEXT FOR THIS QUESTION ===\n{specific_context}"
+        elif general_context:
+            retrieved_context = general_context
+        elif specific_context:
+            retrieved_context = specific_context
+        else:
+            self.logger.warning(f"[QUESTION {question_number}] No context available!")
+            retrieved_context = ""
+        
+        tracer.record("context", f"Combined context ready", 
+                     general_len=len(general_context), 
+                     specific_len=len(specific_context),
+                     total_len=len(retrieved_context))
         
         history: List = [
             SystemMessage(
@@ -101,6 +137,7 @@ class QuestionerAgent(BaseAgent):
                     idea_difficulty=idea.difficulty,
                     question_number=question_number,
                     prev_card_ids=prev_ids,
+                    retrieved_context=retrieved_context,
                 )
             )
         ]
@@ -118,6 +155,7 @@ class QuestionerAgent(BaseAgent):
                 "idea_difficulty": idea.difficulty,
                 "question_number": question_number,
                 "prev_card_ids": prev_ids,
+                "retrieved_context": retrieved_context,
             }
         )
         history.append(ai)
@@ -154,6 +192,7 @@ class QuestionerAgent(BaseAgent):
                         "idea_difficulty": idea.difficulty,
                         "question_number": question_number,
                         "prev_card_ids": prev_ids,
+                        "retrieved_context": retrieved_context,
                     }
                 )
             count += 1
@@ -188,6 +227,7 @@ class QuestionerAgent(BaseAgent):
                     "idea_difficulty": idea.difficulty,
                     "question_number": question_number,
                     "prev_card_ids": prev_ids,
+                    "retrieved_context": retrieved_context,
                 })
             except Exception as e:
                 tracer.record("error", "Final invoke failed", error=str(e))

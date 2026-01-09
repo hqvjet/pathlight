@@ -89,8 +89,40 @@ async def generate_single_lesson_async(agent, state: State, index: int, prev_les
         return None
     
     iteration = 1
+    previous_queries_parallel = []
+    query_keywords_parallel = set()
+    
+    def normalize_q(q: str) -> str:
+        return " ".join(sorted(set(q.lower().split())))
+    
+    def get_kw(q: str) -> set:
+        stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'về', 'của', 'và', 'là'}
+        return set(q.lower().split()) - stopwords
+    
     while getattr(ai, "tool_calls", None) and iteration <= MAX_TOOL_CALLS_PER_AGENT:
         tracer.record("tools", f"lesson {index} iteration {iteration}", count=len(ai.tool_calls))
+        
+        # CRITICAL: Loop detection
+        curr_queries = [tc.get("args", {}).get("query", "") for tc in ai.tool_calls]
+        is_loop = False
+        for cq in curr_queries:
+            cq_norm = normalize_q(cq)
+            cq_kw = get_kw(cq)
+            for prev in previous_queries_parallel:
+                if normalize_q(prev) == cq_norm:
+                    is_loop = True
+                    break
+            if not is_loop and query_keywords_parallel:
+                overlap = len(cq_kw & query_keywords_parallel) / len(cq_kw) if cq_kw else 0
+                if overlap > 0.7:
+                    is_loop = True
+            query_keywords_parallel.update(cq_kw)
+        
+        if is_loop:
+            tracer.record("warn", f"lesson {index} query loop detected - breaking", iteration=iteration)
+            break
+        
+        previous_queries_parallel.extend(curr_queries)
         
         for tool_call in ai.tool_calls:
             tool_name = tool_call["name"]
