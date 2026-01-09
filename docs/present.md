@@ -19,13 +19,13 @@ Moreover, Looking at the EdTech landscape, specifically in Vietnam—one of the 
 
 We are moving from Education 1.0, where systems simply hosted files for users to download, to Education 2.0, where users demand interaction and personalization.
 
+### Post: Brief Overview
 However, the current challenge is Scalability. Creating a high-quality, interactive course manually takes weeks of effort from teachers. It is a slow and expensive bottleneck.
 
 My goal with Pathlight was to break this bottleneck.
 
 By leveraging Generative AI and RAG, I built a system that automates this entire workflow—reducing the time from 'Raw Data' to 'Ready-to-Learn Course' from weeks to just minutes
 
-### Post: Brief Overview
 Before going into the diagrams, let me explain the core concept of Pathlight simply.
 
 Imagine you have a long, heavy PDF document. Reading it alone is difficult and boring. This is passive reading.
