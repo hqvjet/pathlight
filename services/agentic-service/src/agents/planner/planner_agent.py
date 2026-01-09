@@ -108,26 +108,35 @@ class PlannerAgent(BaseAgent):
         # Build prompt with context BEFORE final instruction
         initial_prompt = base_instruction + f"""
 
-=== 📚 TÀI LIỆU GỐC (RETRIEVED CONTEXT - 3 LAYERS) ===
+=== 📚 RETRIEVED CONTEXT (3 LAYERS) ===
 
 {retrieval_results['all_text']}
 
-=== ⚠️ CRITICAL INSTRUCTION ===
+=== 🎯 INSTRUCTION - XÁC ĐỊNH CHỦ ĐỀ VÀ TẠO ROADMAP ===
 
-BẠN VỪA NHẬN ĐƯỢC retrieval context phía trên.
+**BƯỚC 1**: Phân tích retrieved context theo thứ tự ưu tiên:
 
-**BƯỚC 1**: Đọc KỸ retrieval context và XÁC ĐỊNH CHỦ ĐỀ CHÍNH:
-   - Tài liệu nói về chủ đề gì? (VD: "brain reading", "Python programming", "marketing", etc.)
-   - Những khái niệm/keywords chính là gì?
+1. **Document Title/Name** (Layer 1: Abstract, Table of Contents, Introduction):
+   → Tài liệu có tiêu đề/tên gì? Đây thường là CHỦ ĐỀ CHÍNH.
 
-**BƯỚC 2**: Tạo course roadmap JSON CHỈ VỀ CHỦ ĐỀ ĐÃ XÁC ĐỊNH:
-   - Course name PHẢI khớp 100% với chủ đề trong retrieval
-   - Mỗi lesson description PHẢI trích xuất từ retrieval, KHÔNG tự bịa
-   - Nếu retrieval về "não bộ" → course về "não bộ", KHÔNG phải "lãnh đạo"!
+2. **Main Subject vs Supporting Details**:
+   → Phân biệt: Topic nào là TRỌNG TÂM được elaborate (có definition, architecture, details)?
+   → Topic nào chỉ là công cụ/kỹ thuật PHỤ TRỢ (VD: ngôn ngữ lập trình, frameworks)?
 
-**OUTPUT**: JSON format như đã hướng dẫn phía trên.
+3. **Frequency + Context**:
+   → Topic nào xuất hiện xuyên suốt cả 3 layers VỚI vai trò CHÍNH, không phải phụ?
 
-**DO NOT call any tools. Generate JSON directly.**
+**BƯỚC 2**: Tạo course roadmap CHỈ VỀ CHỦ ĐỀ CHÍNH đã xác định:
+   - Course name = Tên/chủ đề chính của document
+   - Lessons = Các khía cạnh/modules của CHỦ ĐỀ đó
+   - KHÔNG tạo course về tools/kỹ thuật phụ trợ
+
+**Nguyên tắc phân biệt**:
+- "Báo cáo về Hệ thống X sử dụng Python" → Course: "Hệ thống X" (Python là tool)
+- "Hướng dẫn lập trình Python" → Course: "Python" (Python là main topic)
+- "Thiết kế kiến trúc microservices với Docker" → Course: "Microservices" (Docker là tool)
+
+**OUTPUT**: JSON format như đã hướng dẫn. KHÔNG call tools.
 """
         
         history: List = [SystemMessage(content=initial_prompt)]
