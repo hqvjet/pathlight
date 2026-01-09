@@ -94,140 +94,148 @@ class PlannerAgent(BaseAgent):
         )
         
         self.logger.info(f"[PLANNER] Progressive retrieval: L1={retrieval_results['layer1_query'][:30]}... | L2={retrieval_results['layer2_query'][:30]}... | L3={retrieval_results['layer3_query'][:30]}...")
+        
+        # DEBUG: Dump FULL retrieved context to verify what LLM actually sees
+        self.logger.info(f"[PLANNER] Retrieved context length: {len(retrieval_results['all_text'])} chars")
+        self.logger.info(f"[PLANNER] ========== FULL RETRIEVED CONTEXT START ==========")
+        self.logger.info(retrieval_results['all_text'])
+        self.logger.info(f"[PLANNER] ========== FULL RETRIEVED CONTEXT END ==========")
+        
         tracer.record("retrieval", "completed 3 layers", 
                      layer1_query=retrieval_results['layer1_query'],
                      layer2_query=retrieval_results['layer2_query'],
-                     layer3_query=retrieval_results['layer3_query'])
+                     layer3_query=retrieval_results['layer3_query'],
+                     context_length=len(retrieval_results['all_text']))
         
-        # CRITICAL FIX: Put retrieved context FIRST, then instruction
-        # This ensures LLM pays attention to the actual content
+        # RADICAL FIX: Separate context from instruction
+        # System message = Retrieved context (FACTS)
+        # User message = Task instruction (WHAT TO DO)
         base_instruction = self.prompt_manager.get_prompt(self.name).format(
             id=state.id, history=[], difficulty=state.difficulty, duration=str(state.duration)
         )
         
-        # Build prompt with context BEFORE final instruction
-        initial_prompt = base_instruction + f"""
+        # System message: ONLY the retrieved context with STRONG emphasis
+        context_message = SystemMessage(content=f"""
+⚠️ CRITICAL: ONLY USE THIS RETRIEVED CONTENT ⚠️
 
-=== 📚 RETRIEVED CONTEXT (3 LAYERS) ===
+Below is the RETRIEVED CONTENT from the user's uploaded document (3 layers of semantic search):
 
 {retrieval_results['all_text']}
 
-=== 🎯 INSTRUCTION - XÁC ĐỊNH CHỦ ĐỀ VÀ TẠO ROADMAP ===
+🔴 ABSOLUTE RULES:
+1. This retrieved text is your ONLY source of truth
+2. You CANNOT use external knowledge, pre-training, or examples
+3. You MUST identify the MAIN TOPIC from this text ONLY
+4. If the document discusses multiple topics (e.g., "Pathlight platform" + implementation details in "Python/Flask"), the MAIN TOPIC is the primary subject (Pathlight), NOT the tools used (Python/Flask)
 
-**BƯỚC 1**: Phân tích retrieved context theo thứ tự ưu tiên:
-
-1. **Document Title/Name** (Layer 1: Abstract, Table of Contents, Introduction):
-   → Tài liệu có tiêu đề/tên gì? Đây thường là CHỦ ĐỀ CHÍNH.
-
-2. **Main Subject vs Supporting Details**:
-   → Phân biệt: Topic nào là TRỌNG TÂM được elaborate (có definition, architecture, details)?
-   → Topic nào chỉ là công cụ/kỹ thuật PHỤ TRỢ (VD: ngôn ngữ lập trình, frameworks)?
-
-3. **Frequency + Context**:
-   → Topic nào xuất hiện xuyên suốt cả 3 layers VỚI vai trò CHÍNH, không phải phụ?
-
-**BƯỚC 2**: Tạo course roadmap CHỈ VỀ CHỦ ĐỀ CHÍNH đã xác định:
-   - Course name = Tên/chủ đề chính của document
-   - Lessons = Các khía cạnh/modules của CHỦ ĐỀ đó
-   - KHÔNG tạo course về tools/kỹ thuật phụ trợ
-
-**Nguyên tắc phân biệt**:
-- "Báo cáo về Hệ thống X sử dụng Python" → Course: "Hệ thống X" (Python là tool)
-- "Hướng dẫn lập trình Python" → Course: "Python" (Python là main topic)
-- "Thiết kế kiến trúc microservices với Docker" → Course: "Microservices" (Docker là tool)
-
-**OUTPUT**: JSON format như đã hướng dẫn. KHÔNG call tools.
-"""
+🎯 YOUR TASK: Read this content and identify what subject this document is PRIMARILY about.
+""")
         
-        history: List = [SystemMessage(content=initial_prompt)]
+        # User message: Task instruction with EXPLICIT main topic detection
+        task_message = SystemMessage(content=base_instruction + """
 
-        # CRITICAL FIX: Since we pre-loaded retrieval context,
-        # invoke LLM WITHOUT tools to prevent it from calling retrieval_tool again
-        # This forces LLM to use the pre-loaded context only
+🔥 CRITICAL EXECUTION STEPS 🔥
+
+STEP 1: IDENTIFY MAIN TOPIC
+- Read the retrieved content above carefully
+- Determine: "What is this document PRIMARILY explaining or teaching?"
+- Look for: Document title, abstract, most frequently discussed concepts, detailed technical explanations
+- CRITICAL DISTINCTION: Main subject (what is being studied/built) vs Implementation details (tools/languages/frameworks used)
+
+STEP 2: CREATE ROADMAP
+- Course name MUST match the MAIN TOPIC from Step 1
+- Lessons cover aspects of the MAIN TOPIC only
+- Use 100% Vietnamese language
+- Output valid JSON format
+
+STEP 3: SELF-VALIDATE
+- Re-read your course name
+- Check: Does it match what the retrieved content is primarily about?
+- If mismatch detected, regenerate the roadmap
+
+Do NOT call any retrieval tools. Use ONLY the pre-loaded context above.
+""")
+        
+        history: List = [context_message, task_message]
+
+        # CHAIN-OF-THOUGHT FIX: Use structured schema to force step-by-step reasoning
+        # Instead of jumping straight to roadmap, force LLM to:
+        # 1. Identify main topic
+        # 2. List key concepts
+        # 3. Distinguish tools vs subject
+        # 4. Then generate roadmap
         from langchain_openai import ChatOpenAI
         from constant import LLM_MAX_TOKENS_PLANNER, LLM_REQUEST_TIMEOUT
+        from schemas.context import CourseAnalysis
         
         no_tools_llm = ChatOpenAI(
             model_name=self.foundation_model,
             openai_api_key=self.llm.openai_api_key,
             temperature=0.3,
             request_timeout=LLM_REQUEST_TIMEOUT,
-            max_tokens=LLM_MAX_TOKENS_PLANNER,
-            model_kwargs={"response_format": {"type": "json_object"}}
+            max_tokens=LLM_MAX_TOKENS_PLANNER
         )
-        no_tools_chain = self.build_chain(no_tools_llm)
+        # Bind with Pydantic schema for structured output with reasoning
+        structured_llm = no_tools_llm.with_structured_output(CourseAnalysis)
         
-        ai: AIMessage = no_tools_chain.invoke(
-            {
-                "id": state.id,
-                "history": history,
-                "difficulty": state.difficulty,
-                "duration": str(state.duration),
-            }
-        )
-        history.append(ai)
-        tracer.record("llm", "response with pre-loaded context", content_preview=str(ai.content)[:200])
+        # DEBUG: Log actual messages being sent to LLM
+        self.logger.info(f"[PLANNER] ========== MESSAGES SENT TO LLM ==========")
+        self.logger.info(f"[PLANNER] Message count: {len(history)}")
+        for i, msg in enumerate(history):
+            self.logger.info(f"[PLANNER] Message {i+1} type: {type(msg).__name__}")
+            self.logger.info(f"[PLANNER] Message {i+1} content length: {len(msg.content)} chars")
+            self.logger.info(f"[PLANNER] Message {i+1} first 200 chars: {msg.content[:200]}...")
+        self.logger.info(f"[PLANNER] ========== END MESSAGES ==========")
         
-        # Since LLM was invoked without tools, ai.tool_calls should be empty
-        # If somehow it still has tool calls (shouldn't happen), log warning
-        if ai.tool_calls and len(ai.tool_calls) > 0:
-            self.logger.error(f"UNEXPECTED: LLM called tools despite no-tools invocation!")
-            tracer.record("error", "unexpected tool calls from no-tools LLM")
+        # Invoke with structured output - forces CoT reasoning
+        analysis: CourseAnalysis = structured_llm.invoke(history)
         
-        # CRITICAL FIX: Validate content before parsing
-        if not ai.content or not ai.content.strip():
-            tracer.record("error", "empty content", has_tool_calls=bool(getattr(ai, 'tool_calls', None)))
+        # Log reasoning steps for debugging
+        self.logger.info(f"[PLANNER CoT] Main topic identified: {analysis.main_topic}")
+        self.logger.info(f"[PLANNER CoT] Key concepts: {', '.join(analysis.key_concepts)}")
+        self.logger.info(f"[PLANNER CoT] Implementation tools: {', '.join(analysis.implementation_tools)}")
+        self.logger.info(f"[PLANNER CoT] Target audience: {analysis.target_audience}")
+        tracer.record("cot_analysis", "reasoning completed",
+                     main_topic=analysis.main_topic,
+                     concepts_count=len(analysis.key_concepts),
+                     tools_count=len(analysis.implementation_tools))
+        
+        # Convert CourseAnalysis to State format
+        json_content = {
+            "course_name": analysis.course_name,
+            "course_description": analysis.course_description,
+            "course_roadmap": [{"title": r.title, "description": r.description} for r in analysis.course_roadmap]
+        }
+        
+        tracer.record("llm", "structured output with CoT", 
+                     course_name=analysis.course_name,
+                     roadmap_items=len(analysis.course_roadmap))
+        
+        # Validate required fields (Pydantic should enforce this, but double-check)
+        if not analysis.course_name or not analysis.course_description or not analysis.course_roadmap:
+            tracer.record("error", "incomplete structured output",
+                         has_name=bool(analysis.course_name),
+                         has_desc=bool(analysis.course_description),
+                         roadmap_count=len(analysis.course_roadmap) if analysis.course_roadmap else 0)
             raise ValueError(
-                f"Planner: LLM returned empty content. "
-                f"Has tool_calls: {bool(getattr(ai, 'tool_calls', None))}"
+                f"Planner: Incomplete structured output - "
+                f"name={bool(analysis.course_name)}, desc={bool(analysis.course_description)}, "
+                f"roadmap={len(analysis.course_roadmap) if analysis.course_roadmap else 0}"
             )
         
-        # Log full content for debugging
-        self.logger.debug(f"Planner LLM content (first 1000 chars): {ai.content[:1000]}")
+        # Extract fields from structured output
+        course_name = json_content["course_name"]
+        course_description = json_content["course_description"]
+        course_roadmap = json_content["course_roadmap"]
         
-        # CRITICAL FIX: Strict JSON parsing with validation
-        try:
-            json_content = json.loads(ai.content)
-        except json.JSONDecodeError as e:
-            tracer.record("error", "failed to parse JSON", error=str(e), content=str(ai.content)[:500])
-            self.logger.error(f"Planner JSON parse error. Content: {ai.content[:1000]}")
-            
-            # FALLBACK: Try to extract JSON from text if wrapped in markdown or has extra text
-            import re
-            json_match = re.search(r'\{[\s\S]*\}', ai.content)
-            if json_match:
-                try:
-                    json_content = json.loads(json_match.group(0))
-                    self.logger.warning("Successfully extracted JSON from wrapped content")
-                except:
-                    raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
-            else:
-                raise ValueError(f"Planner: Failed to parse LLM JSON response - {str(e)}")
-        
-        # CRITICAL FIX: Validate required fields with detailed error messages
-        course_name = json_content.get("course_name")
-        if not course_name:
-            tracer.record("error", "missing course_name", keys=list(json_content.keys()))
-            self.logger.error(f"Planner validation failed: missing course_name. JSON keys: {list(json_content.keys())}")
-            self.logger.error(f"Full JSON content: {json_content}")
-            raise ValueError(f"Planner: LLM response missing 'course_name' field. Available keys: {list(json_content.keys())}")
-        
-        course_description = json_content.get("course_description")
-        if not course_description:
-            tracer.record("error", "missing course_description")
-            self.logger.error(f"Planner validation failed: missing course_description. JSON: {json_content}")
-            raise ValueError(f"Planner: LLM response missing 'course_description' field. Available keys: {list(json_content.keys())}")
-        
-        course_roadmap = json_content.get("course_roadmap")
-        if not course_roadmap or not isinstance(course_roadmap, list) or len(course_roadmap) == 0:
-            tracer.record("error", "invalid course_roadmap", type=type(course_roadmap), value=course_roadmap)
-            self.logger.error(f"Planner validation failed: invalid course_roadmap")
-            self.logger.error(f"Type: {type(course_roadmap)}, Value: {course_roadmap}")
-            self.logger.error(f"Full JSON: {json_content}")
+        # Validate roadmap
+        if not course_roadmap or len(course_roadmap) == 0:
+            tracer.record("error", "empty roadmap")
+            self.logger.error(f"Planner validation failed: empty roadmap")
             
             # ULTIMATE FALLBACK: Create a basic roadmap based on duration
-            self.logger.warning("Creating fallback roadmap due to invalid LLM output")
-            num_lessons = max(2, min(5, int(state.duration) // 20))  # 2-5 lessons based on duration
+            self.logger.warning("Creating fallback roadmap due to empty LLM output")
+            num_lessons = max(2, min(5, int(state.duration) // 20))
             course_roadmap = [
                 {
                     "title": f"Module {i+1}: {course_name} - Part {i+1}",

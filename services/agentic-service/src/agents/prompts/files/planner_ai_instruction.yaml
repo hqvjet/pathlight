@@ -47,43 +47,11 @@ prompt: |
   }}
   ```
   
-  ⚠️ **KIỂM TRA NGAY**:
-  - Course name có khớp với chủ đề chính trong retrieval không?
-  - Nếu retrieval về "não bộ đọc sách" mà tạo ra "lãnh đạo" → SAI HOÀN TOÀN!
-
-  ---
-
-  # QUY TẮC VÀNG - DESCRIPTION PHẢI UNIQUE
-
-  **CRITICAL**: Mỗi lesson PHẢI có description HOÀN TOÀN KHÁC NHAU!
-  
-  **CÁCH LÀM**:
-  1. Đọc HẾT 3 layers retrieval
-  2. List ra TẤT CẢ topics/keywords/concepts tìm được
-  3. MỖI bài học = 1 topic/concept RIÊNG
-  4. Description của mỗi bài phải nhấn mạnh điểm KHÁC BIỆT
-
-  **VÍ DỤ ĐÚNG** (Retrieval về "Brain Reading"):
-  - ✅ Course: "Khoa Học Não Bộ và Quá Trình Đọc"
-  - ✅ Bài 1: "Giải phẫu não bộ: vùng thị giác và ngôn ngữ"
-  - ✅ Bài 2: "Cơ chế nhận dạng chữ cái trong não"
-  - ✅ Bài 3: "Rối loạn đọc: nguyên nhân thần kinh học"
-
-  **VÍ DỤ SAI** (Retrieval về "Brain Reading" nhưng output khác chủ đề):
-  - ❌ Course: "Kỹ Năng Lãnh Đạo" ← SAI HOÀN TOÀN!
-  - ❌ Course: "Marketing Hiện Đại" ← KHÔNG LIÊN QUAN!
-  - ❌ Bài 1: "Kỹ năng giao tiếp" ← KHÔNG CÓ TRONG RETRIEVAL!
-
-  **VÍ DỤ SAI** (Descriptions trùng lặp):
-  - ❌ Bài 1: "Cơ Chế Nhận Diện Chữ Việt"
-  - ❌ Bài 2: "Cơ Chế Nhận Diện Chữ Việt của Não Bộ" ← TRÙNG 90%!
-  - ❌ Bài 3: "Cơ Chế Nhận Diện Chữ Việt Trong Não" ← TRÙNG!
-
-  **KIỂM TRA TRƯỚC KHI SUBMIT**:
-  - [ ] Đọc lại toàn bộ roadmap
-  - [ ] Có bài nào description giống >70% không?
-  - [ ] Mỗi bài có tập trung vào 1 khía cạnh riêng không?
-  - [ ] Toàn bộ tiếng Việt?
+  ⚠️ **CRITICAL VALIDATION**:
+  - Course name PHẢI KHỚP 100% với chủ đề chính trong retrieved context
+  - KHÔNG được tự sáng tác topic khác với retrieval
+  - Mỗi lesson description PHẢI HOÀN TOÀN KHÁC NHAU (không trùng >70%)
+  - Toàn bộ 100% tiếng Việt
 
   ---
 
