@@ -85,7 +85,7 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors truncate">
+                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors line-clamp-1">
                       {quiz.title}
                     </h3>
                     <Badge className={`shrink-0 border ${levelInfo.color}`}>
@@ -190,27 +190,37 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
       className="group hover:shadow-xl transition-all duration-200 cursor-pointer border-gray-200 hover:border-sky-300 flex flex-col h-full"
       onClick={handleClick}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg font-bold text-gray-900 truncate group-hover:text-sky-600 transition-colors mb-2">
+      <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-2 sm:mb-3">
+          <div className="flex-1 min-w-0 w-full">
+            <CardTitle className="text-sm sm:text-base md:text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-sky-600 transition-colors mb-1 sm:mb-1.5">
               {quiz.title}
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600 line-clamp-2">
+            <CardDescription className="text-[11px] sm:text-xs md:text-sm text-gray-600 line-clamp-2">
               {quiz.overview}
             </CardDescription>
           </div>
-          <Badge className={`shrink-0 border ${levelInfo.color}`}>
-            {levelInfo.label}
-          </Badge>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <Badge className={`shrink-0 border text-xs ${levelInfo.color}`}>
+              {levelInfo.label}
+            </Badge>
+            {hasRecommendationScore && (
+              <Badge className="shrink-0 border-amber-200 text-amber-700 bg-amber-50 text-xs">
+                <svg className="w-3 h-3 mr-1 inline" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                {(quiz.recommendation_score * 100).toFixed(0)}%
+              </Badge>
+            )}
+          </div>
         </div>
         
         {/* Creator and Time Info */}
         {(quiz.owner_name || quiz.created_at) && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 pt-2 border-t border-gray-100">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-500 pt-1.5 sm:pt-2 border-t border-gray-100">
             {quiz.owner_name && (
-              <div className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <div className="flex items-center gap-1 truncate max-w-[120px] sm:max-w-none">
+                <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 <span>{quiz.owner_name}</span>
@@ -226,31 +236,31 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
         )}
       </CardHeader>
 
-      <CardContent className="space-y-3 flex flex-col flex-1">
+      <CardContent className="space-y-2 sm:space-y-3 flex flex-col flex-1 p-3 sm:p-4 md:p-6">
         {/* Stats row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-sky-50 rounded-lg p-3 border border-sky-100">
-            <div className="text-xs text-gray-600 mb-1">Số câu hỏi</div>
-            <div className="text-xl font-bold text-sky-700">{quiz.num_questions}</div>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <div className="bg-sky-50 rounded-lg p-2 sm:p-3 border border-sky-100">
+            <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Số câu hỏi</div>
+            <div className="text-lg sm:text-xl font-bold text-sky-700">{quiz.num_questions}</div>
           </div>
-          <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
-            <div className="text-xs text-gray-600 mb-1">Thời lượng</div>
-            <div className="text-xl font-bold text-purple-700">{quiz.duration} phút</div>
+          <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
+            <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Thời lượng</div>
+            <div className="text-lg sm:text-xl font-bold text-purple-700">{quiz.duration} phút</div>
           </div>
         </div>
 
         {/* High score */}
         {quiz.previous_score !== null && quiz.previous_score !== undefined && (
-          <div className={`rounded-lg p-3 border ${
+          <div className={`rounded-lg p-2 sm:p-3 border ${
             quiz.previous_score >= 70 
               ? 'bg-green-50 border-green-200' 
               : 'bg-amber-50 border-amber-200'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-700">Điểm cao nhất</span>
+                <span className="text-[10px] sm:text-xs font-medium text-gray-700">Điểm cao nhất</span>
               </div>
-              <span className={`text-2xl font-bold ${
+              <span className={`text-xl sm:text-2xl font-bold ${
                 quiz.previous_score >= 70 ? 'text-green-700' : 'text-amber-700'
               }`}>
                 {quiz.previous_score}
@@ -260,10 +270,10 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-3 mt-auto border-t border-gray-100">
+        <div className="flex items-center justify-between pt-2 sm:pt-3 mt-auto border-t border-gray-100">
           <div className="flex items-center gap-2">
             {quiz.finish && (
-              <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-xs">
+              <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-[10px] sm:text-xs">
                 Hoàn thành
               </Badge>
             )}
@@ -271,7 +281,7 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
           <Link
             href={`/user/my-quizzes/${quizId}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-sm font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+            className="text-xs sm:text-sm font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
           >
             Chi tiết
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

@@ -11,21 +11,23 @@ export type GenerationItem = {
   progress?: string;
   title_ready?: boolean;
   lessons_ready?: boolean;
+  tests_ready?: boolean;
   final_ready?: boolean;
   vectorized?: boolean;
   lessons_count?: number;
   lessons_planned?: number;
   roadmap_count?: number;
+  tests_count?: number;
   final_count?: number;
   updated_at?: string;
 };
 
 function getGenerationStatus(item: GenerationItem) {
   const steps = [
-    { key: 'vectorized', label: 'Docs', done: item.vectorized, count: null },
-    { key: 'title_ready', label: 'Plan', done: item.title_ready, count: item.roadmap_count },
-    { key: 'lesson_planned', label: 'L.Plan', done: item.title_ready && item.lessons_planned, count: item.lessons_planned },
-    { key: 'lessons_ready', label: 'Lessons', done: item.lessons_ready, count: item.lessons_count },
+    { key: 'vectorized', label: 'Vectorized', done: Boolean(item.vectorized), count: null },
+    { key: 'title_ready', label: 'Plan', done: Boolean(item.title_ready), count: item.roadmap_count },
+    { key: 'lessons_ready', label: 'Lessons', done: Boolean(item.lessons_ready), count: item.lessons_count },
+    { key: 'tests_ready', label: 'Tests', done: Boolean(item.tests_ready), count: item.tests_count },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;
@@ -104,15 +106,15 @@ export default function GenerationCard({
 
   return (
     <Card 
-      className="group p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-orange-300 bg-white h-full flex flex-col"
+      className="group p-4 sm:p-6 hover:shadow-xl transition-all duration-300 border-gray-200 cursor-pointer hover:border-orange-300 bg-white h-full flex flex-col"
       onClick={onClick}
     >
-      <div className="space-y-4 flex-1 flex flex-col">
+      <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col">
         {/* Header with Status Badge */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="flex-1 min-w-0">
             <h3 
-              className="font-bold text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-2" 
+              className="font-bold text-base sm:text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-1" 
               title={item.title}
             >
               {displayTitle}
@@ -198,17 +200,17 @@ export default function GenerationCard({
         )}
 
         {/* Todo List Style Steps */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           {status.steps.map((step) => (
-            <div key={step.key} className="flex flex-col items-center gap-1.5">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+            <div key={step.key} className="flex flex-col items-center gap-1 sm:gap-1.5">
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
                 step.done 
                   ? 'bg-green-500 text-white shadow-md scale-105' 
                   : 'bg-gray-200 text-gray-600'
               }`}>
-                {step.done ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-4 h-4" />}
+                {step.done ? <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               </div>
-              <span className={`text-xs text-center leading-tight whitespace-nowrap ${
+              <span className={`text-[10px] sm:text-xs text-center leading-tight whitespace-nowrap ${
                 step.done ? 'text-green-700 font-medium' : 'text-gray-600'
               }`}>
                 {step.label}

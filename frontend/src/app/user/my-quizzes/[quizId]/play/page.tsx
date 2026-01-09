@@ -98,6 +98,7 @@ export default function QuizPlayPage({ params }: PageProps) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [timerFrozen, setTimerFrozen] = useState(false);
   const freezeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingTimeout = useRef(false);
   
   // Power-ups
   const [powerUps, setPowerUps] = useState<PowerUp[]>([
@@ -193,10 +194,6 @@ export default function QuizPlayPage({ params }: PageProps) {
           const responseData = userInfoResp?.data as { Info?: { current_exp?: number; subscription?: number }; info?: { current_exp?: number; subscription?: number } } | undefined;
           // Try both Info (capital) and info (lowercase) for compatibility
           const userInfo = responseData?.Info || responseData?.info;
-          console.log('User info response:', responseData);
-          console.log('Extracted user info:', userInfo);
-          console.log('Current EXP:', userInfo?.current_exp);
-          console.log('Subscription:', userInfo?.subscription);
           
           const exp = userInfo?.current_exp || 0;
           const subscription = userInfo?.subscription || 0;
@@ -233,10 +230,22 @@ export default function QuizPlayPage({ params }: PageProps) {
   }, [quizId]);
 
   const handleTimeUp = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    // Prevent duplicate execution
+    if (isProcessingTimeout.current) {
+      return;
+    }
+    isProcessingTimeout.current = true;
+    
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
     const currentCard = quiz?.cards[currentIndex];
-    if (!currentCard) return;
+    if (!currentCard) {
+      isProcessingTimeout.current = false;
+      return;
+    }
 
     // Show toast after state updates to avoid setState in render
     setTimeout(() => {
@@ -257,6 +266,8 @@ export default function QuizPlayPage({ params }: PageProps) {
         // Auto submit on last question
         handleSubmit();
       }
+      // Reset flag after transition
+      isProcessingTimeout.current = false;
     }, 1500);
   }, [quiz, currentIndex, answers, timePerQuestion]);
 
@@ -266,9 +277,9 @@ export default function QuizPlayPage({ params }: PageProps) {
 
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 0) {
-          // Time's up for this question
-          handleTimeUp();
+        if (prev <= 1) {
+          // Time's up for this question - use ref to avoid dependency issues
+          handleTimeUpRef.current();
           return 0;
         }
         
@@ -282,9 +293,12 @@ export default function QuizPlayPage({ params }: PageProps) {
     }, 1000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [quiz, submitted, loading, currentIndex, timePerQuestion, handleTimeUp, timerFrozen]);
+  }, [quiz, submitted, loading, currentIndex, timePerQuestion, timerFrozen]);
 
   const handleTimeUpRef = useRef(handleTimeUp);
   useEffect(() => {
@@ -576,13 +590,11 @@ export default function QuizPlayPage({ params }: PageProps) {
       
       // Calculate average score for saving as previous_score
       const avgScore = quiz ? Math.round(actualTotalScore / quiz.cards.length) : 0;
-      console.log('Average score for quiz:', avgScore);
       
       // Update previous_score if this score is higher
       if (avgScore > (quiz.previous_score || 0)) {
         try {
           await quizApi.updatePreviousScore(quizId, avgScore);
-          console.log('Updated previous_score to:', avgScore);
         } catch (updateError) {
           console.error('Failed to update previous_score:', updateError);
           // Don't show error to user, just log it
@@ -618,9 +630,14 @@ export default function QuizPlayPage({ params }: PageProps) {
     setEliminatedOptions({});
     setShowHint({});
     setPowerUps(prev => prev.map(p => ({ ...p, usesLeft: p.maxUses, active: false })));
+    isProcessingTimeout.current = false;
     
     if (freezeTimeoutRef.current) {
       clearTimeout(freezeTimeoutRef.current);
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
     
     // Reload to fetch fresh user EXP
@@ -860,12 +877,12 @@ export default function QuizPlayPage({ params }: PageProps) {
         </div>
 
         {/* Power-ups */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-4 h-4 text-purple-600" />
-            <h3 className="font-bold text-gray-900 text-sm">Items (EXP: {userExp})</h3>
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+            <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
+            <h3 className="font-bold text-gray-900 text-xs sm:text-sm">Items (EXP: {userExp})</h3>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2">
             {powerUps.map((powerUp) => {
               const isActive = powerUp.active;
               const canUse = powerUp.usesLeft > 0 && userExp >= powerUp.cost;
@@ -883,7 +900,7 @@ export default function QuizPlayPage({ params }: PageProps) {
                   key={powerUp.id}
                   onClick={() => activatePowerUp(powerUp.id)}
                   disabled={!canUse || isActive}
-                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all ${
+                  className={`group relative flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-1 sm:gap-1.5 lg:gap-2 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 rounded-lg border-2 font-semibold text-[10px] sm:text-xs lg:text-sm transition-all ${
                     isActive
                       ? 'border-green-500 bg-green-50 text-green-700'
                       : canUse
@@ -892,11 +909,11 @@ export default function QuizPlayPage({ params }: PageProps) {
                   }`}
                   title={powerUp.description}
                 >
-                  <PowerUpIcon className="w-4 h-4" />
-                  <span>{powerUp.name}</span>
-                  <span className="text-xs opacity-75">({powerUp.usesLeft}/{powerUp.maxUses})</span>
+                  <PowerUpIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="text-center lg:text-left leading-tight">{powerUp.name}</span>
+                  <span className="text-[9px] sm:text-xs opacity-75">({powerUp.usesLeft}/{powerUp.maxUses})</span>
                   {canUse && !isActive && (
-                    <span className="absolute -top-2 -right-2 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    <span className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-purple-600 text-white text-[9px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded-full">
                       -{powerUp.cost}
                     </span>
                   )}

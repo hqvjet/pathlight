@@ -71,35 +71,35 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         
         {/* Header Row */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
               Xin chào, {user.given_name || user.name}! 👋
             </h1>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-gray-600">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
+              <p className="text-sm sm:text-base text-gray-600">
                 {user.remind_time 
                   ? `Hẹn gặp bạn vào lúc ${user.remind_time} để học bài!` 
                   : 'Chào mừng trở lại hành trình học tập'}
               </p>
               <a 
                 href="/user/profile" 
-                className="text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline"
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline inline-block"
               >
                 {user.remind_time ? 'Thay đổi giờ nhắc' : 'Cài đặt giờ nhắc'}
               </a>
             </div>
           </div>
           
-          {/* Redesigned Streak - No box */}
+          {/* Redesigned Streak - Responsive */}
           <div className="flex items-center gap-2">
             <svg 
               viewBox="0 0 24 24" 
               fill="currentColor"
-              className="text-orange-500 w-8 h-8 drop-shadow-lg"
+              className="text-orange-500 w-6 h-6 sm:w-8 sm:h-8 drop-shadow-lg"
               style={{ 
                 filter: (user?.streak ?? 0) > 10 ? 'drop-shadow(0 0 8px rgba(249, 115, 22, 0.5))' : 'none'
               }}
@@ -108,79 +108,79 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </svg>
             <div className="flex flex-col">
               <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black text-orange-600">{user?.streak ?? 0}</span>
-                <span className="text-sm text-orange-600 font-bold">ngày</span>
+                <span className="text-2xl sm:text-3xl font-black text-orange-600">{user?.streak ?? 0}</span>
+                <span className="text-xs sm:text-sm text-orange-600 font-bold">ngày</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Row 1: Profile & Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <ProfileCard user={user} />
           
           {/* Stats */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">📊 Thống kê</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📚</div>
-                  <span className="text-sm font-semibold text-gray-700">Khóa học</span>
+          <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">📊 Thống kê</h3>
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex items-center justify-between p-2 sm:p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="text-xl sm:text-2xl">📚</div>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Khóa học</span>
                 </div>
-                <span className="text-xl font-bold text-blue-600">{user.total_courses}</span>
+                <span className="text-lg sm:text-xl font-bold text-blue-600">{user.total_courses}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-indigo-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📖</div>
-                  <span className="text-sm font-semibold text-gray-700">Bài học</span>
+              <div className="flex items-center justify-between p-2 sm:p-3 bg-indigo-50 rounded-lg">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="text-xl sm:text-2xl">📖</div>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Bài học</span>
                 </div>
-                <span className="text-xl font-bold text-indigo-600">{user.total_lessons}</span>
+                <span className="text-lg sm:text-xl font-bold text-indigo-600">{user.total_lessons}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📝</div>
-                  <span className="text-sm font-semibold text-gray-700">Quiz đã làm</span>
+              <div className="flex items-center justify-between p-2 sm:p-3 bg-purple-50 rounded-lg">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="text-xl sm:text-2xl">📝</div>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Quiz đã làm</span>
                 </div>
-                <span className="text-xl font-bold text-purple-600">{user.completed_quizzes}</span>
+                <span className="text-lg sm:text-xl font-bold text-purple-600">{user.completed_quizzes}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">🏆</div>
-                  <span className="text-sm font-semibold text-gray-700">Xếp hạng</span>
+              <div className="flex items-center justify-between p-2 sm:p-3 bg-yellow-50 rounded-lg">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="text-xl sm:text-2xl">🏆</div>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">Xếp hạng</span>
                 </div>
-                <span className="text-xl font-bold text-yellow-600">#{user.rank}</span>
+                <span className="text-lg sm:text-xl font-bold text-yellow-600">#{user.rank}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Row 2: Continue Learning & Top Learners */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Continue Learning */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-blue-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">🚀 Học tiếp</h3>
-              <span className="text-sm text-gray-600">Bài học đang học</span>
+          <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 border-2 border-blue-200">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900">🚀 Học tiếp</h3>
+              <span className="text-xs sm:text-sm text-gray-600">Bài học đang học</span>
             </div>
             
             {user.total_courses > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Main Course Card */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border border-blue-200">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center text-white text-2xl">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 sm:p-5 border border-blue-200">
+                  <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-500 rounded-lg flex items-center justify-center text-white text-xl sm:text-2xl shrink-0">
                       📚
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-gray-900 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">
                         Tiếp tục khóa học của bạn
                       </h4>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-xs sm:text-sm text-gray-600">
                         Đã hoàn thành {user.completed_courses}/{user.total_courses} khóa học
                       </p>
                       <div className="mt-2 flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="flex-1 h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
                             style={{ width: `${completionRate}%` }}
@@ -192,7 +192,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   </div>
                   <Link 
                     href="/user/my-courses" 
-                    className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors"
+                    className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 sm:py-3 rounded-lg transition-colors text-sm sm:text-base"
                   >
                     Xem khóa học của tôi →
                   </Link>

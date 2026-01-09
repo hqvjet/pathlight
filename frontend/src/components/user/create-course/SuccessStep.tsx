@@ -117,14 +117,9 @@ export function SuccessStep({ draft, result, onRestart, onGoToCourses }: Success
   const fetchGenerationStatus = async () => {
     if (!courseId) return;
     try {
-      console.log('[SuccessStep] Fetching generation status for courseId:', courseId);
       const resp = await courseApi.getStatus(courseId);
-      console.log('[SuccessStep] API response:', resp);
       if (resp?.data?.body && typeof resp.data.body === 'object') {
-        console.log('[SuccessStep] Setting generation status:', resp.data.body);
         setGenerationStatus(resp.data.body as GenerationStatus);
-      } else {
-        console.log('[SuccessStep] No valid body in response');
       }
     } catch (error) {
       console.error('[SuccessStep] Failed to fetch generation status:', error);

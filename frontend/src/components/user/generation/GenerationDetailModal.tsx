@@ -15,30 +15,30 @@ function getDetailedStatus(item: GenerationItem) {
     { 
       key: 'vectorized', 
       label: 'Phân tích tài liệu', 
-      done: item.vectorized,
+      done: Boolean(item.vectorized),
       description: 'Vectorize và index tài liệu vào OpenSearch',
       count: null
     },
     { 
       key: 'title_ready', 
       label: 'Tạo kế hoạch khóa học', 
-      done: item.title_ready,
+      done: Boolean(item.title_ready),
       description: 'Sinh tiêu đề, mô tả và roadmap học tập',
       count: item.roadmap_count
     },
     { 
-      key: 'lesson_planned', 
+      key: 'lessons_ready', 
       label: 'Lập kế hoạch bài học', 
-      done: item.title_ready && item.lessons_planned,
-      description: `Xác định số lượng bài học cần tạo${item.lessons_planned ? ` (${item.lessons_planned} bài)` : ''}`,
-      count: item.lessons_planned
+      done: Boolean(item.lessons_ready),
+      description: `Xác định số lượng bài học cần tạo${item.lessons_count ? ` (${item.lessons_count} bài)` : ''}`,
+      count: item.lessons_count
     },
     { 
-      key: 'lessons_ready', 
+      key: 'tests_ready', 
       label: 'Tạo nội dung bài học', 
-      done: item.lessons_ready,
-      description: `Sinh nội dung chi tiết cho từng bài học${item.lessons_count ? ` (${item.lessons_count}/${item.lessons_planned || 0} bài hoàn thành)` : ''}`,
-      count: item.lessons_count
+      done: Boolean(item.tests_ready),
+      description: `Sinh nội dung chi tiết cho từng bài học${item.lessons_count ? ` (${item.lessons_count} bài hoàn thành)` : ''}`,
+      count: null
     },
   ];
   

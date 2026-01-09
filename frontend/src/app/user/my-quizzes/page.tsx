@@ -239,9 +239,9 @@ function MyQuizzesContent() {
 				</div>
 			</div>
 
-			<div className="space-y-6">
-				<div className="flex flex-col gap-4">
-					<div className="relative">
+			<div className="space-y-4 sm:space-y-6">
+				<div className="flex flex-col gap-3">
+					<div className="relative w-full">
 						<input
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
@@ -253,14 +253,14 @@ function MyQuizzesContent() {
 						</svg>
 					</div>
 
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="flex flex-wrap items-center gap-3">
+					<div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+						<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
 							<div className="flex items-center gap-2">
-								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Độ khó</label>
+								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Độ khó</label>
 								<select
 									value={levelFilter}
 									onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
-									className="h-10 pl-3 pr-8 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400"
+									className="flex-1 sm:flex-initial h-10 pl-3 pr-8 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400"
 								>
 									<option value="all">Tất cả</option>
 									<option value="easy">Dễ</option>
@@ -270,12 +270,12 @@ function MyQuizzesContent() {
 							</div>
 
 							<div className="flex items-center gap-2">
-								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:block">Sắp xếp</label>
-								<div className="relative">
+								<label className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Sắp xếp</label>
+								<div className="relative flex-1 sm:flex-initial">
 									<select
 										value={sort}
 										onChange={(e) => setSort(e.target.value as SortOption)}
-										className="appearance-none h-10 pl-4 pr-10 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
+										className="appearance-none w-full h-10 pl-4 pr-10 rounded-lg bg-white border border-gray-200 shadow-sm text-sm focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 cursor-pointer"
 									>
 										<option value="latest">Mới nhất</option>
 										<option value="questions_desc">Số câu hỏi giảm dần</option>
@@ -318,8 +318,8 @@ function MyQuizzesContent() {
 
 				<div>
 					{paginatedQuizzes.length === 0 ? (
-						<div className="bg-white rounded-xl p-12 text-center border border-dashed border-gray-300">
-							<p className="text-gray-600 mb-4">
+						<div className="bg-white rounded-xl p-8 sm:p-12 text-center border border-dashed border-gray-300">
+							<p className="text-gray-600 mb-4 text-sm sm:text-base">
 								{filteredMy.length === 0 && (activeTab === 'my' ? myQuizzes : publicQuizzes).length === 0
 									? (activeTab === 'my' ? 'Bạn chưa có quiz nào.' : 'Chưa có quiz công khai nào.')
 									: 'Không tìm thấy quiz phù hợp.'}
@@ -335,7 +335,7 @@ function MyQuizzesContent() {
 						</div>
 					) : (
 						<>
-							<div className={viewMode === 'grid' ? 'grid gap-5 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-4'}>
+							<div className={viewMode === 'grid' ? 'grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3' : 'space-y-4'}>
 								{paginatedQuizzes.map((quiz) => (
 									<QuizCard key={quiz.id || quiz.quiz_id} quiz={quiz} viewMode={viewMode} />
 								))}
