@@ -152,7 +152,6 @@ export function CreateCourseWizard() {
   const validateMeta = (meta: CourseDraftState['meta']) => {
     const missing: string[] = [];
     if (!meta.userPosition.trim()) missing.push('Vị trí người học');
-    if (!meta.shortPrompt.trim()) missing.push('Prompt ngắn');
     if (!meta.courseLevel) missing.push('Trình độ khóa học');
     if (!meta.courseConstraint) missing.push('Văn phong khóa học');
     if (!meta.durationDays || meta.durationDays < 1) missing.push('Thời lượng (ngày)');

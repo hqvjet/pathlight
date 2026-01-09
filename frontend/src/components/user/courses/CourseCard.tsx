@@ -82,7 +82,7 @@ export function CourseCard({ course, onSelect, onOwnerClick }: CourseCardProps) 
       <CardHeader className="pb-3 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row items-start justify-between mb-3 gap-2">
           <div className="flex-1 w-full">
-            <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1">
+            <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-1">
               {course.title}
             </CardTitle>
             {course.subtitle && (

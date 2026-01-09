@@ -85,7 +85,7 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors truncate">
+                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors line-clamp-1">
                       {quiz.title}
                     </h3>
                     <Badge className={`shrink-0 border ${levelInfo.color}`}>
@@ -193,7 +193,7 @@ export function QuizCard({ quiz, onSelect, viewMode = 'grid' }: QuizCardProps) {
       <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-2 sm:mb-3">
           <div className="flex-1 min-w-0 w-full">
-            <CardTitle className="text-sm sm:text-base md:text-lg font-bold text-gray-900 truncate group-hover:text-sky-600 transition-colors mb-1 sm:mb-1.5">
+            <CardTitle className="text-sm sm:text-base md:text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-sky-600 transition-colors mb-1 sm:mb-1.5">
               {quiz.title}
             </CardTitle>
             <CardDescription className="text-[11px] sm:text-xs md:text-sm text-gray-600 line-clamp-2">

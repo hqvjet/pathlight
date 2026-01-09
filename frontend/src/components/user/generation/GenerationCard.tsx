@@ -114,7 +114,7 @@ export default function GenerationCard({
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="flex-1 min-w-0">
             <h3 
-              className="font-bold text-base sm:text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-2" 
+              className="font-bold text-base sm:text-lg text-gray-900 group-hover:text-orange-600 transition-colors leading-tight mb-1 line-clamp-1" 
               title={item.title}
             >
               {displayTitle}
@@ -200,10 +200,10 @@ export default function GenerationCard({
         )}
 
         {/* Todo List Style Steps */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           {status.steps.map((step) => (
             <div key={step.key} className="flex flex-col items-center gap-1 sm:gap-1.5">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
                 step.done 
                   ? 'bg-green-500 text-white shadow-md scale-105' 
                   : 'bg-gray-200 text-gray-600'
