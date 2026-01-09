@@ -22,11 +22,20 @@ export type GenerationItem = {
 };
 
 function getGenerationStatus(item: GenerationItem) {
+  console.log('[GenerationCard] Item data:', {
+    course_id: item.course_id,
+    vectorized: item.vectorized,
+    title_ready: item.title_ready,
+    lessons_ready: item.lessons_ready,
+    tests_ready: item.tests_ready,
+    final_ready: item.final_ready
+  });
+  
   const steps = [
-    { key: 'vectorized', label: 'Vectorized', done: item.vectorized, count: null },
-    { key: 'title_ready', label: 'Plan', done: item.title_ready, count: item.roadmap_count },
-    { key: 'lessons_ready', label: 'Lessons', done: item.lessons_ready, count: item.lessons_count },
-    { key: 'tests_ready', label: 'Tests', done: item.tests_ready, count: null },
+    { key: 'vectorized', label: 'Vectorized', done: Boolean(item.vectorized), count: null },
+    { key: 'title_ready', label: 'Plan', done: Boolean(item.title_ready), count: item.roadmap_count },
+    { key: 'lessons_ready', label: 'Lessons', done: Boolean(item.lessons_ready), count: item.lessons_count },
+    { key: 'tests_ready', label: 'Tests', done: Boolean(item.tests_ready), count: null },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;

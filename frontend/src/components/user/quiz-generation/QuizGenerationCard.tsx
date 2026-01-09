@@ -10,23 +10,32 @@ export interface QuizGenerationCardProps {
 }
 
 function getQuizStatus(item: QuizGenerationItem) {
+  // Debug logging
+  console.log('[QuizGenerationCard] Item data:', {
+    quiz_id: item.quiz_id,
+    vectorized: item.vectorized,
+    plan_ready: item.plan_ready,
+    questions_ready: item.questions_ready,
+    status: item.status
+  });
+  
   const steps = [
     { 
       key: 'vectorized', 
       label: 'Vectorized', 
-      done: item.vectorized ?? false,
+      done: Boolean(item.vectorized),
       count: null
     },
     { 
       key: 'plan_ready', 
       label: 'Plan', 
-      done: item.plan_ready ?? false,
+      done: Boolean(item.plan_ready),
       count: item.ideas_count
     },
     { 
       key: 'questions_ready', 
       label: 'Questions', 
-      done: item.questions_ready ?? false,
+      done: Boolean(item.questions_ready),
       count: item.questions_count
     },
   ];
@@ -189,7 +198,7 @@ export default function QuizGenerationCard({ item, onClick, userNames }: {
         )}
 
         {/* Todo List Style Steps */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {status.steps.map((step) => (
             <div key={step.key} className="flex flex-col items-center gap-1 sm:gap-1.5">
               <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${

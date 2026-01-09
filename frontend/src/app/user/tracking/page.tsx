@@ -66,6 +66,7 @@ function TrackingInner() {
     try {
       const resp = await quizApi.listMyGenerations();
       if (resp.status === 200 && Array.isArray(resp.data?.items)) {
+        console.log('[Quiz Tracking] Raw API response:', resp.data.items);
         const mapped = (resp.data.items as unknown as Array<Record<string, unknown>>).map((r) => ({
           quiz_id: String(r.quiz_id ?? ""),
           user_id: r.user_id ? String(r.user_id) : undefined,
@@ -73,6 +74,7 @@ function TrackingInner() {
           progress_percentage: typeof r.progress_percentage === 'number' ? r.progress_percentage : undefined,
           current_step: r.current_step ? String(r.current_step) : undefined,
           current_step_detail: r.current_step_detail ? String(r.current_step_detail) : undefined,
+          vectorized: r.vectorized !== undefined ? Boolean(r.vectorized) : undefined,
           plan_ready: r.plan_ready !== undefined ? Boolean(r.plan_ready) : undefined,
           questions_ready: r.questions_ready !== undefined ? Boolean(r.questions_ready) : undefined,
           title: r.title ? String(r.title) : undefined,
@@ -92,6 +94,7 @@ function TrackingInner() {
           return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
         });
         
+        console.log('[Quiz Tracking] Mapped items:', mapped);
         setQuizItems(mapped);
       } else if (resp.status === 401) {
         showToast.error("Bạn cần đăng nhập để xem tiến trình.");
