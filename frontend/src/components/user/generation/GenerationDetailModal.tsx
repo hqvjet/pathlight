@@ -66,7 +66,7 @@ export default function GenerationDetailModal({
   if (!item) return null;
 
   const status = getDetailedStatus(item);
-  const updated = item.last_updated ? new Date(item.last_updated).toLocaleString('vi-VN') : "Chưa có thông tin";
+  const updated = (item.updated_at || item.last_updated) ? new Date(item.updated_at || item.last_updated || '').toLocaleString('vi-VN') : "Chưa có thông tin";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -110,24 +110,24 @@ export default function GenerationDetailModal({
                 {item.course_id}
               </code>
             </div>
-            {item.lessons_planned && (
+            {item.lessons_total && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Số bài học:</span>
                 <span className="text-sm font-medium text-orange-600">
-                  {item.lessons_count || 0}/{item.lessons_planned} bài
+                  {item.lessons_completed || 0}/{item.lessons_total} bài
                 </span>
               </div>
             )}
-            {item.roadmap_count && (
+            {item.planning_roadmap_count && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Roadmap:</span>
-                <span className="text-sm font-medium">{item.roadmap_count} bước</span>
+                <span className="text-sm font-medium">{item.planning_roadmap_count} modules</span>
               </div>
             )}
-            {item.final_count !== undefined && (
+            {item.tests_total !== undefined && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Câu hỏi kiểm tra:</span>
-                <span className="text-sm font-medium text-purple-600">{item.final_count} câu</span>
+                <span className="text-sm font-medium text-purple-600">{item.tests_total} bài</span>
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -195,15 +195,10 @@ export default function GenerationDetailModal({
                 <h4 className="font-semibold text-red-800">Lỗi xảy ra</h4>
               </div>
               <p className="text-red-700 font-medium">Quá trình tạo khóa học gặp sự cố</p>
+              {item.error_message && (
+                <p className="text-sm text-red-600 mt-2 italic">&ldquo;{item.error_message}&rdquo;</p>
+              )}
               <p className="text-sm text-red-600 mt-1">Vui lòng thử lại hoặc liên hệ hỗ trợ</p>
-            </div>
-          )}
-
-          {/* Progress Text */}
-          {item.progress && (
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-blue-800 mb-2">Trạng thái hiện tại</h4>
-              <p className="text-blue-700 italic">&ldquo;{item.progress}&rdquo;</p>
             </div>
           )}
 
@@ -212,6 +207,7 @@ export default function GenerationDetailModal({
             <h3 className="text-lg font-semibold text-gray-900">Chi tiết các bước</h3>
             <div className="space-y-3">
               {status.steps.map((step, index) => {
+                const isActive = !status.isComplete && status.currentStep?.key === step.key;
                 const isLessonsStep = step.key === 'lessons';
                 const hasLessons = isLessonsStep && item.lessons_list && item.lessons_list.length > 0;
                 

@@ -28,6 +28,7 @@ export type GenerationItem = {
   tests_total?: number;
   
   start_timestamp?: number;
+  updated_at?: string;
   last_updated?: string;
   end_timestamp?: number;
 };
@@ -69,7 +70,7 @@ function getGenerationStatus(item: GenerationItem) {
   return { steps, completedSteps, isComplete, currentStep, progressPercent, overallStatus };
 }
 
-// Format time difference
+// Format time difference (prefers updated_at over last_updated)
 function getTimeElapsed(dateStr?: string): string {
   if (!dateStr) return "Không rõ";
   
@@ -115,7 +116,7 @@ export default function GenerationCard({
   const status = getGenerationStatus(item);
   const displayTitle = item.planning_course_title || "Đang tạo khóa học...";
   const displayDesc = item.error_message || null;
-  const timeElapsed = getTimeElapsed(item.last_updated);
+  const timeElapsed = getTimeElapsed(item.updated_at || item.last_updated);
   const creatorName = item.user_id && userNames?.[item.user_id] ? userNames[item.user_id] : getUserDisplayName(item.user_id);
   const lessonsInfo = item.lessons_total 
     ? `${item.lessons_completed || 0}/${item.lessons_total}` 

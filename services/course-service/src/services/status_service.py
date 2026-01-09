@@ -115,6 +115,7 @@ def fetch_generation_status(course_id: str) -> Optional[Dict[str, Any]]:
             "tests_total": lessons_total,
             
             "start_timestamp": item.get("start_timestamp"),
+            "updated_at": item.get("updated_at"),
             "last_updated": item.get("updated_at"),
             "end_timestamp": item.get("end_timestamp"),
         }
@@ -205,6 +206,7 @@ def fetch_user_generations(user_id: str) -> Optional[List[Dict[str, Any]]]:
                 "tests_total": lessons_total,
                 
                 "start_timestamp": it.get("start_timestamp"),
+                "updated_at": it.get("updated_at"),
                 "last_updated": it.get("updated_at"),
                 "end_timestamp": it.get("end_timestamp"),
             })
