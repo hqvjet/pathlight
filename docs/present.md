@@ -44,22 +44,16 @@ Instead of just scrolling through pages, users now have a roadmap to follow and 
 
 To make this workflow possible, let’s look at the Functional Overview...
 
-## System Introduction (2 mins)
+## System Introduction (2 mins 30 secs)
 ### Purpose: To show examination board the highlevel system design (usecase, class), that let them know our team not stop in coding only, but we know how to prepare our idea and design them.
 ### Infrastructure Solution
-Moving to the implementation, the most valuable asset of Pathlight is its Infrastructure.
+"Moving to the System Design, I want to start with the foundation. To ensure scalability, I did not just build a web app; I architected a Cloud-Native System on AWS.
 
-I did not just build a web app; I architected a Cloud-Native System on AWS using Microservices.
+As you can see in this architecture:
 
-1. What & How: I designed a Virtual Private Cloud (VPC) divided into two strict zones:
+Security: I divided the network into a Public Subnet for the Frontend and a Private Subnet for the Database and Vector Store, ensuring no direct outside access to sensitive data.
 
-Public Subnet: Houses the API Gateway and Frontend for user access.
-
-Private Subnet: Secures the Database and Vector Store. No one from the outside can touch our data.
-
-2. Why: Because AI processing is heavy. If we run everything on one server, the app will crash.
-
-3. The Value: To solve this, I implemented an Event-Driven Architecture using AWS SQS. When a user requests a course, the request is pushed to a Queue. The AI processes it asynchronously in the background. -> Result: The user experience is zero-latency, and the system can handle hundreds of requests without freezing
+Performance: Crucially, I used an Event-Driven Architecture with AWS SQS. All heavy AI tasks are pushed to a Queue and processed asynchronously. This ensures the user experience is zero-latency, even under heavy load
 
 ### Usecase Part
 To bring this 'Digital Tutor' concept to life, I designed a functional ecosystem that involves 4 key actors.
