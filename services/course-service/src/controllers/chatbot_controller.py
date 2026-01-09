@@ -42,14 +42,14 @@ class ChatbotController:
         chat_id = request.chat_id or str(uuid.uuid4())
         
         try:
-            # Create placeholder record in DynamoDB immediately
+            # Create placeholder record in DynamoDB immediately to prevent 404
             dynamodb = _get_dynamodb_client()
             table_name = _get_chat_table_name()
             now = datetime.now(timezone.utc).isoformat()
             
-            dynamodb.put_item(
-                TableName=table_name,
-                Item={
+            try:
+                # Create comprehensive placeholder to prevent Lambda overwrite
+                item = {
                     "chat_id": {"S": chat_id},
                     "user_id": {"S": user_id},
                     "message": {"S": request.message},
@@ -58,8 +58,22 @@ class ChatbotController:
                     "status": {"S": "processing"},
                     "created_at": {"S": now},
                     "updated_at": {"S": now},
+                    "response": {"S": ""},  # Empty response initially
+                    "error_message": {"S": ""},
                 }
-            )
+                
+                # Add context_chunks as empty list
+                item["context_chunks"] = {"L": []}
+                
+                print(f"Creating placeholder record for chat_id: {chat_id} in table: {table_name}")
+                dynamodb.put_item(
+                    TableName=table_name,
+                    Item=item
+                )
+                print(f"Placeholder created successfully for chat_id: {chat_id}")
+            except ClientError as db_error:
+                # Log but don't fail - Lambda will create it later
+                print(f"Warning: Failed to create placeholder record for {chat_id}: {db_error}")
             
             # Send to SQS for async processing
             send_chatbot_question(
