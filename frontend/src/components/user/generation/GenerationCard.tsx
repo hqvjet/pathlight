@@ -17,6 +17,7 @@ export type GenerationItem = {
   lessons_count?: number;
   lessons_planned?: number;
   roadmap_count?: number;
+  tests_count?: number;
   final_count?: number;
   updated_at?: string;
 };
@@ -26,7 +27,7 @@ function getGenerationStatus(item: GenerationItem) {
     { key: 'vectorized', label: 'Vectorized', done: Boolean(item.vectorized), count: null },
     { key: 'title_ready', label: 'Plan', done: Boolean(item.title_ready), count: item.roadmap_count },
     { key: 'lessons_ready', label: 'Lessons', done: Boolean(item.lessons_ready), count: item.lessons_count },
-    { key: 'tests_ready', label: 'Tests', done: Boolean(item.tests_ready), count: null },
+    { key: 'tests_ready', label: 'Tests', done: Boolean(item.tests_ready), count: item.tests_count },
   ];
   
   const completedSteps = steps.filter(s => s.done).length;
