@@ -44,9 +44,9 @@ function TrackingInner() {
       if (resp.status === 200 && Array.isArray(resp.data?.items)) {
         const items = resp.data.items as GenerationItem[];
         items.sort((a, b) => {
-          if (!a.updated_at) return 1;
-          if (!b.updated_at) return -1;
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          if (!a.last_updated) return 1;
+          if (!b.last_updated) return -1;
+          return new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime();
         });
         setCourseItems(items);
       } else if (resp.status === 401) {
